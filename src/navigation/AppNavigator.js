@@ -57,6 +57,24 @@ function MainTabs() {
   );
 }
 
+import { useNavigation } from '@react-navigation/native';
+import useCallStore from '../store/useCallStore';
+
+function CallObserver() {
+  const navigation = useNavigation();
+  const callState = useCallStore((s) => s.callState);
+  const isReceiver = useCallStore((s) => s.isReceiver);
+
+  React.useEffect(() => {
+    // Only the receiver (not the caller) is routed to IncomingCall screen
+    if (callState === 'incoming' && isReceiver) {
+      navigation.navigate('IncomingCall');
+    }
+  }, [callState, isReceiver, navigation]);
+
+  return null;
+}
+
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, user } = useAuthStore();
 
@@ -75,6 +93,7 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
+      <CallObserver />
       <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
         {/* Auth Flow */}
         <Stack.Screen name="Splash" component={SplashScreen} />

@@ -9,13 +9,14 @@ const useCallStore = create((set, get) => ({
   answer: null,
   iceCandidates: [],
   endReason: null, // 'rejected' | 'ended' | 'missed'
+  isReceiver: false, // true if this user is receiving the call (not the initiator)
 
-  // Outgoing call
+  // Outgoing call — initiated by this user
   startCall: (remoteUser, callType) => {
-    set({ callState: 'calling', remoteUser, callType, iceCandidates: [], endReason: null });
+    set({ callState: 'calling', remoteUser, callType, iceCandidates: [], endReason: null, isReceiver: false });
   },
 
-  // Incoming call from socket
+  // Incoming call from socket — this user is the receiver
   setIncomingCall: (data) => {
     set({
       callState: 'incoming',
@@ -24,6 +25,7 @@ const useCallStore = create((set, get) => ({
       offer: data.offer,
       iceCandidates: [],
       endReason: null,
+      isReceiver: true,
     });
   },
 
@@ -46,10 +48,10 @@ const useCallStore = create((set, get) => ({
       offer: null,
       answer: null,
     });
-    // Reset to idle after delay
+    // Reset to idle after short delay
     setTimeout(() => {
-      set({ callState: 'idle', remoteUser: null, callType: null, iceCandidates: [], endReason: null });
-    }, 2000);
+      set({ callState: 'idle', remoteUser: null, callType: null, iceCandidates: [], endReason: null, isReceiver: false });
+    }, 1500);
   },
 
   resetCall: () => {
@@ -61,6 +63,7 @@ const useCallStore = create((set, get) => ({
       answer: null,
       iceCandidates: [],
       endReason: null,
+      isReceiver: false,
     });
   },
 }));

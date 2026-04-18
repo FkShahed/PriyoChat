@@ -4,12 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import useChatStore from './useChatStore';
 import useCallStore from './useCallStore';
 
-import { Platform, NativeModules } from 'react-native';
-
 const SOCKET_URL = 'https://priyochat.onrender.com';
 
 const useSocketStore = create((set, get) => ({
-  socket: null,
   isConnected: false,
 
   connect: async () => {

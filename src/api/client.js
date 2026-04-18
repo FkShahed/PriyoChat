@@ -3,19 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Platform, NativeModules } from 'react-native';
 
-// Dynamically get the IP address from the Metro bundler (works on physical devices & emulators)
-let localIp = '192.168.1.104'; // fallback
-if (__DEV__ && Platform.OS !== 'web') {
-  const scriptURL = NativeModules.SourceCode?.scriptURL;
-  if (scriptURL) {
-    const match = scriptURL.match(/^https?:\/\/([^:]+)/);
-    if (match && match[1]) localIp = match[1];
-  }
-}
 
-export const API_BASE_URL = Platform.OS === 'web'
-  ? 'http://localhost:4444/api'
-  : `http://${localIp}:4444/api`;
+
+export const API_BASE_URL = 'https://priyochat.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

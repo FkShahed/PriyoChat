@@ -1,44 +1,89 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image, Vibration,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  useSharedValue, useAnimatedStyle, withRepeat, withSequence,
-  withTiming, withSpring,
-} from 'react-native-reanimated';
+import { Animated as RNAnimated } from 'react-native';
 import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import { getInitials } from '../../utils/helpers';
 
+function formatDuration(secs) {
+  const m = Math.floor(secs / 60).toString().padStart(2, '0');
+  const s = (secs % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
 export default function CallScreen({ route, navigation }) {
   const { otherUser, callType } = route.params;
-  const { callState, startCall, resetCall } = useCallStore();
+  const { callState, isReceiver, resetCall } = useCallStore();
   const { emit } = useSocketStore();
-  const ringAnim = useSharedValue(1);
 
-  // Pulsing ring animation
+  const ringAnim = useRef(new RNAnimated.Value(0)).current;
+  const loopRef = useRef(null);
+  const timerRef = useRef(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const hasNavigatedBack = useRef(false);
+
+  // ── Pulsing animation ─────────────────────────────────────────────
   useEffect(() => {
-    ringAnim.value = withRepeat(
-      withSequence(withTiming(1.2, { duration: 600 }), withTiming(1, { duration: 600 })),
-      -1
+    loopRef.current = RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(ringAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        RNAnimated.timing(ringAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ])
     );
-    startCall(otherUser, callType);
-    // Emit call offer (in real WebRTC, you'd attach real SDP offer here)
-    emit('call_offer', { to: otherUser._id, offer: { sdp: 'placeholder' }, callType });
-    Vibration.vibrate([0, 400, 200, 400]);
+    loopRef.current.start();
+    return () => loopRef.current?.stop();
+  }, []);
+
+  // ── Caller-only: emit offer ────────────────────────────────────────
+  useEffect(() => {
+    if (!isReceiver) {
+      // Only the caller sends the offer and vibrates
+      emit('call_offer', { to: otherUser._id, offer: { sdp: 'placeholder' }, callType });
+      Vibration.vibrate([0, 400, 200, 400]);
+    }
     return () => Vibration.cancel();
   }, []);
 
-  const ringStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: ringAnim.value }],
-    opacity: (ringAnim.value - 1) * 5 + 0.2,
-  }));
+  // ── Start timer when call becomes active ──────────────────────────
+  useEffect(() => {
+    if (callState === 'active') {
+      loopRef.current?.stop(); // stop pulsing when connected
+      timerRef.current = setInterval(() => {
+        setCallDuration((d) => d + 1);
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [callState]);
+
+  // ── React to remote ending/rejecting ─────────────────────────────
+  useEffect(() => {
+    if ((callState === 'ended' || callState === 'idle') && !hasNavigatedBack.current) {
+      hasNavigatedBack.current = true;
+      Vibration.cancel();
+      navigation.goBack();
+    }
+  }, [callState]);
 
   const handleEndCall = () => {
+    if (hasNavigatedBack.current) return;
+    hasNavigatedBack.current = true;
     emit('call_end', { to: otherUser._id });
     resetCall();
     navigation.goBack();
+  };
+
+  const scale = ringAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
+  const opacity = ringAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0] });
+
+  const statusLine = () => {
+    if (callState === 'active') return `🔴  ${formatDuration(callDuration)}`;
+    if (isReceiver) return callType === 'video' ? '📹 Video Call' : '📞 Audio Call';
+    return (callType === 'video' ? '📹 Video Call' : '📞 Audio Call') + ' · Calling...';
   };
 
   return (
@@ -46,9 +91,9 @@ export default function CallScreen({ route, navigation }) {
       <View style={styles.content}>
         {/* Pulse rings */}
         <View style={styles.pulseContainer}>
-          <Animated.View style={[styles.pulseRing, styles.pulse3]} />
-          <Animated.View style={[styles.pulseRing, styles.pulse2, ringStyle]} />
-          <Animated.View style={[styles.pulseRing, styles.pulse1]} />
+          <View style={[styles.pulseRing, styles.pulse3]} />
+          <RNAnimated.View style={[styles.pulseRing, styles.pulse2, { transform: [{ scale }], opacity }]} />
+          <View style={[styles.pulseRing, styles.pulse1]} />
           {/* Avatar */}
           <View style={styles.avatarWrapper}>
             {otherUser.avatar ? (
@@ -62,9 +107,7 @@ export default function CallScreen({ route, navigation }) {
         </View>
 
         <Text style={styles.name}>{otherUser.name}</Text>
-        <Text style={styles.callStatus}>
-          {callType === 'video' ? '📹 Video Call' : '📞 Audio Call'} · Calling...
-        </Text>
+        <Text style={styles.callStatus}>{statusLine()}</Text>
       </View>
 
       {/* Controls */}
@@ -103,7 +146,7 @@ const styles = StyleSheet.create({
   },
   initials: { fontSize: 36, color: '#FFF', fontWeight: '700' },
   name: { fontSize: 28, fontWeight: '700', color: '#FFF', marginBottom: 8 },
-  callStatus: { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
+  callStatus: { color: 'rgba(255,255,255,0.6)', fontSize: 16, letterSpacing: 0.5 },
   controls: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 40 },
   muteBtn: { alignItems: 'center' },
   speakerBtn: { alignItems: 'center' },

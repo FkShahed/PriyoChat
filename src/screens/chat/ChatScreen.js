@@ -10,6 +10,7 @@ import { conversationApi, mediaApi } from '../../api/services';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
+import useCallStore from '../../store/useCallStore';
 import { THEMES } from '../../themes/themes';
 import { formatMessageTime, getInitials } from '../../utils/helpers';
 
@@ -258,10 +259,16 @@ export default function ChatScreen({ route, navigation }) {
             {isOtherOnline ? '🟢 Online' : otherUser?.status || ''}
           </Text>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Call', { otherUser, callType: 'audio' })} style={styles.callBtn}>
+        <TouchableOpacity onPress={() => {
+          useCallStore.getState().startCall(otherUser, 'audio');
+          navigation.navigate('Call', { otherUser, callType: 'audio' });
+        }} style={styles.callBtn}>
           <Text style={{ fontSize: 20 }}>📞</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('Call', { otherUser, callType: 'video' })} style={styles.callBtn}>
+        <TouchableOpacity onPress={() => {
+          useCallStore.getState().startCall(otherUser, 'video');
+          navigation.navigate('Call', { otherUser, callType: 'video' });
+        }} style={styles.callBtn}>
           <Text style={{ fontSize: 20 }}>📹</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => navigation.navigate('ThemeSelector', { conversationId, currentTheme: convo.theme })} style={styles.callBtn}>
