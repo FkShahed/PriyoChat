@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "PriyoChat",
+    "slug": "priyochat",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.shahed.priyochat",
+      "adaptiveIcon": {
+        "backgroundColor": "#0084FF"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ab48d8dd-0cb6-4a1d-82b0-84f55577a6d1"
+      }
+    }
+  }
+}
