@@ -13,7 +13,7 @@ if (__DEV__ && Platform.OS !== 'web') {
   }
 }
 
-export const API_BASE_URL = Platform.OS === 'web' 
+export const API_BASE_URL = Platform.OS === 'web'
   ? 'http://localhost:4444/api'
   : `http://${localIp}:4444/api`;
 

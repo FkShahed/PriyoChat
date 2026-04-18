@@ -6,19 +6,7 @@ import useCallStore from './useCallStore';
 
 import { Platform, NativeModules } from 'react-native';
 
-// Dynamically get the IP address from the Metro bundler
-let localIp = '192.168.1.104'; // fallback
-if (__DEV__ && Platform.OS !== 'web') {
-  const scriptURL = NativeModules.SourceCode?.scriptURL;
-  if (scriptURL) {
-    const match = scriptURL.match(/^https?:\/\/([^:]+)/);
-    if (match && match[1]) localIp = match[1];
-  }
-}
-
-const SOCKET_URL = Platform.OS === 'web' 
-  ? 'http://localhost:4444' 
-  : `http://${localIp}:4444`;
+const SOCKET_URL = 'https://priyochat.onrender.com';
 
 const useSocketStore = create((set, get) => ({
   socket: null,
