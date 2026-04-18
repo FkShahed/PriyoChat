@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const https = require('https');
+const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -61,6 +63,10 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth', authLimiter);
 
+// ─── Welcome page (served at root /) ─────────────────────────────────────────
+app.use(express.static(path.join(__dirname, 'src/public')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'src/public/index.html')));
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -84,10 +90,26 @@ app.use((err, req, res, next) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 
+// ─── Keep-alive ping (prevents Render free tier from sleeping) ───────────────
+// Render spins down after 15 min of inactivity — ping every 14 min to stay awake
+const SELF_URL = process.env.SELF_URL || 'https://priyochat.onrender.com';
+const PING_INTERVAL_MS = 14 * 60 * 1000; // 14 minutes
+
+function pingServer() {
+  https.get(`${SELF_URL}/health`, (res) => {
+    console.log(`🏓 Keep-alive ping → ${res.statusCode}`);
+  }).on('error', (err) => {
+    console.warn(`⚠️  Keep-alive ping failed: ${err.message}`);
+  });
+}
+
 connectDB().then(() => {
   initFirebase();
   setupSocket(io);
   server.listen(PORT, () => {
     console.log(`🚀 PriyoChat Server running on port ${PORT}`);
+    // Start keep-alive after server is up
+    setInterval(pingServer, PING_INTERVAL_MS);
+    console.log(`⏰ Keep-alive ping scheduled every ${PING_INTERVAL_MS / 60000} minutes`);
   });
 });
