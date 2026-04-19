@@ -91,15 +91,15 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 // ─── Keep-alive ping (prevents Render free tier from sleeping) ───────────────
-// Render spins down after 15 min of inactivity — ping every 14 min to stay awake
+// Ping every 45 seconds to stay awake and log activity
 const SELF_URL = process.env.SELF_URL || 'https://priyochat.onrender.com';
-const PING_INTERVAL_MS = 14 * 60 * 1000; // 14 minutes
+const PING_INTERVAL_MS = 45 * 1000; // 45 seconds
 
 function pingServer() {
   https.get(`${SELF_URL}/health`, (res) => {
-    console.log(`🏓 Keep-alive ping → ${res.statusCode}`);
+    console.log(`🟢 Running server - ${new Date().toLocaleTimeString()} (Status: ${res.statusCode})`);
   }).on('error', (err) => {
-    console.warn(`⚠️  Keep-alive ping failed: ${err.message}`);
+    console.warn(`⚠️ Running server - ${new Date().toLocaleTimeString()} (Ping failed: ${err.message})`);
   });
 }
 

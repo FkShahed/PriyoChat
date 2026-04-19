@@ -6,6 +6,8 @@ import useAuthStore from './src/store/useAuthStore';
 import useSocketStore from './src/store/useSocketStore';
 import useCallStore from './src/store/useCallStore';
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 export default function App() {
   const { isLoading, isAuthenticated, restoreSession } = useAuthStore();
   const { connect } = useSocketStore();
@@ -18,9 +20,11 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" />
-      <AppNavigator />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar barStyle="dark-content" />
+        <AppNavigator />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
