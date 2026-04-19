@@ -47,7 +47,7 @@ export default function CallScreen({ route, navigation }) {
   const hasNavigatedBack = useRef(false);
 
   // ── WebRTC ────────────────────────────────────────────────────────
-  const { cleanup: cleanupWebRTC } = useWebRTCCall({
+  const { cleanup: cleanupWebRTC, setSpeaker } = useWebRTCCall({
     remoteUserId: otherUser._id,
     callType,
     isReceiver,
@@ -243,7 +243,7 @@ export default function CallScreen({ route, navigation }) {
         <TouchableOpacity style={styles.endBtn} onPress={handleEndCall}>
           <Text style={{ fontSize: 28 }}>📵</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.speakerBtn} onPress={() => setSpeakerOn((s) => !s)}>
+        <TouchableOpacity style={styles.speakerBtn} onPress={() => { setSpeakerOn((s) => { const next = !s; setSpeaker?.(next); return next; }); }}>
           <Text style={styles.controlEmoji}>{speakerOn ? '🔊' : '🔈'}</Text>
           <Text style={styles.controlLabel}>Speaker</Text>
         </TouchableOpacity>

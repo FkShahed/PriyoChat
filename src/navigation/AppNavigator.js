@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, ActivityIndicator } from 'react-native';
 import useAuthStore from '../store/useAuthStore';
+import useThemeStore, { useColors } from '../store/useThemeStore';
 
 // Auth Screens
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -15,6 +16,8 @@ import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
 import ChatListScreen from '../screens/chat/ChatListScreen';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ThemeSelectorScreen from '../screens/chat/ThemeSelectorScreen';
+import UserProfileScreen from '../screens/chat/UserProfileScreen';
+import SharedMediaScreen from '../screens/chat/SharedMediaScreen';
 import SearchUsersScreen from '../screens/friends/SearchUsersScreen';
 import FriendRequestsScreen from '../screens/friends/FriendRequestsScreen';
 import CallScreen from '../screens/calls/CallScreen';
@@ -24,7 +27,7 @@ import SettingsScreen from '../screens/settings/SettingsScreen';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function TabIcon({ name, focused }) {
+function TabIcon({ name, focused, C }) {
   const icons = {
     Chats: focused ? '💬' : '🗨️',
     Requests: focused ? '🔔' : '🔕',
@@ -34,16 +37,18 @@ function TabIcon({ name, focused }) {
 }
 
 function MainTabs() {
+  const C = useColors();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
         tabBarActiveTintColor: '#0084FF',
-        tabBarInactiveTintColor: '#8E8E93',
+        tabBarInactiveTintColor: C.textSecondary,
         tabBarStyle: {
+          backgroundColor: C.surface,
           borderTopWidth: 0.5,
-          borderTopColor: '#EEEEEE',
+          borderTopColor: C.border,
           paddingBottom: 8,
           height: 60,
         },
@@ -66,7 +71,6 @@ function CallObserver() {
   const isReceiver = useCallStore((s) => s.isReceiver);
 
   React.useEffect(() => {
-    // Only the receiver (not the caller) is routed to IncomingCall screen
     if (callState === 'incoming' && isReceiver) {
       navigation.navigate('IncomingCall');
     }
@@ -75,8 +79,32 @@ function CallObserver() {
   return null;
 }
 
+// Watches isAuthenticated and navigates to Splash on logout
+function LogoutObserver() {
+  const navigation = useNavigation();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const hasNavigated = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!isLoading && !isAuthenticated && !hasNavigated.current) {
+      hasNavigated.current = true;
+      navigation.reset({ index: 0, routes: [{ name: 'Splash' }] });
+    }
+    if (isAuthenticated) {
+      hasNavigated.current = false; // reset so next logout works
+    }
+  }, [isAuthenticated, isLoading]);
+
+  return null;
+}
+
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, user } = useAuthStore();
+  const { init: initTheme, resolvedTheme } = useThemeStore();
+
+  // Init theme store once
+  React.useEffect(() => { initTheme(); }, []);
 
   if (isLoading) {
     return (
@@ -94,6 +122,7 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <CallObserver />
+      <LogoutObserver />
       <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
         {/* Auth Flow */}
         <Stack.Screen name="Splash" component={SplashScreen} />
@@ -105,6 +134,8 @@ export default function AppNavigator() {
         <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen name="Chat" component={ChatScreen} />
         <Stack.Screen name="ThemeSelector" component={ThemeSelectorScreen} />
+        <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+        <Stack.Screen name="SharedMedia" component={SharedMediaScreen} />
         <Stack.Screen name="SearchUsers" component={SearchUsersScreen} />
         <Stack.Screen name="Call" component={CallScreen} />
         <Stack.Screen name="IncomingCall" component={IncomingCallScreen} />

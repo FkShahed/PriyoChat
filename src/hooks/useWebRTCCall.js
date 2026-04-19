@@ -3,6 +3,14 @@ import { Platform, PermissionsAndroid, Alert } from 'react-native';
 import useCallStore from '../store/useCallStore';
 import useSocketStore from '../store/useSocketStore';
 
+// InCallManager — controls audio routing (earpiece vs speaker), proximity sensor
+let InCallManager = null;
+try {
+  InCallManager = require('react-native-incall-manager').default;
+} catch (e) {
+  console.warn('[InCallManager] Not available:', e.message);
+}
+
 // Conditionally load WebRTC based on platform
 let RTCPeerConnection, RTCIceCandidate, RTCSessionDescription, mediaDevices;
 let webrtcAvailable = false;
@@ -32,7 +40,26 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
 ];
+
+// High-quality audio constraints
+const AUDIO_CONSTRAINTS = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  sampleRate: 48000,
+  channelCount: 1,
+};
+
+// High-quality video constraints
+const VIDEO_CONSTRAINTS = {
+  facingMode: 'user',
+  width: { ideal: 1280, min: 640 },
+  height: { ideal: 720, min: 480 },
+  frameRate: { ideal: 30, min: 15 },
+};
 
 const CONNECTION_TIMEOUT_MS = 30000; // 30s timeout for WebRTC to connect
 
@@ -187,16 +214,22 @@ export default function useWebRTCCall({
 
     console.log('[WebRTC] Getting user media, callType:', callType);
     const constraints = {
-      audio: true,
-      video: callType === 'video'
-        ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
-        : false,
+      audio: AUDIO_CONSTRAINTS,
+      video: callType === 'video' ? VIDEO_CONSTRAINTS : false,
     };
 
     const stream = await mediaDevices.getUserMedia(constraints);
     console.log('[WebRTC] Got local stream, tracks:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
     localStreamRef.current = stream;
     onLocalStream?.(stream);
+
+    // Start InCallManager — routes audio to earpiece by default
+    if (InCallManager) {
+      InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
+      InCallManager.setSpeakerphoneOn(false);
+      console.log('[InCallManager] Started, earpiece mode');
+    }
+
     return stream;
   }, [callType, onLocalStream]);
 
@@ -379,7 +412,18 @@ export default function useWebRTCCall({
     pcRef.current = null;
     remoteDescReady.current = false;
     pendingCandidates.current = [];
+    if (InCallManager) {
+      InCallManager.stop();
+      console.log('[InCallManager] Stopped');
+    }
   }, []);
 
-  return { cleanup };
+  const setSpeaker = useCallback((on) => {
+    if (InCallManager) {
+      InCallManager.setSpeakerphoneOn(on);
+      console.log('[InCallManager] Speaker:', on);
+    }
+  }, []);
+
+  return { cleanup, setSpeaker };
 }
