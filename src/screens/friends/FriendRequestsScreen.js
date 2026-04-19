@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   Image, ActivityIndicator, StatusBar,
 } from 'react-native';
-import { requestApi } from '../../api/services';
+import { requestApi, conversationApi } from '../../api/services';
 import { getInitials } from '../../utils/helpers';
 import useChatStore from '../../store/useChatStore';
 import { useColors } from '../../store/useThemeStore';
@@ -11,7 +11,7 @@ import { useColors } from '../../store/useThemeStore';
 export default function FriendRequestsScreen({ navigation }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { addOrUpdateConversation } = useChatStore();
+  const { addOrUpdateConversation, setConversations } = useChatStore();
   const C = useColors();
 
   const load = async () => {
@@ -27,10 +27,14 @@ export default function FriendRequestsScreen({ navigation }) {
 
   const accept = async (reqId) => {
     try {
-      const { data } = await requestApi.accept(reqId);
-      if (data.conversation) addOrUpdateConversation(data.conversation);
+      await requestApi.accept(reqId);
       setRequests((prev) => prev.filter((r) => r._id !== reqId));
-    } catch (err) {}
+      // Force fetch all conversations to ensure the new friend appears immediately
+      const { data } = await conversationApi.getAll();
+      if (data) setConversations(data);
+    } catch (err) {
+      console.error('Accept error:', err);
+    }
   };
 
   const reject = async (reqId) => {

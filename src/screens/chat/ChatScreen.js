@@ -5,6 +5,7 @@ import {
   ImageBackground, ScrollView, Modal, TouchableWithoutFeedback,
   StatusBar, Dimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Animated as RNAnimated } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -99,9 +100,25 @@ export default function ChatScreen({ route, navigation }) {
   const convo = conversations.find(c => c._id === conversationId) || initialConvo;
   const { resolvedTheme } = useThemeStore();
 
-  let theme = THEMES[convo.theme] || THEMES[DEFAULT_THEME];
-  if (!convo.theme || convo.theme === DEFAULT_THEME) {
-    let baseTheme = THEMES[DEFAULT_THEME];
+  // Local theme key — loaded from AsyncStorage (supports painted themes the backend can't store)
+  const [localThemeKey, setLocalThemeKey] = useState(null);
+  useEffect(() => {
+    AsyncStorage.getItem(`chat_theme_${conversationId}`).then(stored => {
+      if (stored && THEMES[stored]) setLocalThemeKey(stored);
+    });
+  }, [conversationId]);
+
+  // Listen for in-store changes (set by ThemeSelectorScreen after apply)
+  useEffect(() => {
+    const storeKey = convo.theme;
+    if (storeKey && THEMES[storeKey]) setLocalThemeKey(storeKey);
+  }, [convo.theme]);
+
+  // Resolve active theme: local key wins over backend key
+  const activeThemeKey = localThemeKey || convo.theme || DEFAULT_THEME;
+  let theme = THEMES[activeThemeKey] || THEMES[DEFAULT_THEME];
+  if (activeThemeKey === DEFAULT_THEME) {
+    const baseTheme = THEMES[DEFAULT_THEME];
     if (resolvedTheme === 'dark' && baseTheme.isLight && baseTheme.darkVariant) {
       theme = THEMES[baseTheme.darkVariant];
     } else if (resolvedTheme === 'light' && !baseTheme.isLight && baseTheme.lightVariant) {
@@ -147,10 +164,14 @@ export default function ChatScreen({ route, navigation }) {
   }, [conversationId]);
 
   useEffect(() => {
+    useChatStore.getState().setActiveConversationId(conversationId);
     loadMessages(1);
     emit('join', { conversationId });
     emit('message_seen', { conversationId });
-    return () => clearTimeout(typingTimeout.current);
+    return () => {
+      clearTimeout(typingTimeout.current);
+      useChatStore.getState().setActiveConversationId(null);
+    };
   }, []);
 
   useEffect(() => {

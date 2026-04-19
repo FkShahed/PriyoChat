@@ -223,11 +223,15 @@ export default function useWebRTCCall({
     localStreamRef.current = stream;
     onLocalStream?.(stream);
 
-    // Start InCallManager — routes audio to earpiece by default
+    // Start InCallManager
     if (InCallManager) {
-      InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
-      InCallManager.setSpeakerphoneOn(false);
-      console.log('[InCallManager] Started, earpiece mode');
+      try {
+        InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
+        InCallManager.setForceSpeakerphoneOn(callType === 'video');
+        console.log('[InCallManager] Started, speakerphone:', callType === 'video');
+      } catch (e) {
+        console.warn('[InCallManager] start error:', e);
+      }
     }
 
     return stream;
@@ -413,15 +417,23 @@ export default function useWebRTCCall({
     remoteDescReady.current = false;
     pendingCandidates.current = [];
     if (InCallManager) {
-      InCallManager.stop();
-      console.log('[InCallManager] Stopped');
+      try {
+        InCallManager.stop();
+        console.log('[InCallManager] Stopped');
+      } catch (e) {
+        console.warn('[InCallManager] stop error:', e);
+      }
     }
   }, []);
 
   const setSpeaker = useCallback((on) => {
     if (InCallManager) {
-      InCallManager.setSpeakerphoneOn(on);
-      console.log('[InCallManager] Speaker:', on);
+      try {
+        InCallManager.setForceSpeakerphoneOn(on);
+        console.log('[InCallManager] Speaker:', on);
+      } catch (e) {
+        console.warn('[InCallManager] setSpeaker error:', e);
+      }
     }
   }, []);
 

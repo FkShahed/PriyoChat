@@ -38,7 +38,7 @@ export default function CallScreen({ route, navigation }) {
   const [remoteStream, setRemoteStream] = useState(null);
   const [callDuration, setCallDuration] = useState(0);
   const [muted, setMuted] = useState(false);
-  const [speakerOn, setSpeakerOn] = useState(false);
+  const [speakerOn, setSpeakerOn] = useState(callType === 'video');
   const [cameraFront, setCameraFront] = useState(true);
 
   const ringAnim = useRef(new RNAnimated.Value(0)).current;

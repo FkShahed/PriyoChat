@@ -4,6 +4,7 @@
     "slug": "priyochat",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "plugins": [
       [
@@ -20,6 +21,15 @@
           "cameraPermission": "Allow PriyoChat to access your camera for video calls.",
           "microphonePermission": "Allow PriyoChat to access your microphone for calls."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0084FF",
+          "defaultChannel": "messages",
+          "sounds": []
+        }
       ]
     ],
     "ios": {
@@ -32,6 +42,7 @@
     "android": {
       "package": "com.shahed.priyochat",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0084FF"
       },
       "permissions": [

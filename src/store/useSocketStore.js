@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import useChatStore from './useChatStore';
 import useCallStore from './useCallStore';
+import NotificationService from '../services/NotificationService';
 
 const SOCKET_URL = 'https://priyochat.onrender.com';
 
@@ -43,6 +44,17 @@ const useSocketStore = create((set, get) => ({
         lastMessage: message,
         updatedAt: message.createdAt,
       });
+      // Show push notification if user is NOT in this conversation
+      const activeId = useChatStore.getState().activeConversationId;
+      if (activeId !== message.conversation) {
+        NotificationService.showMessageNotification({
+          senderName: message.sender?.name || 'New Message',
+          senderId: message.sender?._id,
+          text: message.text,
+          conversationId: message.conversation,
+          avatarUrl: message.sender?.avatar,
+        });
+      }
     });
 
     newSocket.on('message_status_updated', ({ messageId, status, conversationId }) => {
@@ -88,6 +100,11 @@ const useSocketStore = create((set, get) => ({
     // ── Call events ──────────────────────────────────────────────────
     newSocket.on('incoming_call', (data) => {
       useCallStore.getState().setIncomingCall(data);
+      // Show a heads-up notification so user sees it even when phone is locked
+      NotificationService.showCallNotification({
+        callerName: data.caller?.name || 'Someone',
+        callType: data.callType,
+      });
     });
 
     newSocket.on('call_answered', ({ answer }) => {

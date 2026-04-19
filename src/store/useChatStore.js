@@ -5,8 +5,10 @@ const useChatStore = create((set, get) => ({
   messages: {}, // { conversationId: [message, ...] }
   typingUsers: {}, // { conversationId: userId | null }
   onlineUsers: {}, // { userId: bool }
+  activeConversationId: null, // the conversation the user is currently viewing
 
   setConversations: (conversations) => set({ conversations }),
+  setActiveConversationId: (id) => set({ activeConversationId: id }),
 
   addOrUpdateConversation: (convo) => {
     const { conversations } = get();

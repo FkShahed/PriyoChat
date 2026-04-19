@@ -3,10 +3,15 @@ import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
   ImageBackground, StatusBar, Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { conversationApi } from '../../api/services';
 import { THEMES } from '../../themes/themes';
 import { useColors } from '../../store/useThemeStore';
+import useChatStore from '../../store/useChatStore';
+
+// Keys the backend actually supports; all others are stored locally only.
+const BACKEND_THEMES = new Set(['ClassicBlue', 'DarkNeon', 'SoftPurple', 'MinimalWhite', 'OceanGlass']);
 
 const THEME_KEYS = Object.keys(THEMES);
 
@@ -25,14 +30,29 @@ export default function ThemeSelectorScreen({ route, navigation }) {
   const [loading, setLoading] = useState(false);
   const C = useColors();
 
+  const { conversations, setConversations } = useChatStore();
+
   const handleApply = async () => {
     if (selected === currentTheme) return navigation.goBack();
     setLoading(true);
     try {
-      await conversationApi.updateTheme(conversationId, selected);
+      // 1. Always persist locally — works for ALL themes
+      await AsyncStorage.setItem(`chat_theme_${conversationId}`, selected);
+
+      // 2. Update in-memory store instantly so ChatScreen re-renders immediately
+      const updatedConvos = conversations.map(c =>
+        c._id === conversationId ? { ...c, theme: selected } : c
+      );
+      setConversations(updatedConvos);
+
+      // 3. Try to sync to backend only for supported themes (silently skip others)
+      if (BACKEND_THEMES.has(selected)) {
+        conversationApi.updateTheme(conversationId, selected).catch(() => {});
+      }
+
       navigation.goBack();
     } catch (err) {
-      Alert.alert('Error', 'Failed to change theme');
+      Alert.alert('Error', 'Failed to save theme locally.');
     } finally {
       setLoading(false);
     }
