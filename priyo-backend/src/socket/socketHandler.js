@@ -134,43 +134,29 @@ const setupSocket = (io) => {
 
     // ─── WebRTC Signaling ──────────────────────────────────────────
     socket.on('call_offer', ({ to, offer, callType }) => {
-      const targetSocket = onlineUsers.get(to);
-      if (targetSocket) {
-        io.to(targetSocket).emit('incoming_call', {
-          from: userId,
-          caller: { name: socket.user.name, avatar: socket.user.avatar },
-          offer,
-          callType, // 'audio' | 'video'
-        });
-      }
+      // emit to receiver's personal room (more reliable than raw socketId)
+      io.to(to).emit('incoming_call', {
+        from: userId,
+        caller: { name: socket.user.name, avatar: socket.user.avatar },
+        offer,
+        callType,
+      });
     });
 
     socket.on('call_answer', ({ to, answer }) => {
-      const targetSocket = onlineUsers.get(to);
-      if (targetSocket) {
-        io.to(targetSocket).emit('call_answered', { from: userId, answer });
-      }
+      io.to(to).emit('call_answered', { from: userId, answer });
     });
 
     socket.on('call_ice', ({ to, candidate }) => {
-      const targetSocket = onlineUsers.get(to);
-      if (targetSocket) {
-        io.to(targetSocket).emit('call_ice', { from: userId, candidate });
-      }
+      io.to(to).emit('call_ice', { from: userId, candidate });
     });
 
     socket.on('call_reject', ({ to }) => {
-      const targetSocket = onlineUsers.get(to);
-      if (targetSocket) {
-        io.to(targetSocket).emit('call_rejected', { from: userId });
-      }
+      io.to(to).emit('call_rejected', { from: userId });
     });
 
     socket.on('call_end', ({ to }) => {
-      const targetSocket = onlineUsers.get(to);
-      if (targetSocket) {
-        io.to(targetSocket).emit('call_ended', { from: userId });
-      }
+      io.to(to).emit('call_ended', { from: userId });
     });
 
     // ─── Disconnect ────────────────────────────────────────────────

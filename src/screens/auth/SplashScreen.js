@@ -1,17 +1,42 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, StatusBar, Dimensions,
+  View, Text, TouchableOpacity, StyleSheet, StatusBar, Dimensions, Animated
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen({ navigation }) {
+  const fadeUpAnim = useRef(new Animated.Value(0)).current;
+  const fadeDownAnim = useRef(new Animated.Value(0)).current;
+  const slideUpAnim = useRef(new Animated.Value(50)).current;
+  const slideDownAnim = useRef(new Animated.Value(-50)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(200),
+      Animated.parallel([
+        Animated.timing(fadeUpAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(slideUpAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ]),
+      Animated.delay(100), // Wait a bit before showing buttons
+      Animated.parallel([
+        Animated.timing(fadeDownAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(slideDownAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, []);
+
   return (
     <LinearGradient colors={['#0084FF', '#0040CC', '#001A80']} style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.logoContainer}>
+      
+      <Animated.View 
+        style={[
+          styles.logoContainer, 
+          { opacity: fadeUpAnim, transform: [{ translateY: slideUpAnim }] }
+        ]}
+      >
         <View style={styles.logoCircle}>
           <Text style={styles.logoEmoji}>💬</Text>
         </View>
@@ -19,7 +44,12 @@ export default function SplashScreen({ navigation }) {
         <Text style={styles.tagline}>Connect. Chat. Share.</Text>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(600).duration(800)} style={styles.buttons}>
+      <Animated.View 
+        style={[
+          styles.buttons, 
+          { opacity: fadeDownAnim, transform: [{ translateY: slideDownAnim }] }
+        ]}
+      >
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={() => navigation.navigate('Login')}

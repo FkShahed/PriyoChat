@@ -4,7 +4,6 @@ import {
   TextInput, StatusBar, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInRight } from 'react-native-reanimated';
 import { conversationApi } from '../../api/services';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
@@ -50,7 +49,7 @@ export default function ChatListScreen({ navigation }) {
       : lastMsg?.text || 'Start a conversation';
 
     return (
-      <Animated.View entering={FadeInRight.delay(index * 50).duration(300)}>
+      <View>
         <TouchableOpacity
           style={styles.item}
           onPress={() => navigation.navigate('Chat', { conversation: item, otherUser: other })}
@@ -88,7 +87,7 @@ export default function ChatListScreen({ navigation }) {
             </View>
           </View>
         </TouchableOpacity>
-      </Animated.View>
+      </View>
     );
   };
 

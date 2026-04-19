@@ -9,7 +9,7 @@ import useSocketStore from '../../store/useSocketStore';
 import { getInitials } from '../../utils/helpers';
 
 export default function IncomingCallScreen({ navigation }) {
-  const { remoteUser, callType, callState, setCallActive, resetCall } = useCallStore();
+  const { remoteUser, callType, callState, setCallAccepted, resetCall } = useCallStore();
   const { emit } = useSocketStore();
   const slideAnim = useRef(new RNAnimated.Value(60)).current;
   const opacityAnim = useRef(new RNAnimated.Value(0)).current;
@@ -33,8 +33,10 @@ export default function IncomingCallScreen({ navigation }) {
   const handleAccept = () => {
     if (hasActed.current) return;
     hasActed.current = true;
-    emit('call_answer', { to: remoteUser._id, answer: { sdp: 'placeholder' } });
-    setCallActive(); // sets callState = 'active', isReceiver stays true
+    // Don't emit call_answer here — useWebRTCCall hook in CallScreen
+    // will create the real SDP answer and emit it after setting up media.
+    // Mark as 'connecting' — the hook will set 'active' when WebRTC connects.
+    setCallAccepted();
     navigation.replace('Call', { otherUser: remoteUser, callType });
   };
 

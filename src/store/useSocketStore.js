@@ -7,6 +7,7 @@ import useCallStore from './useCallStore';
 const SOCKET_URL = 'https://priyochat.onrender.com';
 
 const useSocketStore = create((set, get) => ({
+  socket: null,
   isConnected: false,
 
   connect: async () => {

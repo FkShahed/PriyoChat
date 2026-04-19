@@ -5,14 +5,41 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24
+          }
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Allow PriyoChat to access your camera for video calls.",
+          "microphonePermission": "Allow PriyoChat to access your microphone for calls."
+        }
+      ]
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow PriyoChat to access your camera for video calls.",
+        "NSMicrophoneUsageDescription": "Allow PriyoChat to access your microphone for calls."
+      }
     },
     "android": {
       "package": "com.shahed.priyochat",
       "adaptiveIcon": {
         "backgroundColor": "#0084FF"
-      }
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "INTERNET"
+      ]
     },
     "extra": {
       "eas": {

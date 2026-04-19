@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 const useCallStore = create((set, get) => ({
-  // 'idle' | 'calling' | 'incoming' | 'active' | 'ended'
+  // 'idle' | 'calling' | 'incoming' | 'connecting' | 'active' | 'ended'
   callState: 'idle',
   callType: null, // 'audio' | 'video'
   remoteUser: null,
@@ -13,7 +13,7 @@ const useCallStore = create((set, get) => ({
 
   // Outgoing call — initiated by this user
   startCall: (remoteUser, callType) => {
-    set({ callState: 'calling', remoteUser, callType, iceCandidates: [], endReason: null, isReceiver: false });
+    set({ callState: 'calling', remoteUser, callType, iceCandidates: [], endReason: null, isReceiver: false, offer: null, answer: null });
   },
 
   // Incoming call from socket — this user is the receiver
@@ -22,17 +22,35 @@ const useCallStore = create((set, get) => ({
       callState: 'incoming',
       callType: data.callType,
       remoteUser: { _id: data.from, ...data.caller },
-      offer: data.offer,
+      offer: data.offer,          // full SDP object for WebRTC
+      remoteUserId: data.from,    // shortcut for ICE routing
       iceCandidates: [],
       endReason: null,
       isReceiver: true,
+      answer: null,
     });
   },
 
-  setCallAnswered: (answer) => {
-    set({ answer, callState: 'active' });
+  // Receiver accepted — transitional state while WebRTC connects
+  setCallAccepted: () => {
+    set({ callState: 'connecting' });
   },
 
+  // Caller received SDP answer from receiver
+  setCallAnswered: (answer) => {
+    set({ answer, callState: 'connecting' });
+  },
+
+  // Both sides: WebRTC peer connection is actually connected
+  setCallConnected: () => {
+    const { callState } = get();
+    // Only transition if we're in a valid pre-active state
+    if (callState === 'connecting' || callState === 'calling' || callState === 'incoming') {
+      set({ callState: 'active' });
+    }
+  },
+
+  // Legacy — kept for backward compat but prefer setCallConnected
   setCallActive: () => {
     set({ callState: 'active' });
   },
