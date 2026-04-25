@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const BugReport = require('../models/BugReport');
 const cloudinary = require('../config/cloudinary');
 const streamifier = require('streamifier');
 
@@ -88,4 +89,23 @@ const getMe = async (req, res) => {
   res.json(req.user);
 };
 
-module.exports = { searchUsers, getUserById, updateProfile, updateFcmToken, getMe };
+// POST /api/users/bug-report
+const reportBug = async (req, res) => {
+  try {
+    const { title, description, deviceInfo } = req.body;
+    if (!title || !description) return res.status(400).json({ message: 'Title and description are required' });
+    
+    await BugReport.create({
+      reportedBy: req.user._id,
+      title,
+      description,
+      deviceInfo,
+    });
+    
+    res.status(201).json({ message: 'Bug report submitted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+module.exports = { searchUsers, getUserById, updateProfile, updateFcmToken, getMe, reportBug };

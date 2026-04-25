@@ -29,6 +29,7 @@ import CallScreen from '../screens/calls/CallScreen';
 import IncomingCallScreen from '../screens/calls/IncomingCallScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import WarningDetailsScreen from '../screens/settings/WarningDetailsScreen';
+import ReportBugScreen from '../screens/settings/ReportBugScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -177,6 +178,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Call" component={CallScreen} />
           <Stack.Screen name="IncomingCall" component={IncomingCallScreen} />
           <Stack.Screen name="WarningDetails" component={WarningDetailsScreen} />
+          <Stack.Screen name="ReportBug" component={ReportBugScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

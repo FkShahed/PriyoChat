@@ -14,6 +14,7 @@ export const userApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   updateFcmToken: (fcmToken) => api.put('/users/fcm-token', { fcmToken }),
+  reportBug: (data) => api.post('/users/bug-report', data),
 };
 
 export const requestApi = {

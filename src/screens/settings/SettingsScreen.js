@@ -34,21 +34,53 @@ export default function SettingsScreen({ navigation }) {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [perms, setPerms] = useState({ notifications: false, camera: false, microphone: false });
+  const [perms, setPerms] = useState({ 
+    notifications: false, 
+    camera: false, 
+    microphone: false,
+    calendar: false,
+    contacts: false,
+    location: false,
+    phone: false,
+    storage: false,
+  });
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
+  const getAndroidPerms = (type) => {
+    switch (type) {
+      case 'camera': return [PermissionsAndroid.PERMISSIONS.CAMERA];
+      case 'microphone': return [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+      case 'calendar': return [PermissionsAndroid.PERMISSIONS.READ_CALENDAR, PermissionsAndroid.PERMISSIONS.WRITE_CALENDAR];
+      case 'contacts': return [PermissionsAndroid.PERMISSIONS.READ_CONTACTS];
+      case 'location': return [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
+      case 'phone': return [PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE];
+      case 'storage':
+        if (Platform.Version >= 33) return [PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES, PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO];
+        return [PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE];
+      default: return [];
+    }
+  };
+
   const checkPermissions = async () => {
-    let notif = false, cam = false, mic = false;
+    let newPerms = { ...perms };
     try {
       const { status } = await Notifications.getPermissionsAsync();
-      notif = status === 'granted';
+      newPerms.notifications = status === 'granted';
       if (Platform.OS === 'android') {
-        cam = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
-        mic = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+        const types = ['camera', 'microphone', 'calendar', 'contacts', 'location', 'phone', 'storage'];
+        for (let t of types) {
+          const required = getAndroidPerms(t);
+          let allGranted = true;
+          for (let p of required) {
+            const isGranted = await PermissionsAndroid.check(p);
+            if (!isGranted) allGranted = false;
+          }
+          newPerms[t] = allGranted;
+        }
       } else if (Platform.OS === 'web') {
-        cam = true; mic = true; // Simplified for web
+        Object.keys(newPerms).forEach(k => newPerms[k] = true);
       }
-      setPerms({ notifications: notif, camera: cam, microphone: mic });
+      setPerms(newPerms);
     } catch (e) {
       console.warn('Error checking perms', e);
     }
@@ -77,9 +109,9 @@ export default function SettingsScreen({ navigation }) {
         const { status } = await Notifications.requestPermissionsAsync();
         granted = status === 'granted';
       } else if (Platform.OS === 'android') {
-        const permType = type === 'camera' ? PermissionsAndroid.PERMISSIONS.CAMERA : PermissionsAndroid.PERMISSIONS.RECORD_AUDIO;
-        const res = await PermissionsAndroid.request(permType);
-        granted = res === PermissionsAndroid.RESULTS.GRANTED;
+        const required = getAndroidPerms(type);
+        const results = await PermissionsAndroid.requestMultiple(required);
+        granted = required.every(r => results[r] === PermissionsAndroid.RESULTS.GRANTED);
       } else {
         granted = true; // web fallback
       }
@@ -94,6 +126,38 @@ export default function SettingsScreen({ navigation }) {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Open Settings', onPress: () => Linking.openSettings() }
       ]);
+    }
+  };
+
+  const grantAllPermissions = async () => {
+    let updatedPerms = { ...perms };
+    try {
+      if (!perms.notifications) {
+        const { status } = await Notifications.requestPermissionsAsync();
+        updatedPerms.notifications = status === 'granted';
+      }
+      
+      if (Platform.OS === 'android') {
+        const types = ['camera', 'microphone', 'calendar', 'contacts', 'location', 'phone', 'storage'];
+        let toRequest = [];
+        for (let t of types) {
+          if (!perms[t]) toRequest.push(...getAndroidPerms(t));
+        }
+        
+        if (toRequest.length > 0) {
+          const results = await PermissionsAndroid.requestMultiple(toRequest);
+          for (let t of types) {
+             const required = getAndroidPerms(t);
+             updatedPerms[t] = required.every(r => results[r] === PermissionsAndroid.RESULTS.GRANTED || results[r] === true);
+          }
+        }
+      } else if (Platform.OS === 'web') {
+        Object.keys(updatedPerms).forEach(k => updatedPerms[k] = true);
+      }
+      
+      setPerms(updatedPerms);
+    } catch (e) {
+      console.warn('Error requesting all perms', e);
     }
   };
 
@@ -299,46 +363,38 @@ export default function SettingsScreen({ navigation }) {
 
       {/* ── Permissions section ──────────────────────────────────── */}
       <View style={[styles.section, { backgroundColor: C.surface }]}>
-        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Permissions</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Permissions</Text>
+          <TouchableOpacity onPress={grantAllPermissions}>
+            <Text style={{ color: '#0084FF', fontSize: 13, fontWeight: '600' }}>Grant All</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={{ color: C.text, fontSize: 13, marginBottom: 12, lineHeight: 18, opacity: 0.8 }}>
-          Manage access to ensure calls and messages work properly.
+          Manage access to ensure all app features work properly.
         </Text>
         
-        <View style={styles.permRow}>
-          <View style={styles.permInfo}>
-            <Ionicons name="notifications-outline" size={20} color={C.text} />
-            <Text style={[styles.permLabel, { color: C.text }]}>Notifications</Text>
+        {[
+          { key: 'notifications', label: 'Notifications', icon: 'notifications-outline' },
+          { key: 'camera', label: 'Camera', icon: 'camera-outline' },
+          { key: 'microphone', label: 'Microphone', icon: 'mic-outline' },
+          { key: 'storage', label: 'Photos & Videos', icon: 'images-outline' },
+          { key: 'location', label: 'Location', icon: 'location-outline' },
+          { key: 'contacts', label: 'Contacts', icon: 'people-outline' },
+          { key: 'calendar', label: 'Calendar', icon: 'calendar-outline' },
+          { key: 'phone', label: 'Phone Status', icon: 'call-outline' },
+        ].map((p) => (
+          <View style={styles.permRow} key={p.key}>
+            <View style={styles.permInfo}>
+              <Ionicons name={p.icon} size={20} color={C.text} />
+              <Text style={[styles.permLabel, { color: C.text }]}>{p.label}</Text>
+            </View>
+            <Switch
+              value={perms[p.key]}
+              onValueChange={() => togglePermission(p.key)}
+              trackColor={{ true: '#34C759', false: C.border }}
+            />
           </View>
-          <Switch
-            value={perms.notifications}
-            onValueChange={() => togglePermission('notifications')}
-            trackColor={{ true: '#34C759', false: C.border }}
-          />
-        </View>
-
-        <View style={styles.permRow}>
-          <View style={styles.permInfo}>
-            <Ionicons name="camera-outline" size={20} color={C.text} />
-            <Text style={[styles.permLabel, { color: C.text }]}>Camera</Text>
-          </View>
-          <Switch
-            value={perms.camera}
-            onValueChange={() => togglePermission('camera')}
-            trackColor={{ true: '#34C759', false: C.border }}
-          />
-        </View>
-
-        <View style={styles.permRow}>
-          <View style={styles.permInfo}>
-            <Ionicons name="mic-outline" size={20} color={C.text} />
-            <Text style={[styles.permLabel, { color: C.text }]}>Microphone</Text>
-          </View>
-          <Switch
-            value={perms.microphone}
-            onValueChange={() => togglePermission('microphone')}
-            trackColor={{ true: '#34C759', false: C.border }}
-          />
-        </View>
+        ))}
       </View>
 
       {/* ── Account section ─────────────────────────────────────── */}
@@ -361,6 +417,18 @@ export default function SettingsScreen({ navigation }) {
               <Text style={[styles.updateBtnText, { color: C.text }]}>Check for Updates</Text>
             </>
           )}
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Support section ─────────────────────────────────────── */}
+      <View style={[styles.section, { backgroundColor: C.surface }]}>
+        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Support</Text>
+        <TouchableOpacity 
+          style={[styles.updateBtn, { backgroundColor: C.surfaceAlt, borderColor: 'transparent' }]} 
+          onPress={() => navigation.navigate('ReportBug')}
+        >
+          <Ionicons name="bug-outline" size={18} color="#FF9500" />
+          <Text style={[styles.updateBtnText, { color: C.text }]}>Report a Bug</Text>
         </TouchableOpacity>
       </View>
 
