@@ -6,13 +6,13 @@ import { navigationRef } from '../navigation/navigationRef';
 // Your Expo project ID from app.json
 const PROJECT_ID = 'ab48d8dd-0cb6-4a1d-82b0-84f55577a6d1';
 
-// ── Configure foreground notification behavior ──────────────────────────────
-// When the app is OPEN, we DON'T show banner alerts (socket handles real-time)
-// but we DO set the badge counter so it shows when switching to background.
+// Configure foreground notification behavior
+// Since we only trigger local notifications when NOT in the active chat,
+// we DO want to show the banner alert even when the app is foregrounded.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: false, // socket already shows messages in-app
-    shouldPlaySound: false,
+    shouldShowAlert: true,
+    shouldPlaySound: true,
     shouldSetBadge: true,
   }),
 });
@@ -51,10 +51,9 @@ class NotificationService {
 
   /**
    * Show a local notification for an incoming chat message.
-   * Only fires when the app is backgrounded/closed (socket handles foreground).
+   * Only fires when the user is NOT inside the active chat.
    */
   static async showMessageNotification({ senderName, senderId, text, conversationId, avatarUrl }) {
-    if (AppState.currentState === 'active') return; // already visible — skip
     try {
       await Notifications.scheduleNotificationAsync({
         content: {

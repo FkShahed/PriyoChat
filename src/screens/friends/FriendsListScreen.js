@@ -18,7 +18,7 @@ export default function FriendsListScreen({ navigation }) {
     conversations.forEach((c) => {
       const other = c.participants?.find((p) => p._id !== user?._id);
       if (other && !friendMap[other._id]) {
-        friendMap[other._id] = { ...other, conversationId: c._id };
+        friendMap[other._id] = { ...other, conversation: c };
       }
     });
     return Object.values(friendMap).sort((a, b) => a.name.localeCompare(b.name));
@@ -27,7 +27,7 @@ export default function FriendsListScreen({ navigation }) {
   const filteredFriends = friends.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()));
 
   const handleChat = (friend) => {
-    navigation.navigate('Chat', { conversationId: friend.conversationId, otherUser: friend });
+    navigation.navigate('Chat', { conversation: friend.conversation, otherUser: friend });
   };
 
   return (

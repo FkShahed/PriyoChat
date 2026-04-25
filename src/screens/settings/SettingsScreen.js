@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image, ScrollView,
-  Alert, ActivityIndicator, TextInput, Platform,
+  Alert, ActivityIndicator, TextInput, Platform, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -184,6 +184,21 @@ export default function SettingsScreen({ navigation }) {
             </TouchableOpacity>
           ))}
         </View>
+      </View>
+
+      {/* ── Permissions section ──────────────────────────────────── */}
+      <View style={[styles.section, { backgroundColor: C.surface }]}>
+        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Permissions</Text>
+        <Text style={{ color: C.text, fontSize: 14, marginBottom: 12, lineHeight: 20 }}>
+          Manage Notifications, Camera, and Microphone permissions to ensure calls and messages work properly.
+        </Text>
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: C.surfaceAlt, borderWidth: 1, borderColor: C.border, flexDirection: 'row', gap: 8, justifyContent: 'center' }]}
+          onPress={() => Linking.openSettings()}
+        >
+          <Ionicons name="settings-outline" size={18} color={C.text} />
+          <Text style={[styles.actionBtnText, { color: C.text }]}>Open Device Settings</Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── Account section ─────────────────────────────────────── */}
