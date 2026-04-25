@@ -5,6 +5,7 @@ const Report = require('../models/Report');
 const BugReport = require('../models/BugReport');
 const AuditLog = require('../models/AuditLog');
 const { logAdminAction } = require('../middleware/role');
+const { sendPushNotification } = require('../config/firebase');
 
 // GET /api/admin/users
 const getAllUsers = async (req, res) => {
@@ -298,6 +299,33 @@ const updateBugReportStatus = async (req, res) => {
   }
 };
 
+// POST /api/admin/broadcast
+const broadcastNotification = async (req, res) => {
+  try {
+    const { title, body } = req.body;
+    if (!title || !body) return res.status(400).json({ message: 'Title and body are required' });
+
+    // Fetch all users who have an FCM token
+    const users = await User.find({ fcmToken: { $exists: true, $ne: null } }).select('fcmToken name');
+
+    if (users.length === 0) {
+      return res.json({ message: 'No users with push tokens found.', sent: 0 });
+    }
+
+    let sent = 0;
+    // Send in parallel with Promise.allSettled so one failure doesn't stop the rest
+    const results = await Promise.allSettled(
+      users.map((u) => sendPushNotification(u.fcmToken, title, body, { type: 'broadcast' }))
+    );
+    sent = results.filter((r) => r.status === 'fulfilled').length;
+
+    await logAdminAction(req.user._id, 'BROADCAST_NOTIFICATION', 'System', null, { title, body, sent }, req.ip);
+    res.json({ message: `Broadcast sent to ${sent}/${users.length} users.`, sent, total: users.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 module.exports = {
   getAllUsers,
   banUser,
@@ -310,4 +338,5 @@ module.exports = {
   getAuditLogs,
   getBugReports,
   updateBugReportStatus,
+  broadcastNotification,
 };

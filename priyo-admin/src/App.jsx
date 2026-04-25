@@ -8,6 +8,7 @@ import UsersPage from './pages/UsersPage';
 import ReportsPage from './pages/ReportsPage';
 import BugReportsPage from './pages/BugReportsPage';
 import AuditLogsPage from './pages/AuditLogsPage';
+import BroadcastPage from './pages/BroadcastPage';
 import './components/AdminLayout.css';
 
 function ProtectedRoute({ children }) {
@@ -29,6 +30,7 @@ function AppRoutes() {
                 <Route path="/users" element={<UsersPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/bug-reports" element={<BugReportsPage />} />
+                <Route path="/broadcast" element={<BroadcastPage />} />
                 <Route path="/audit-logs" element={<AuditLogsPage />} />
               </Routes>
             </AdminLayout>

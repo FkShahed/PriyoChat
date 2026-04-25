@@ -4,7 +4,8 @@ const { requireAdmin } = require('../middleware/role');
 const {
   getAllUsers, banUser, suspendUser, warnUser, removeWarning,
   getReports, resolveReport, getAnalytics, getAuditLogs,
-  getBugReports, updateBugReportStatus
+  getBugReports, updateBugReportStatus,
+  broadcastNotification
 } = require('../controllers/adminController');
 
 // All admin routes protected
@@ -24,5 +25,7 @@ router.put('/bug-reports/:id/status', updateBugReportStatus);
 
 router.get('/analytics', getAnalytics);
 router.get('/audit-logs', getAuditLogs);
+
+router.post('/broadcast', broadcastNotification);
 
 module.exports = router;
