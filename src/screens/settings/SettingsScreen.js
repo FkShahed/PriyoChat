@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
+import Constants, { AppOwnership } from 'expo-constants';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
@@ -114,7 +115,21 @@ export default function SettingsScreen({ navigation }) {
   };
   
   const onUpdateCheck = async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      Alert.alert('Not Supported', 'Updates are managed by the browser on web.');
+      return;
+    }
+
+    if (Constants.appOwnership === AppOwnership.Expo) {
+      Alert.alert('Expo Go', 'You are currently using Expo Go. Updates are handled automatically by the Expo Go app. This "Check for Updates" feature is for standalone APK/IPA builds.');
+      return;
+    }
+
+    if (!Updates.isEnabled) {
+      Alert.alert('Update Info', 'Updates are only enabled in standalone builds (APK/IPA). In development, changes are applied instantly via live reloading.');
+      return;
+    }
+
     setCheckingUpdate(true);
     try {
       const update = await Updates.checkForUpdateAsync();
@@ -122,8 +137,15 @@ export default function SettingsScreen({ navigation }) {
         Alert.alert('Update Available', 'A new version of PriyoChat is available. Download and restart now?', [
           { text: 'Later', style: 'cancel' },
           { text: 'Update', onPress: async () => {
-            await Updates.fetchUpdateAsync();
-            await Updates.reloadAsync();
+            try {
+              setCheckingUpdate(true);
+              await Updates.fetchUpdateAsync();
+              await Updates.reloadAsync();
+            } catch (err) {
+              Alert.alert('Update Failed', 'Could not download the update. Please check your internet connection.');
+            } finally {
+              setCheckingUpdate(false);
+            }
           }}
         ]);
       } else {
@@ -131,7 +153,7 @@ export default function SettingsScreen({ navigation }) {
       }
     } catch (e) {
       console.warn('Update check error', e);
-      Alert.alert('Update Info', 'Updates are only available in preview/production builds. Development builds use live reloading.');
+      Alert.alert('Update Service Error', e.message || 'Could not connect to the update service.');
     } finally {
       setCheckingUpdate(false);
     }
