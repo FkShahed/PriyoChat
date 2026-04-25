@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Image,
-  TextInput, ActivityIndicator, StatusBar,
+  TextInput, ActivityIndicator, StatusBar, Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -156,6 +156,24 @@ export default function ChatListScreen({ navigation }) {
         </View>
       </LinearGradient>
 
+      {user?.warnings > 0 && (
+        <TouchableOpacity 
+          activeOpacity={0.8}
+          style={[styles.warningBanner, { backgroundColor: isDark ? '#332200' : '#FFF9E6' }]}
+          onPress={() => navigation.navigate('WarningDetails')}
+        >
+          <Ionicons name="warning" size={18} color="#FF9500" style={{ marginRight: 10 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.warningTitle, { color: isDark ? '#FFD699' : '#995500' }]}>
+              Account Warning ({user.warnings})
+            </Text>
+            <Text style={[styles.warningSub, { color: isDark ? 'rgba(255,214,153,0.7)' : '#B36600' }]}>
+              Tap to see details and reason.
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
       {loading ? (
         <ActivityIndicator style={{ marginTop: 48 }} color="#0084FF" size="large" />
       ) : filtered.length === 0 ? (
@@ -243,4 +261,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingVertical: 13,
   },
   emptyBtnText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,149,0,0.2)',
+  },
+  warningTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  warningSub: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, ActivityIndicator } from 'react-native';
+import { Text, View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import useAuthStore from '../store/useAuthStore';
 import useThemeStore, { useColors } from '../store/useThemeStore';
 import { navigationRef } from './navigationRef';
@@ -28,6 +28,7 @@ import CallsListScreen from '../screens/calls/CallsListScreen';
 import CallScreen from '../screens/calls/CallScreen';
 import IncomingCallScreen from '../screens/calls/IncomingCallScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
+import WarningDetailsScreen from '../screens/settings/WarningDetailsScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -130,6 +131,29 @@ export default function AppNavigator() {
     initialRoute = user?.profileSetup ? 'MainTabs' : 'ProfileSetup';
   }
 
+  if (isAuthenticated && (user?.isBlocked || user?.isSuspended)) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', padding: 20 }}>
+        <Ionicons name="lock-closed" size={80} color="#FF3B30" />
+        <Text style={{ color: '#FFF', fontSize: 24, fontWeight: '700', marginTop: 20 }}>Account Restricted</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginTop: 12 }}>
+          {user?.isBlocked ? 'Your account has been permanently banned.' : 'Your account is temporarily suspended.'}
+        </Text>
+        {user?.moderationReason ? (
+          <Text style={{ color: '#FF3B30', marginTop: 20, fontWeight: '600', textAlign: 'center' }}>
+            Reason: {user.moderationReason}
+          </Text>
+        ) : null}
+        <TouchableOpacity 
+          style={{ marginTop: 40, paddingHorizontal: 30, paddingVertical: 12, backgroundColor: '#FFF', borderRadius: 8 }}
+          onPress={() => useAuthStore.getState().logout()}
+        >
+          <Text style={{ color: '#000', fontWeight: '700' }}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <>
       <CallObserver />
@@ -152,6 +176,7 @@ export default function AppNavigator() {
           <Stack.Screen name="FriendsList" component={FriendsListScreen} />
           <Stack.Screen name="Call" component={CallScreen} />
           <Stack.Screen name="IncomingCall" component={IncomingCallScreen} />
+          <Stack.Screen name="WarningDetails" component={WarningDetailsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

@@ -31,13 +31,22 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor — handle 401 globally
+// Response interceptor — handle 401 & 403 globally
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+
+    if (status === 401) {
       await AsyncStorage.multiRemove(['auth_token', 'auth_user']);
     }
+
+    if (status === 403) {
+      // 403 errors are handled by our Account Restricted screen or the Login screen.
+      // We log them to console but don't want them triggering generic error alerts.
+      console.log('[API] 403 Forbidden - Access Restricted');
+    }
+
     return Promise.reject(error);
   }
 );

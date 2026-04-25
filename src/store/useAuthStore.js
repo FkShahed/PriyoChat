@@ -23,7 +23,26 @@ const useAuthStore = create((set, get) => ({
       } else {
         set({ isLoading: false });
       }
-    } catch {
+    } catch (err) {
+      // If banned/suspended, the getMe call will return 403.
+      if (err.response?.status === 403) {
+        const msg = err.response.data?.message?.toLowerCase() || '';
+        const isBanned = msg.includes('ban') || msg.includes('block');
+        const isSuspended = msg.includes('suspended');
+        
+        if (isBanned || isSuspended) {
+          const userStr = await AsyncStorage.getItem('auth_user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            set({
+              user: { ...user, isBlocked: isBanned, isSuspended, moderationReason: err.response.data?.reason || '' },
+              isAuthenticated: true,
+              isLoading: false
+            });
+            return;
+          }
+        }
+      }
       set({ isLoading: false });
     }
   },

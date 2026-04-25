@@ -32,8 +32,8 @@ const login = async (req, res) => {
     if (!user || !(await user.comparePassword(password)))
       return res.status(401).json({ message: 'Invalid email or password' });
 
-    if (user.isBlocked) return res.status(403).json({ message: 'Account banned' });
-    if (user.isSuspended) return res.status(403).json({ message: 'Account suspended' });
+    if (user.isBlocked) return res.status(403).json({ message: 'Account banned', reason: user.moderationReason });
+    if (user.isSuspended) return res.status(403).json({ message: 'Account suspended', reason: user.moderationReason });
 
     const token = generateToken(user._id);
     const safeUser = user.toJSON();

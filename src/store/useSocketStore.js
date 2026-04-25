@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 import useChatStore from './useChatStore';
 import useCallStore from './useCallStore';
+import useAuthStore from './useAuthStore';
 import NotificationService from '../services/NotificationService';
 
 import { SOCKET_URL } from '../api/client';
@@ -143,6 +145,23 @@ const useSocketStore = create((set, get) => ({
 
     newSocket.on('request_accepted', ({ conversation }) => {
       useChatStore.getState().addOrUpdateConversation(conversation);
+    });
+
+    newSocket.on('user_moderated', ({ type, reason, warnings }) => {
+      const title = type === 'warn' ? 'Official Warning' : 'Account Restricted';
+      let message = reason || 'No reason provided';
+      
+      if (type === 'warn') {
+        message = `You have received a warning.\nReason: ${reason}\nTotal warnings: ${warnings}`;
+        Alert.alert(title, message);
+        useAuthStore.getState().updateUser({ ...useAuthStore.getState().user, warnings });
+      } else if (type === 'remove_warning') {
+        useAuthStore.getState().updateUser({ ...useAuthStore.getState().user, warnings });
+      } else if (type === 'ban' || type === 'suspend') {
+        Alert.alert(title, `Your account has been ${type === 'ban' ? 'banned' : 'suspended'}.\nReason: ${reason}`, [
+          { text: 'OK', onPress: () => useAuthStore.getState().logout() }
+        ]);
+      }
     });
 
     set({ socket: newSocket });

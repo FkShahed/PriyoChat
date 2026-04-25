@@ -41,7 +41,13 @@ export default function LoginScreen({ navigation }) {
       }
     } catch (err) {
       console.log('[Login] error:', err?.message, 'response:', JSON.stringify(err?.response?.data));
-      showAlert('Login Failed', err.response?.data?.message || err.message || 'Please try again');
+      if (err.response?.status === 403) {
+        const reason = err.response.data?.reason;
+        const msg = reason ? `${err.response.data.message}\nReason: ${reason}` : (err.response.data?.message || 'Account restricted');
+        showAlert('Account Restricted', msg);
+      } else {
+        showAlert('Login Failed', err.response?.data?.message || err.message || 'Please try again');
+      }
     } finally {
       setLoading(false);
     }

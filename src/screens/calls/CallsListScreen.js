@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Image, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import useCallStore from '../../store/useCallStore';
 import useAuthStore from '../../store/useAuthStore';
 import { useColors } from '../../store/useThemeStore';
@@ -53,7 +53,8 @@ export default function CallsListScreen({ navigation }) {
     const { remoteUser, type, direction, status, timestamp } = item;
     const gradColors = avatarGradient(remoteUser?.name || '');
     
-    let iconName = 'call';
+    let IconComponent = Feather;
+    let iconName = 'phone';
     let iconColor = C.textSecondary;
 
     if (direction === 'incoming') {
@@ -85,7 +86,7 @@ export default function CallsListScreen({ navigation }) {
             {remoteUser?.name || 'Unknown'}
           </Text>
           <View style={styles.previewRow}>
-            <Ionicons name={iconName} size={14} color={iconColor} style={{ marginRight: 6 }} />
+            <IconComponent name={iconName} size={14} color={iconColor} style={{ marginRight: 6 }} />
             <Text style={[styles.preview, { color: C.textSecondary }]} numberOfLines={1}>
               {direction.charAt(0).toUpperCase() + direction.slice(1)} • {type === 'video' ? 'Video' : 'Audio'} • {formatTime(timestamp)}
             </Text>
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
   avatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
   initials: { fontSize: 19, fontWeight: '700', color: '#FFF' },
   info: { flex: 1, minWidth: 0 },
-  name: { fontSize: 16, fontWeight: '600', flex: 1, marginBottom: 3 },
+  name: { fontSize: 16, fontWeight: '600', marginBottom: 1 },
   previewRow: { flexDirection: 'row', alignItems: 'center' },
   preview: { fontSize: 13, flex: 1 },
   callBtn: { padding: 10, paddingRight: 0 },

@@ -34,10 +34,20 @@ const banUser = async (req, res) => {
     const { ban = true, reason = '' } = req.body;
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { isBlocked: ban },
+      { isBlocked: ban, moderationReason: reason },
       { new: true }
     );
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Notify user via socket
+    const io = req.app.get('io');
+    if (io) {
+      io.to(user._id.toString()).emit('user_moderated', {
+        type: ban ? 'ban' : 'unban',
+        reason,
+      });
+    }
+
     await logAdminAction(
       req.user._id,
       ban ? 'BAN_USER' : 'UNBAN_USER',
@@ -58,10 +68,20 @@ const suspendUser = async (req, res) => {
     const { suspend = true, reason = '' } = req.body;
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { isSuspended: suspend },
+      { isSuspended: suspend, moderationReason: reason },
       { new: true }
     );
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Notify user via socket
+    const io = req.app.get('io');
+    if (io) {
+      io.to(user._id.toString()).emit('user_moderated', {
+        type: suspend ? 'suspend' : 'unsuspend',
+        reason,
+      });
+    }
+
     await logAdminAction(
       req.user._id,
       suspend ? 'SUSPEND_USER' : 'UNSUSPEND_USER',
@@ -82,13 +102,55 @@ const warnUser = async (req, res) => {
     const { reason = '' } = req.body;
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { $inc: { warnings: 1 } },
+      { $inc: { warnings: 1 }, moderationReason: reason },
       { new: true }
     );
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Notify user via socket
+    const io = req.app.get('io');
+    if (io) {
+      io.to(user._id.toString()).emit('user_moderated', {
+        type: 'warn',
+        reason,
+        warnings: user.warnings,
+      });
+    }
+
     await logAdminAction(req.user._id, 'WARN_USER', 'User', user._id, { reason, targetName: user.name }, req.ip);
     res.json({ message: 'Warning issued', warnings: user.warnings });
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// PUT /api/admin/users/:id/remove-warning
+const removeWarning = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    let updatedWarnings = user.warnings;
+    if (user.warnings > 0) {
+      updatedWarnings = user.warnings - 1;
+      await User.findByIdAndUpdate(req.params.id, { warnings: updatedWarnings });
+    }
+
+    // Notify user via socket
+    const io = req.app.get('io');
+    if (io) {
+      const targetId = user._id.toString();
+      console.log(`[Admin] Emitting remove_warning to ${targetId}, new count: ${updatedWarnings}`);
+      io.to(targetId).emit('user_moderated', {
+        type: 'remove_warning',
+        warnings: updatedWarnings,
+      });
+    }
+
+    await logAdminAction(req.user._id, 'REMOVE_WARNING', 'User', user._id, { targetName: user.name }, req.ip);
+    res.json({ message: 'Warning removed', warnings: updatedWarnings });
+  } catch (err) {
+    console.error('[Admin] removeWarning error:', err.message);
     res.status(500).json({ message: err.message });
   }
 };
@@ -206,6 +268,7 @@ module.exports = {
   banUser,
   suspendUser,
   warnUser,
+  removeWarning,
   getReports,
   resolveReport,
   getAnalytics,

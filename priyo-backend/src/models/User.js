@@ -70,6 +70,10 @@ const userSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    moderationReason: {
+      type: String,
+      default: '',
+    },
     profileSetup: {
       type: Boolean,
       default: false,

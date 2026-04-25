@@ -32,13 +32,29 @@ export default function UsersPage() {
   useEffect(() => { load(page, search); }, [page]);
 
   const doAction = async (userid, action) => {
+    console.log(`[AdminAction] ${action} on user ${userid}`);
+    let reason = '';
+    if (['ban', 'warn', 'suspend'].includes(action)) {
+      reason = window.prompt(`Enter reason for ${action}:`);
+      if (reason === null) return; // cancelled
+    }
+
     setActionLoading((prev) => ({ ...prev, [userid]: action }));
     try {
-      if (action === 'ban') await api.put(`/admin/users/${userid}/ban`, { ban: true });
+      if (action === 'ban') await api.put(`/admin/users/${userid}/ban`, { ban: true, reason });
       else if (action === 'unban') await api.put(`/admin/users/${userid}/ban`, { ban: false });
-      else if (action === 'warn') await api.put(`/admin/users/${userid}/warn`, { reason: 'Admin warning' });
-      else if (action === 'suspend') await api.put(`/admin/users/${userid}/suspend`, { suspend: true });
-      load(page, search);
+      else if (action === 'warn') await api.put(`/admin/users/${userid}/warn`, { reason });
+      else if (action === 'remove-warn') {
+        const res = await api.put(`/admin/users/${userid}/remove-warning`);
+        console.log('[remove-warn] response:', res.data);
+      }
+      else if (action === 'suspend') await api.put(`/admin/users/${userid}/suspend`, { suspend: true, reason });
+      else if (action === 'unsuspend') await api.put(`/admin/users/${userid}/suspend`, { suspend: false });
+      // Force a fresh fetch with a small delay so DB write settles
+      setTimeout(() => load(page, search), 300);
+    } catch (err) {
+      console.error('[AdminAction] error:', err);
+      window.alert(`Error: ${err.response?.data?.message || err.message}`);
     } finally {
       setActionLoading((prev) => ({ ...prev, [userid]: null }));
     }
@@ -104,9 +120,33 @@ export default function UsersPage() {
                   {u.isOnline ? <span className="badge badge-online">Online</span> : <span className="badge badge-offline">Offline</span>}
                 </td>
                 <td>
-                  <div className="actions">
-                    <button className="btn btn-warn" onClick={() => doAction(u._id, 'warn')}>⚠️ Warn</button>
-                    {!u.isSuspended && <button className="btn btn-ban" onClick={() => doAction(u._id, 'suspend')}>⏸ Suspend</button>}
+                  <div className="actions" style={{ alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                      <button 
+                        className="btn btn-warn" 
+                        style={{ borderTopRightRadius: u.warnings > 0 ? 0 : 7, borderBottomRightRadius: u.warnings > 0 ? 0 : 7 }}
+                        onClick={() => doAction(u._id, 'warn')} 
+                        disabled={actionLoading[u._id]}
+                      >
+                        {actionLoading[u._id] === 'warn' ? '...' : '⚠️ Warn'}
+                      </button>
+                      {u.warnings > 0 && (
+                        <button 
+                          className="btn btn-warn" 
+                          style={{ padding: '4px 8px', borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderLeftColor: 'transparent', marginLeft: '1px' }} 
+                          onClick={() => doAction(u._id, 'remove-warn')}
+                          disabled={actionLoading[u._id]}
+                          title="Remove Warning"
+                        >
+                          {actionLoading[u._id] === 'remove-warn' ? '...' : '✖'}
+                        </button>
+                      )}
+                    </div>
+                    {u.isSuspended ? (
+                      <button className="btn btn-unban" onClick={() => doAction(u._id, 'unsuspend')}>▶ Unsuspend</button>
+                    ) : (
+                      <button className="btn btn-ban" onClick={() => doAction(u._id, 'suspend')}>⏸ Suspend</button>
+                    )}
                     {u.isBlocked ? (
                       <button className="btn btn-unban" onClick={() => doAction(u._id, 'unban')}>✓ Unban</button>
                     ) : (
