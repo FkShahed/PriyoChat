@@ -5,7 +5,7 @@ const Report = require('../models/Report');
 const BugReport = require('../models/BugReport');
 const AuditLog = require('../models/AuditLog');
 const { logAdminAction } = require('../middleware/role');
-const { sendPushNotification } = require('../config/firebase');
+const { sendPushNotification, sendExpoPushBatch } = require('../config/firebase');
 
 // GET /api/admin/users
 const getAllUsers = async (req, res) => {
@@ -305,21 +305,32 @@ const broadcastNotification = async (req, res) => {
     const { title, body } = req.body;
     if (!title || !body) return res.status(400).json({ message: 'Title and body are required' });
 
-    // Fetch all users who have an FCM token
-    const users = await User.find({ fcmToken: { $exists: true, $ne: null } }).select('fcmToken name');
+    // Fetch all users who have an FCM/Expo token
+    const users = await User.find({ fcmToken: { $exists: true, $ne: null } }).select('fcmToken');
 
     if (users.length === 0) {
       return res.json({ message: 'No users with push tokens found.', sent: 0 });
     }
 
-    let sent = 0;
-    // Send in parallel with Promise.allSettled so one failure doesn't stop the rest
-    const results = await Promise.allSettled(
-      users.map((u) => sendPushNotification(u.fcmToken, title, body, { type: 'broadcast' }))
-    );
-    sent = results.filter((r) => r.status === 'fulfilled').length;
+    // Separate Expo tokens from raw FCM tokens
+    const expoTokens = users.map(u => u.fcmToken).filter(t => t && (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken')));
+    const fcmTokens = users.map(u => u.fcmToken).filter(t => t && !t.startsWith('ExponentPushToken') && !t.startsWith('ExpoPushToken'));
 
-    await logAdminAction(req.user._id, 'BROADCAST_NOTIFICATION', 'System', null, { title, body, sent }, req.ip);
+    let sent = 0;
+
+    // Send Expo tokens in efficient batches
+    if (expoTokens.length > 0) {
+      const expoSent = await sendExpoPushBatch(expoTokens, title, body, { type: 'broadcast' });
+      sent += expoSent;
+    }
+
+    // Send individual FCM tokens
+    if (fcmTokens.length > 0) {
+      const results = await Promise.allSettled(fcmTokens.map(t => sendPushNotification(t, title, body, { type: 'broadcast' })));
+      sent += results.filter(r => r.status === 'fulfilled').length;
+    }
+
+    await logAdminAction(req.user._id, 'BROADCAST_NOTIFICATION', 'System', null, { title, body, sent, total: users.length }, req.ip);
     res.json({ message: `Broadcast sent to ${sent}/${users.length} users.`, sent, total: users.length });
   } catch (err) {
     res.status(500).json({ message: err.message });
