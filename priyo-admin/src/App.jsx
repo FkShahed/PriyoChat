@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import UsersPage from './pages/UsersPage';
 import ReportsPage from './pages/ReportsPage';
+import BugReportsPage from './pages/BugReportsPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import './components/AdminLayout.css';
 
@@ -27,6 +28,7 @@ function AppRoutes() {
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/users" element={<UsersPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/bug-reports" element={<BugReportsPage />} />
                 <Route path="/audit-logs" element={<AuditLogsPage />} />
               </Routes>
             </AdminLayout>

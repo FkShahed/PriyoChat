@@ -7,6 +7,7 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: '📊' },
   { path: '/users', label: 'Users', icon: '👥' },
   { path: '/reports', label: 'Reports', icon: '🚩' },
+  { path: '/bug-reports', label: 'Bug Reports', icon: '🐞' },
   { path: '/audit-logs', label: 'Audit Logs', icon: '📋' },
 ];
 

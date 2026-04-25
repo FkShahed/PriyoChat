@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const Report = require('../models/Report');
+const BugReport = require('../models/BugReport');
 const AuditLog = require('../models/AuditLog');
 const { logAdminAction } = require('../middleware/role');
 
@@ -263,6 +264,40 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
+// GET /api/admin/bug-reports
+const getBugReports = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+    const query = {};
+    if (status) query.status = status;
+
+    const reports = await BugReport.find(query)
+      .populate('reportedBy', 'name email avatar')
+      .sort('-createdAt')
+      .skip((page - 1) * limit)
+      .limit(Number(limit));
+    const total = await BugReport.countDocuments(query);
+
+    res.json({ reports, total, page: Number(page), totalPages: Math.ceil(total / limit) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// PUT /api/admin/bug-reports/:id/status
+const updateBugReportStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const report = await BugReport.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    if (!report) return res.status(404).json({ message: 'Bug report not found' });
+
+    await logAdminAction(req.user._id, 'UPDATE_BUG_REPORT', 'BugReport', report._id, { status }, req.ip);
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 module.exports = {
   getAllUsers,
   banUser,
@@ -273,4 +308,6 @@ module.exports = {
   resolveReport,
   getAnalytics,
   getAuditLogs,
+  getBugReports,
+  updateBugReportStatus,
 };
