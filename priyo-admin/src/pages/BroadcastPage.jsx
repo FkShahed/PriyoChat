@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import { useAdminAuth } from '../context/AuthContext';
 
 export default function BroadcastPage() {
-  const { token } = useAdminAuth();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,11 +21,7 @@ export default function BroadcastPage() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await axios.post(
-        `${import.meta.env.VITE_API_URL}/admin/broadcast`,
-        { title, body },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await api.post('/admin/broadcast', { title, body });
       setResult({ success: true, message: res.data.message });
       setTitle('');
       setBody('');

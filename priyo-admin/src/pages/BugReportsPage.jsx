@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useAdminAuth } from '../context/AuthContext';
+import api from '../api/client';
 
 export default function BugReportsPage() {
-  const { token } = useAdminAuth();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -11,10 +9,8 @@ export default function BugReportsPage() {
   const fetchBugReports = async () => {
     setLoading(true);
     try {
-      const url = `${import.meta.env.VITE_API_URL}/admin/bug-reports${statusFilter ? `?status=${statusFilter}` : ''}`;
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const url = `/admin/bug-reports${statusFilter ? `?status=${statusFilter}` : ''}`;
+      const res = await api.get(url);
       setReports(res.data.reports || []);
     } catch (err) {
       alert('Failed to fetch bug reports: ' + (err.response?.data?.message || err.message));
@@ -29,12 +25,7 @@ export default function BugReportsPage() {
 
   const updateStatus = async (id, newStatus) => {
     try {
-      await axios.put(
-        `${import.meta.env.VITE_API_URL}/admin/bug-reports/${id}/status`,
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      // Update local state
+      await api.put(`/admin/bug-reports/${id}/status`, { status: newStatus });
       setReports(reports.map((r) => (r._id === id ? { ...r, status: newStatus } : r)));
     } catch (err) {
       console.error(err);
