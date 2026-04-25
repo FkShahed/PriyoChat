@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
+import * as Updates from 'expo-updates';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
@@ -33,6 +34,7 @@ export default function SettingsScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
 
   const [perms, setPerms] = useState({ notifications: false, camera: false, microphone: false });
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const checkPermissions = async () => {
     let notif = false, cam = false, mic = false;
@@ -108,6 +110,30 @@ export default function SettingsScreen({ navigation }) {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Logout', style: 'destructive', onPress: performLogout },
       ]);
+    }
+  };
+  
+  const onUpdateCheck = async () => {
+    if (Platform.OS === 'web') return;
+    setCheckingUpdate(true);
+    try {
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        Alert.alert('Update Available', 'A new version of PriyoChat is available. Download and restart now?', [
+          { text: 'Later', style: 'cancel' },
+          { text: 'Update', onPress: async () => {
+            await Updates.fetchUpdateAsync();
+            await Updates.reloadAsync();
+          }}
+        ]);
+      } else {
+        Alert.alert('Up to Date', 'You are running the latest version of PriyoChat.');
+      }
+    } catch (e) {
+      console.warn('Update check error', e);
+      Alert.alert('Update Info', 'Updates are only available in preview/production builds. Development builds use live reloading.');
+    } finally {
+      setCheckingUpdate(false);
     }
   };
 
@@ -300,6 +326,20 @@ export default function SettingsScreen({ navigation }) {
           <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Email</Text>
           <Text style={[styles.infoValue, { color: C.text }]}>{user?.email}</Text>
         </View>
+        <TouchableOpacity 
+          style={[styles.updateBtn, { backgroundColor: C.surfaceAlt }]} 
+          onPress={onUpdateCheck}
+          disabled={checkingUpdate}
+        >
+          {checkingUpdate ? (
+            <ActivityIndicator color={C.textSecondary} size="small" />
+          ) : (
+            <>
+              <Ionicons name="cloud-download-outline" size={18} color="#0084FF" />
+              <Text style={[styles.updateBtnText, { color: C.text }]}>Check for Updates</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* ── Logout ──────────────────────────────────────────────── */}
@@ -363,4 +403,19 @@ const styles = StyleSheet.create({
   },
   permInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   permLabel: { fontSize: 15, fontWeight: '500' },
+  updateBtn: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,132,255,0.2)',
+  },
+  updateBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
