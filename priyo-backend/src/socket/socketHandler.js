@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const Call = require('../models/Call');
 const { sendPushNotification } = require('../config/firebase');
 
 // Map userId -> socketId for online tracking
@@ -133,17 +134,31 @@ const setupSocket = (io) => {
     });
 
     // ─── WebRTC Signaling ──────────────────────────────────────────
-    socket.on('call_offer', ({ to, offer, callType }) => {
+    socket.on('call_offer', async ({ to, offer, callType }) => {
+      console.log(`📞 Call Offer from ${socket.user.name} (${userId}) to ${to}`);
+      
+      // Create database record
+      const call = await Call.create({
+        caller: userId,
+        receiver: to,
+        type: callType,
+        status: 'pending'
+      });
+
       // emit to receiver's personal room (more reliable than raw socketId)
       io.to(to).emit('incoming_call', {
         from: userId,
+        callId: call._id,
         caller: { name: socket.user.name, avatar: socket.user.avatar },
         offer,
         callType,
       });
     });
 
-    socket.on('call_answer', ({ to, answer }) => {
+    socket.on('call_answer', async ({ to, answer, callId }) => {
+      if (callId) {
+        await Call.findByIdAndUpdate(callId, { status: 'completed' }); // Simplified: mark as completed once answered
+      }
       io.to(to).emit('call_answered', { from: userId, answer });
     });
 
@@ -151,11 +166,21 @@ const setupSocket = (io) => {
       io.to(to).emit('call_ice', { from: userId, candidate });
     });
 
-    socket.on('call_reject', ({ to }) => {
+    socket.on('call_reject', async ({ to, callId }) => {
+      if (callId) {
+        await Call.findByIdAndUpdate(callId, { status: 'rejected', endedAt: new Date() });
+      }
       io.to(to).emit('call_rejected', { from: userId });
     });
 
-    socket.on('call_end', ({ to }) => {
+    socket.on('call_end', async ({ to, callId, duration = 0 }) => {
+      if (callId) {
+        await Call.findByIdAndUpdate(callId, { 
+          status: 'completed', 
+          endedAt: new Date(),
+          duration 
+        });
+      }
       io.to(to).emit('call_ended', { from: userId });
     });
 

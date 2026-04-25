@@ -24,6 +24,7 @@ import SharedMediaScreen from '../screens/chat/SharedMediaScreen';
 import SearchUsersScreen from '../screens/friends/SearchUsersScreen';
 import FriendRequestsScreen from '../screens/friends/FriendRequestsScreen';
 import FriendsListScreen from '../screens/friends/FriendsListScreen';
+import CallsListScreen from '../screens/calls/CallsListScreen';
 import CallScreen from '../screens/calls/CallScreen';
 import IncomingCallScreen from '../screens/calls/IncomingCallScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
@@ -34,7 +35,7 @@ const Tab = createBottomTabNavigator();
 function TabIcon({ name, focused, C }) {
   let iconName;
   if (name === 'Chats') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-  else if (name === 'Friends') iconName = focused ? 'people' : 'people-outline';
+  else if (name === 'Calls') iconName = focused ? 'call' : 'call-outline';
   else if (name === 'Requests') iconName = focused ? 'person-add' : 'person-add-outline';
   else if (name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
 
@@ -61,7 +62,7 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Chats" component={ChatListScreen} />
-      <Tab.Screen name="Friends" component={FriendsListScreen} />
+      <Tab.Screen name="Calls" component={CallsListScreen} />
       <Tab.Screen name="Requests" component={FriendRequestsScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
@@ -148,6 +149,7 @@ export default function AppNavigator() {
           <Stack.Screen name="UserProfile" component={UserProfileScreen} />
           <Stack.Screen name="SharedMedia" component={SharedMediaScreen} />
           <Stack.Screen name="SearchUsers" component={SearchUsersScreen} />
+          <Stack.Screen name="FriendsList" component={FriendsListScreen} />
           <Stack.Screen name="Call" component={CallScreen} />
           <Stack.Screen name="IncomingCall" component={IncomingCallScreen} />
         </Stack.Navigator>

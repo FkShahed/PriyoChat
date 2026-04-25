@@ -252,12 +252,12 @@ export default function ChatScreen({ route, navigation }) {
   };
 
   const displayedMessages = searchQuery.trim()
-    ? convoMessages.filter(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? convoMessages.filter(m => m.text?.toLowerCase()?.includes(searchQuery.toLowerCase()))
     : convoMessages;
 
   // ── Render message ──────────────────────────────────────────────────
   const renderMessage = ({ item: msg }) => {
-    const isMine = msg.sender?._id === currentUser?._id || msg.sender === currentUser?._id;
+    const isMine = msg.sender?._id?.toString() === currentUser?._id?.toString() || msg.sender?.toString() === currentUser?._id?.toString();
     if (msg.isDeleted) {
       return (
         <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>

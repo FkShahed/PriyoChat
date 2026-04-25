@@ -43,3 +43,9 @@ export const mediaApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 };
+
+export const callApi = {
+  getAll: () => api.get('/calls'),
+  delete: (id) => api.delete(`/calls/${id}`),
+  clearAll: () => api.delete('/calls/clear/all'),
+};

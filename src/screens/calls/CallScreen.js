@@ -32,6 +32,7 @@ function formatDuration(secs) {
 export default function CallScreen({ route, navigation }) {
   const { otherUser, callType } = route.params;
   const { callState, isReceiver, offer, resetCall } = useCallStore();
+  console.log('[CallScreen] otherUser:', otherUser?._id, otherUser?.name, 'isReceiver:', isReceiver);
   const { emit } = useSocketStore();
 
   const [localStream, setLocalStream] = useState(null);

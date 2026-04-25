@@ -10,6 +10,7 @@ import { getInitials } from '../../utils/helpers';
 
 export default function IncomingCallScreen({ navigation }) {
   const { remoteUser, callType, callState, setCallAccepted, resetCall } = useCallStore();
+  console.log('[IncomingCallScreen] remoteUser:', remoteUser?._id, remoteUser?.name);
   const { emit } = useSocketStore();
   const slideAnim = useRef(new RNAnimated.Value(60)).current;
   const opacityAnim = useRef(new RNAnimated.Value(0)).current;

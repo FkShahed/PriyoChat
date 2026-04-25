@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image, ScrollView,
-  Alert, ActivityIndicator, TextInput, Platform, Linking,
+  Alert, ActivityIndicator, TextInput, Platform, Linking, Switch, PermissionsAndroid, AppState
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Notifications from 'expo-notifications';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
@@ -30,6 +31,68 @@ export default function SettingsScreen({ navigation }) {
   const [status, setStatus] = useState(user?.status || '');
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const [perms, setPerms] = useState({ notifications: false, camera: false, microphone: false });
+
+  const checkPermissions = async () => {
+    let notif = false, cam = false, mic = false;
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      notif = status === 'granted';
+      if (Platform.OS === 'android') {
+        cam = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+        mic = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+      } else if (Platform.OS === 'web') {
+        cam = true; mic = true; // Simplified for web
+      }
+      setPerms({ notifications: notif, camera: cam, microphone: mic });
+    } catch (e) {
+      console.warn('Error checking perms', e);
+    }
+  };
+
+  useEffect(() => {
+    checkPermissions();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') checkPermissions();
+    });
+    return () => sub.remove();
+  }, []);
+
+  const togglePermission = async (type) => {
+    if (perms[type]) {
+      Alert.alert('Revoke Permission', `To disable ${type} access, please go to your Device Settings.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() }
+      ]);
+      return;
+    }
+
+    let granted = false;
+    try {
+      if (type === 'notifications') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        granted = status === 'granted';
+      } else if (Platform.OS === 'android') {
+        const permType = type === 'camera' ? PermissionsAndroid.PERMISSIONS.CAMERA : PermissionsAndroid.PERMISSIONS.RECORD_AUDIO;
+        const res = await PermissionsAndroid.request(permType);
+        granted = res === PermissionsAndroid.RESULTS.GRANTED;
+      } else {
+        granted = true; // web fallback
+      }
+    } catch (e) {
+      console.warn('Error requesting perm', e);
+    }
+
+    if (granted) {
+      setPerms((p) => ({ ...p, [type]: true }));
+    } else {
+      Alert.alert('Permission Denied', `We couldn't get permission. You may need to enable it manually in Device Settings.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() }
+      ]);
+    }
+  };
 
   const handleLogout = async () => {
     const performLogout = async () => {
@@ -189,16 +252,45 @@ export default function SettingsScreen({ navigation }) {
       {/* ── Permissions section ──────────────────────────────────── */}
       <View style={[styles.section, { backgroundColor: C.surface }]}>
         <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Permissions</Text>
-        <Text style={{ color: C.text, fontSize: 14, marginBottom: 12, lineHeight: 20 }}>
-          Manage Notifications, Camera, and Microphone permissions to ensure calls and messages work properly.
+        <Text style={{ color: C.text, fontSize: 13, marginBottom: 12, lineHeight: 18, opacity: 0.8 }}>
+          Manage access to ensure calls and messages work properly.
         </Text>
-        <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: C.surfaceAlt, borderWidth: 1, borderColor: C.border, flexDirection: 'row', gap: 8, justifyContent: 'center' }]}
-          onPress={() => Linking.openSettings()}
-        >
-          <Ionicons name="settings-outline" size={18} color={C.text} />
-          <Text style={[styles.actionBtnText, { color: C.text }]}>Open Device Settings</Text>
-        </TouchableOpacity>
+        
+        <View style={styles.permRow}>
+          <View style={styles.permInfo}>
+            <Ionicons name="notifications-outline" size={20} color={C.text} />
+            <Text style={[styles.permLabel, { color: C.text }]}>Notifications</Text>
+          </View>
+          <Switch
+            value={perms.notifications}
+            onValueChange={() => togglePermission('notifications')}
+            trackColor={{ true: '#34C759', false: C.border }}
+          />
+        </View>
+
+        <View style={styles.permRow}>
+          <View style={styles.permInfo}>
+            <Ionicons name="camera-outline" size={20} color={C.text} />
+            <Text style={[styles.permLabel, { color: C.text }]}>Camera</Text>
+          </View>
+          <Switch
+            value={perms.camera}
+            onValueChange={() => togglePermission('camera')}
+            trackColor={{ true: '#34C759', false: C.border }}
+          />
+        </View>
+
+        <View style={styles.permRow}>
+          <View style={styles.permInfo}>
+            <Ionicons name="mic-outline" size={20} color={C.text} />
+            <Text style={[styles.permLabel, { color: C.text }]}>Microphone</Text>
+          </View>
+          <Switch
+            value={perms.microphone}
+            onValueChange={() => togglePermission('microphone')}
+            trackColor={{ true: '#34C759', false: C.border }}
+          />
+        </View>
       </View>
 
       {/* ── Account section ─────────────────────────────────────── */}
@@ -260,4 +352,15 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#FF3B30', backgroundColor: 'transparent',
   },
   dangerBtnText: { color: '#FF3B30', fontWeight: '700', fontSize: 15 },
+  // Permissions
+  permRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  permInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  permLabel: { fontSize: 15, fontWeight: '500' },
 });

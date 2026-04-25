@@ -53,12 +53,12 @@ export default function ChatListScreen({ navigation }) {
   useEffect(() => { loadConversations(); }, []);
 
   const filtered = conversations.filter((c) => {
-    const other = c.participants?.find((p) => p._id !== user?._id);
-    return other?.name?.toLowerCase().includes(search.toLowerCase());
+    const other = c.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
+    return other?.name?.toLowerCase()?.includes(search.toLowerCase());
   });
 
   const renderItem = ({ item }) => {
-    const other = item.participants?.find((p) => p._id !== user?._id);
+    const other = item.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
     const isOnline = onlineUsers[other?._id] ?? other?.isOnline;
     const lastMsg = item.lastMessage;
     const isDeleted = lastMsg?.isDeleted;

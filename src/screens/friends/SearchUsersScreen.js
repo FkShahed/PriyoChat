@@ -39,7 +39,7 @@ export default function SearchUsersScreen({ navigation }) {
       const friendIds = new Set();
       conversations.forEach(c => {
         c.participants?.forEach(p => {
-          if (p._id !== user?._id) friendIds.add(p._id);
+          if (p._id?.toString() !== user?._id?.toString()) friendIds.add(p._id?.toString());
         });
       });
       
@@ -119,7 +119,7 @@ export default function SearchUsersScreen({ navigation }) {
               <Text style={[styles.name, { color: C.text }]}>{item.name}</Text>
               <Text style={[styles.status, { color: C.textSecondary }]} numberOfLines={1}>{item.status}</Text>
             </View>
-            {item._id !== user?._id && (
+            {item._id?.toString() !== user?._id?.toString() && (
               <TouchableOpacity
                 style={[styles.addBtn, sentIds[item._id] && styles.sentBtn]}
                 onPress={() => handleSendRequest(item._id)}
