@@ -17,8 +17,7 @@ export default function BugReportsPage() {
       });
       setReports(res.data.reports || []);
     } catch (err) {
-      console.error(err);
-      alert('Failed to fetch bug reports');
+      alert('Failed to fetch bug reports: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
