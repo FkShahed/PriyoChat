@@ -5,8 +5,15 @@ import { Platform, NativeModules } from 'react-native';
 
 
 
-export const API_BASE_URL = 'http://192.168.1.104:4444/api';
-// export const API_BASE_URL = 'https://priyochat.onrender.com/api';
+// Central source for backend URLs
+const IS_LOCAL = false; // Set to true for local development, false for production
+
+export const BASE_URL = IS_LOCAL
+  ? 'http://192.168.1.104:4444'
+  : 'https://priyochat.onrender.com';
+
+export const API_BASE_URL = `${BASE_URL}/api`;
+export const SOCKET_URL = BASE_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,

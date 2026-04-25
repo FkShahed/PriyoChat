@@ -5,7 +5,7 @@ import useChatStore from './useChatStore';
 import useCallStore from './useCallStore';
 import NotificationService from '../services/NotificationService';
 
-const SOCKET_URL = 'https://priyochat.onrender.com';
+import { SOCKET_URL } from '../api/client';
 
 const useSocketStore = create((set, get) => ({
   socket: null,
