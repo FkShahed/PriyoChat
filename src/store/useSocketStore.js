@@ -123,6 +123,19 @@ const useSocketStore = create((set, get) => ({
       useCallStore.getState().endCall('ended');
     });
 
+    // Wrap emit to include callId for call-related events
+    const originalEmit = newSocket.emit;
+    newSocket.emit = (event, data, ...args) => {
+      const callRelated = ['call_answer', 'call_reject', 'call_end'];
+      if (callRelated.includes(event)) {
+        const { callId } = useCallStore.getState();
+        if (callId && data && typeof data === 'object') {
+          data.callId = callId;
+        }
+      }
+      return originalEmit.apply(newSocket, [event, data, ...args]);
+    };
+
     // ── Friend request events ────────────────────────────────────────
     newSocket.on('friend_request', ({ request }) => {
       // Navigation handled in FriendRequestsScreen

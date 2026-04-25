@@ -28,10 +28,17 @@ function avatarGradient(name = '') {
 export default function CallsListScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
   const { callHistory: allHistory, fetchHistory, startCall } = useCallStore();
+  const [refreshing, setRefreshing] = React.useState(false);
   const callHistory = (allHistory || []).filter(h => !h.ownerId || h.ownerId === user?._id?.toString());
   
   const C = useColors();
   const isDark = C.bg === '#121212';
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await fetchHistory();
+    setRefreshing(false);
+  }, [fetchHistory]);
 
   React.useEffect(() => {
     fetchHistory();
@@ -112,7 +119,7 @@ export default function CallsListScreen({ navigation }) {
         </View>
       </LinearGradient>
 
-      {callHistory.length === 0 ? (
+      {callHistory.length === 0 && !refreshing ? (
         <View style={styles.empty}>
           <View style={[styles.emptyIcon, { backgroundColor: isDark ? 'rgba(0,132,255,0.12)' : 'rgba(0,132,255,0.07)' }]}>
             <Ionicons name="call-outline" size={52} color="#0084FF" />
@@ -121,12 +128,17 @@ export default function CallsListScreen({ navigation }) {
           <Text style={[styles.emptySub, { color: C.textSecondary }]}>
             Your incoming and outgoing calls will appear here.
           </Text>
+          <TouchableOpacity onPress={onRefresh} style={{ marginTop: 20 }}>
+            <Text style={{ color: '#0084FF', fontWeight: '700' }}>Refresh</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={callHistory}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           contentContainerStyle={{ paddingBottom: 24, paddingTop: 6 }}
           ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: C.border }]} />}
           showsVerticalScrollIndicator={false}

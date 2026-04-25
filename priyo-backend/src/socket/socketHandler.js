@@ -137,18 +137,25 @@ const setupSocket = (io) => {
     socket.on('call_offer', async ({ to, offer, callType }) => {
       console.log(`📞 Call Offer from ${socket.user.name} (${userId}) to ${to}`);
       
-      // Create database record
-      const call = await Call.create({
-        caller: userId,
-        receiver: to,
-        type: callType,
-        status: 'pending'
-      });
+      let callId = null;
+      try {
+        // Create database record
+        const call = await Call.create({
+          caller: userId,
+          receiver: to,
+          type: callType,
+          status: 'pending'
+        });
+        callId = call._id;
+        console.log(`[socketHandler] Call record created: ${callId}`);
+      } catch (err) {
+        console.error('[socketHandler] Error creating call record:', err.message);
+      }
 
       // emit to receiver's personal room (more reliable than raw socketId)
       io.to(to).emit('incoming_call', {
         from: userId,
-        callId: call._id,
+        callId,
         caller: { name: socket.user.name, avatar: socket.user.avatar },
         offer,
         callType,

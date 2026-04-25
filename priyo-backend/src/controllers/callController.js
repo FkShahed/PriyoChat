@@ -10,6 +10,7 @@ exports.getMyCalls = async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(50);
 
+    console.log(`[callController] Found ${calls.length} calls for user ${req.user._id}`);
     res.json({
       success: true,
       data: calls

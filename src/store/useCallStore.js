@@ -11,6 +11,7 @@ const useCallStore = create(
       callState: 'idle',
       callType: null, // 'audio' | 'video'
       remoteUser: null,
+      callId: null, // ID from the backend database
       offer: null,
       answer: null,
       iceCandidates: [],
@@ -29,7 +30,13 @@ const useCallStore = create(
         try {
           const { callApi } = require('../api/services');
           const { data } = await callApi.getAll();
+          console.log('[useCallStore] fetchHistory raw data:', JSON.stringify(data));
           
+          if (!data || !data.data) {
+            console.warn('[useCallStore] fetchHistory: No data returned');
+            return;
+          }
+
           // Map backend Call model to frontend history format
           const formatted = data.data.map(c => {
             const { user } = require('./useAuthStore').default.getState();
@@ -47,6 +54,7 @@ const useCallStore = create(
             };
           });
           
+          console.log('[useCallStore] fetchHistory success, count:', formatted.length);
           set({ callHistory: formatted });
         } catch (e) {
           console.error('[useCallStore] fetchHistory error:', e.message);
@@ -60,13 +68,14 @@ const useCallStore = create(
 
       // Incoming call from socket — this user is the receiver
       setIncomingCall: (data) => {
-        console.log('[useCallStore] setIncomingCall, from:', data.from, 'callerName:', data.caller?.name);
+        console.log('[useCallStore] setIncomingCall, callId:', data.callId, 'from:', data.from);
         set({
           callState: 'incoming',
           callType: data.callType,
+          callId: data.callId,
           remoteUser: { _id: data.from, ...data.caller },
-          offer: data.offer,          // full SDP object for WebRTC
-          remoteUserId: data.from,    // shortcut for ICE routing
+          offer: data.offer,
+          remoteUserId: data.from,
           iceCandidates: [],
           endReason: null,
           isReceiver: true,
