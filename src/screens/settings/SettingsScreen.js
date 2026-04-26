@@ -7,10 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
-import * as Updates from 'expo-updates';
-import * as FileSystem from 'expo-file-system';
-import * as IntentLauncher from 'expo-intent-launcher';
-import Constants, { AppOwnership } from 'expo-constants';
+import Constants from 'expo-constants';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
@@ -46,8 +43,8 @@ export default function SettingsScreen({ navigation }) {
     phone: false,
     storage: false,
   });
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [downloadUri, setDownloadUri] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(true);
+  const [updateInfo, setUpdateInfo] = useState({ apkUrl: null, latestVersion: null, isLatest: true });
 
   const getAndroidPerms = (type) => {
     switch (type) {
@@ -96,25 +93,6 @@ export default function SettingsScreen({ navigation }) {
     });
     return () => sub.remove();
   }, []);
-
-  // Cleanup downloaded APK when user returns to app after installation
-  useEffect(() => {
-    const listener = AppState.addEventListener('change', async (state) => {
-      if (state === 'active' && downloadUri) {
-        try {
-          const info = await FileSystem.getInfoAsync(downloadUri);
-          if (info.exists) {
-            await FileSystem.deleteAsync(downloadUri, { idempotent: true });
-            console.log('[APKCleanup] Removed APK after returning to app:', downloadUri);
-          }
-        } catch (err) {
-          console.warn('[APKCleanup] Failed to clean up APK on resume:', err);
-        }
-        setDownloadUri(null);
-      }
-    });
-    return () => listener.remove();
-  }, [downloadUri]);
 
   const togglePermission = async (type) => {
     if (perms[type]) {
@@ -199,177 +177,46 @@ export default function SettingsScreen({ navigation }) {
       ]);
     }
   };
-  
   const compareVersions = (a, b) => {
-    if (!a || !b) return 0;
-    const normalize = (v) => String(v).split('.').map((part) => parseInt(part, 10) || 0);
-    const [aParts, bParts] = [normalize(a), normalize(b)];
-    const len = Math.max(aParts.length, bParts.length);
-    for (let i = 0; i < len; i += 1) {
-      const aVal = aParts[i] || 0;
-      const bVal = bParts[i] || 0;
-      if (aVal > bVal) return 1;
-      if (aVal < bVal) return -1;
+    const normalize = (v) => String(v).split('.').map((n) => parseInt(n, 10) || 0);
+    const [ap, bp] = [normalize(a), normalize(b)];
+    const len = Math.max(ap.length, bp.length);
+    for (let i = 0; i < len; i++) {
+      if ((ap[i] || 0) > (bp[i] || 0)) return 1;
+      if ((ap[i] || 0) < (bp[i] || 0)) return -1;
     }
     return 0;
   };
 
-  const cleanupApk = async (uri) => {
-    if (!uri) return;
-    try {
-      const info = await FileSystem.getInfoAsync(uri);
-      if (info.exists) {
-        await FileSystem.deleteAsync(uri, { idempotent: true });
-        console.log('[APKCleanup] Removed file:', uri);
+  const currentVersion =
+    Constants.expoConfig?.version ||
+    Constants.nativeAppVersion ||
+    '0.0.0';
+
+  // Check for updates on mount
+  useEffect(() => {
+    const checkVersion = async () => {
+      try {
+        const { data } = await userApi.getAppUpdate();
+        const latestVersion = data?.version || '';
+        const apkUrl = data?.apkUrl || '';
+        const isLatest = !latestVersion || !apkUrl || compareVersions(latestVersion, currentVersion) <= 0;
+        setUpdateInfo({ apkUrl, latestVersion, isLatest });
+      } catch (err) {
+        console.warn('[VersionCheck] Failed:', err);
+        setUpdateInfo({ apkUrl: null, latestVersion: null, isLatest: true });
+      } finally {
+        setCheckingUpdate(false);
       }
+    };
+    checkVersion();
+  }, []);
+  const handleDownloadUpdate = async () => {
+    if (!updateInfo.apkUrl) return;
+    try {
+      await Linking.openURL(updateInfo.apkUrl);
     } catch (err) {
-      console.warn('[APKCleanup] Failed to remove file:', err);
-    }
-    if (uri === downloadUri) setDownloadUri(null);
-  };
-
-  const downloadAndInstallApk = async (url, version) => {
-    const fileName = `PriyoChat-${version}.apk`;
-    const destUri = FileSystem.cacheDirectory + fileName;
-
-    setCheckingUpdate(true);
-    try {
-      // Clean up any stale leftover APK first
-      await cleanupApk(destUri);
-
-      console.log('[APKDownload] Downloading from:', url);
-
-      const downloadResumable = FileSystem.createDownloadResumable(
-        url,
-        destUri,
-        {},
-        (progress) => {
-          if (progress.totalBytesExpectedToWrite > 0) {
-            const pct = Math.round(
-              (progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100
-            );
-            console.log(`[APKDownload] Progress: ${pct}%`);
-          }
-        }
-      );
-
-      const result = await downloadResumable.downloadAsync();
-      if (!result?.uri) throw new Error('Download returned no file URI.');
-
-      const localUri = result.uri;
-      setDownloadUri(localUri);
-      console.log('[APKDownload] Saved to:', localUri);
-
-      // Get a content:// URI that the Android package installer can accept
-      const contentUri = await FileSystem.getContentUriAsync(localUri);
-      console.log('[APKDownload] Content URI:', contentUri);
-
-      Alert.alert(
-        'Download Complete',
-        `PriyoChat v${version} downloaded. Install it now?`,
-        [
-          {
-            text: 'Install',
-            onPress: async () => {
-              try {
-                await IntentLauncher.startActivityAsync(
-                  'android.intent.action.VIEW',
-                  {
-                    data: contentUri,
-                    flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-                    type: 'application/vnd.android.package-archive',
-                  }
-                );
-                // AppState listener will delete the file once the user returns to the app
-              } catch (installErr) {
-                console.error('[APKInstall] Error:', installErr);
-                Alert.alert(
-                  'Install Failed',
-                  `Could not open the APK installer.\n\nError: ${installErr.message || 'Unknown'}\n\nMake sure "Install from unknown sources" is enabled for this app in your device settings.`
-                );
-                await cleanupApk(localUri);
-              }
-            },
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => cleanupApk(localUri),
-          },
-        ]
-      );
-    } catch (downloadError) {
-      console.error('[APKDownload] Error:', downloadError);
-      Alert.alert(
-        'Download Failed',
-        `Could not download the APK.\n\nError: ${downloadError.message || 'Unknown error'}\n\nCheck that the APK URL is accessible from your network.`
-      );
-      await cleanupApk(destUri);
-    } finally {
-      setCheckingUpdate(false);
-    }
-  };
-
-  const onUpdateCheck = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Not Supported', 'Updates are managed by the browser on web.');
-      return;
-    }
-
-    if (Platform.OS !== 'android') {
-      Alert.alert('Unsupported Platform', 'APK download and install is only supported on Android builds.');
-      return;
-    }
-
-    setCheckingUpdate(true);
-
-    try {
-      // Get current version from various possible sources
-      const currentVersion = 
-        Constants.expoConfig?.version || 
-        Constants.manifest2?.extra?.expoClient?.version ||
-        Constants.nativeAppVersion || 
-        '0.0.0';
-      
-      console.log('[UpdateCheck] Current Version:', currentVersion);
-      
-      const { data } = await userApi.getAppUpdate();
-      console.log('[UpdateCheck] Server Data:', data);
-
-      const latestVersion = data?.version || '';
-      const apkUrl = data?.apkUrl || '';
-      const releaseNotes = data?.releaseNotes || '';
-
-      if (!latestVersion || !apkUrl) {
-        Alert.alert('Update Info Missing', 'The server has not been configured with the latest APK details yet.');
-        return;
-      }
-
-      const comparison = compareVersions(latestVersion, currentVersion);
-      console.log(`[UpdateCheck] Comparison Result: ${comparison} (Latest: ${latestVersion} vs Current: ${currentVersion})`);
-
-      if (comparison <= 0) {
-        Alert.alert('Up to Date', `You are running the latest version (${currentVersion}).`);
-        return;
-      }
-
-      Alert.alert(
-        'Update Available',
-        `A new update is available (${latestVersion}).\n\nRelease notes:\n${releaseNotes || 'No release notes provided.'}`,
-        [
-          { text: 'Later', style: 'cancel' },
-          {
-            text: 'Download & Install',
-            onPress: () => downloadAndInstallApk(apkUrl, latestVersion),
-          },
-        ]
-      );
-    } catch (err) {
-      console.error('[UpdateCheck] Error:', err);
-      const errMsg = err.response?.data?.message || err.message || 'Failed to check for updates.';
-      Alert.alert('Update Check Failed', errMsg);
-    } finally {
-      setCheckingUpdate(false);
+      Alert.alert('Error', 'Could not open the download link. Please try again.');
     }
   };
 
@@ -554,21 +401,45 @@ export default function SettingsScreen({ navigation }) {
           <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Email</Text>
           <Text style={[styles.infoValue, { color: C.text }]}>{user?.email}</Text>
         </View>
-        <TouchableOpacity 
-          style={[styles.updateBtn, { backgroundColor: C.surfaceAlt }]} 
-          onPress={onUpdateCheck}
-          disabled={checkingUpdate}
+        <View style={styles.infoRow}>
+          <Text style={[styles.infoLabel, { color: C.textSecondary }]}>App Version</Text>
+          <Text style={[styles.infoValue, { color: C.text }]}>{currentVersion}</Text>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.updateBtn,
+            {
+              backgroundColor: updateInfo.isLatest || checkingUpdate
+                ? C.surfaceAlt
+                : 'rgba(0,132,255,0.1)',
+              borderColor: updateInfo.isLatest || checkingUpdate
+                ? 'transparent'
+                : '#0084FF',
+              borderWidth: 1,
+              opacity: updateInfo.isLatest && !checkingUpdate ? 0.5 : 1,
+            }
+          ]}
+          onPress={handleDownloadUpdate}
+          disabled={checkingUpdate || updateInfo.isLatest}
         >
           {checkingUpdate ? (
             <ActivityIndicator color={C.textSecondary} size="small" />
+          ) : updateInfo.isLatest ? (
+            <>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#34C759" />
+              <Text style={[styles.updateBtnText, { color: C.text }]}>You're up to date</Text>
+            </>
           ) : (
             <>
               <Ionicons name="cloud-download-outline" size={18} color="#0084FF" />
-              <Text style={[styles.updateBtnText, { color: C.text }]}>Check for Updates</Text>
+              <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>
+                Download v{updateInfo.latestVersion}
+              </Text>
             </>
           )}
         </TouchableOpacity>
       </View>
+
 
       {/* ── Support section ─────────────────────────────────────── */}
       <View style={[styles.section, { backgroundColor: C.surface }]}>
