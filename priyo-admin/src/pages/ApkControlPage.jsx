@@ -108,8 +108,11 @@ export default function ApkControlPage() {
 
   const handleAddCuratedRingtone = async (e) => {
     const file = e.target.files[0];
-    if (!file || !newRingtoneName.trim()) {
+    if (!file) return;
+
+    if (!newRingtoneName.trim()) {
       alert('Please enter a name for the ringtone before uploading.');
+      e.target.value = '';
       return;
     }
 
@@ -326,12 +329,20 @@ export default function ApkControlPage() {
             placeholder="Ringtone Name (e.g., Classical Piano)"
             style={{ flex: 1 }}
           />
-          <label htmlFor="curated-upload" className="primary-btn" style={{
-            background: 'linear-gradient(135deg, #0084FF, #7C00FF)',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.5 : 1,
-            margin: 0
-          }}>
+          <label htmlFor="curated-upload" className="primary-btn" 
+            onClick={(e) => {
+              if (!newRingtoneName.trim() && !loading) {
+                e.preventDefault();
+                alert('Please enter a name for the ringtone before uploading.');
+              }
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #0084FF, #7C00FF)',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.5 : 1,
+              margin: 0
+            }}
+          >
             {loading ? 'Uploading...' : 'Upload MP3'}
           </label>
           <input 
