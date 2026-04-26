@@ -51,3 +51,7 @@ export const callApi = {
   delete: (id) => api.delete(`/calls/${id}`),
   clearAll: () => api.delete('/calls/clear/all'),
 };
+
+export const configApi = {
+  getGlobal: () => api.get('/config'),
+};

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authApi, userApi } from '../api/services';
+import { authApi, userApi, configApi } from '../api/services';
 
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -13,6 +13,18 @@ const useAuthStore = create((set, get) => ({
     try {
       const token = await AsyncStorage.getItem('auth_token');
       const userStr = await AsyncStorage.getItem('auth_user');
+      // Fetch global config
+      try {
+        const { data: config } = await configApi.getGlobal();
+        if (config?.defaultRingtoneUrl) {
+          await AsyncStorage.setItem('global_ringtone_uri', config.defaultRingtoneUrl);
+        } else {
+          await AsyncStorage.removeItem('global_ringtone_uri');
+        }
+      } catch (e) {
+        console.warn('Failed to fetch global config', e);
+      }
+
       if (token && userStr) {
         const user = JSON.parse(userStr);
         set({ user, token, isAuthenticated: true, isLoading: false });

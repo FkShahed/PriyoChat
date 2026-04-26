@@ -4,6 +4,7 @@ const Conversation = require('../models/Conversation');
 const Report = require('../models/Report');
 const BugReport = require('../models/BugReport');
 const AppUpdate = require('../models/AppUpdate');
+const AppConfig = require('../models/AppConfig');
 const AuditLog = require('../models/AuditLog');
 const { logAdminAction } = require('../middleware/role');
 const { sendPushNotification, sendExpoPushBatch } = require('../config/firebase');
@@ -397,6 +398,39 @@ const broadcastNotification = async (req, res) => {
   }
 };
 
+// GET /api/admin/config
+const getAppConfig = async (req, res) => {
+  try {
+    let config = await AppConfig.findOne({ configKey: 'global' });
+    if (!config) {
+      config = await AppConfig.create({ configKey: 'global', defaultRingtoneUrl: '' });
+    }
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// PUT /api/admin/config
+const updateAppConfig = async (req, res) => {
+  try {
+    const { defaultRingtoneUrl } = req.body;
+    let config = await AppConfig.findOne({ configKey: 'global' });
+    if (!config) {
+      config = new AppConfig({ configKey: 'global' });
+    }
+    
+    if (defaultRingtoneUrl !== undefined) config.defaultRingtoneUrl = defaultRingtoneUrl;
+    config.updatedBy = req.user._id;
+    await config.save();
+    
+    await logAdminAction(req.user._id, 'UPDATE_APP_CONFIG', 'System', null, { defaultRingtoneUrl }, req.ip);
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 module.exports = {
   getAllUsers,
   banUser,
@@ -414,4 +448,6 @@ module.exports = {
   setAppUpdate,
   getAppUpdateHistory,
   deleteAppUpdate,
+  getAppConfig,
+  updateAppConfig,
 };

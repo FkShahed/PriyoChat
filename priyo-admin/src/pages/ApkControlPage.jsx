@@ -8,20 +8,22 @@ export default function ApkControlPage() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [globalRingtoneUrl, setGlobalRingtoneUrl] = useState('');
 
   const fetchInfo = async () => {
     try {
-      const [infoRes, historyRes] = await Promise.all([
+      const [infoRes, historyRes, configRes] = await Promise.all([
         api.get('/admin/app-update'),
-        api.get('/admin/app-update/history')
+        api.get('/admin/app-update/history'),
+        api.get('/admin/config')
       ]);
       setVersion(infoRes.data.version || '');
       setApkUrl(infoRes.data.apkUrl || '');
       setReleaseNotes(infoRes.data.releaseNotes || '');
       setHistory(historyRes.data || []);
+      setGlobalRingtoneUrl(configRes.data.defaultRingtoneUrl || '');
     } catch (err) {
       console.error('Fetch error:', err);
-      // It's fine if no update exists yet
     }
   };
 
@@ -67,6 +69,37 @@ export default function ApkControlPage() {
       setMessage(err.response?.data?.message || 'Failed to delete APK update info.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUploadRingtone = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    setMessage('');
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+
+      // 1. Upload file to Cloudinary via media route
+      const uploadRes = await api.post('/media/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      const newUrl = uploadRes.data[0]?.url;
+      if (!newUrl) throw new Error('Upload failed');
+
+      // 2. Save config
+      await api.put('/admin/config', { defaultRingtoneUrl: newUrl });
+      setGlobalRingtoneUrl(newUrl);
+      setMessage('Global default ringtone updated successfully.');
+    } catch (err) {
+      console.error(err);
+      setMessage(err.response?.data?.message || 'Failed to update global ringtone.');
+    } finally {
+      setLoading(false);
+      e.target.value = ''; // reset file input
     }
   };
 
@@ -171,6 +204,53 @@ export default function ApkControlPage() {
           }}>
             {loading ? 'Publishing…' : 'Publish New Update'}
           </button>
+        </div>
+      </div>
+
+      {/* Global App Settings Section */}
+      <div className="card" style={{ marginBottom: '40px' }}>
+        <h3 style={{ marginBottom: '20px', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '20px' }}>⚙️</span> Global App Settings
+        </h3>
+        <p style={{ opacity: 0.7, fontSize: '14px', marginBottom: '16px' }}>
+          Upload an audio file (MP3/WAV) to be used as the default incoming call ringtone for all users globally. Users can still override this locally.
+        </p>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ flex: 1 }}>
+            <label className="form-label" style={{ opacity: 0.5 }}>Current Global Ringtone URL</label>
+            <div style={{ 
+              fontSize: '12px', color: '#a5d6ff', wordBreak: 'break-all', 
+              background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', 
+              border: '1px solid rgba(0,132,255,0.1)', minHeight: '38px'
+            }}>
+              {globalRingtoneUrl ? (
+                <a href={globalRingtoneUrl} target="_blank" rel="noreferrer" style={{ color: '#a5d6ff' }}>{globalRingtoneUrl}</a>
+              ) : 'No custom global ringtone configured (using app default).'}
+            </div>
+          </div>
+          
+          <div style={{ marginTop: '22px' }}>
+            <label htmlFor="ringtone-upload" className="primary-btn" style={{
+              display: 'inline-block',
+              background: 'linear-gradient(135deg, #34C759, #28a745)',
+              boxShadow: '0 4px 15px rgba(40,167,69,0.3)',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
+              padding: '10px 20px',
+              textAlign: 'center'
+            }}>
+              {loading ? 'Uploading...' : 'Upload Ringtone'}
+            </label>
+            <input 
+              type="file" 
+              id="ringtone-upload" 
+              accept="audio/*" 
+              style={{ display: 'none' }} 
+              onChange={handleUploadRingtone} 
+              disabled={loading}
+            />
+          </div>
         </div>
       </div>
 

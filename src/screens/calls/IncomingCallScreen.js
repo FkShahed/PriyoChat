@@ -35,7 +35,16 @@ export default function IncomingCallScreen({ navigation }) {
         });
 
         const customUri = await AsyncStorage.getItem('custom_ringtone_uri');
-        const soundSource = customUri ? { uri: customUri } : require('../../assets/ringtone.wav');
+        const globalUri = await AsyncStorage.getItem('global_ringtone_uri');
+        
+        let soundSource;
+        if (customUri) {
+          soundSource = { uri: customUri };
+        } else if (globalUri) {
+          soundSource = { uri: globalUri };
+        } else {
+          soundSource = require('../../assets/ringtone.wav');
+        }
 
         const { sound } = await Audio.Sound.createAsync(
           soundSource,

@@ -20,6 +20,7 @@ const conversationRoutes = require('./src/routes/conversationRoutes');
 const mediaRoutes = require('./src/routes/mediaRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
 const callRoutes = require('./src/routes/callRoutes');
+const configRoutes = require('./src/routes/configRoutes');
 
 // Initialize
 const app = express();
@@ -76,6 +77,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/calls', callRoutes);
+app.use('/api/config', configRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date() }));

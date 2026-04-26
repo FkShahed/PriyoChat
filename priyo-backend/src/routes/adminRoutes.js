@@ -6,6 +6,7 @@ const {
   getReports, resolveReport, getAnalytics, getAuditLogs,
   getBugReports, updateBugReportStatus,
   getAppUpdate, setAppUpdate, getAppUpdateHistory, deleteAppUpdate,
+  getAppConfig, updateAppConfig,
   broadcastNotification
 } = require('../controllers/adminController');
 
@@ -30,6 +31,9 @@ router.get('/app-update', getAppUpdate);
 router.get('/app-update/history', getAppUpdateHistory);
 router.put('/app-update', setAppUpdate);
 router.delete('/app-update/:id', deleteAppUpdate);
+
+router.get('/config', getAppConfig);
+router.put('/config', updateAppConfig);
 
 router.post('/broadcast', broadcastNotification);
 
