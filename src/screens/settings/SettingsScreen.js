@@ -209,16 +209,32 @@ export default function SettingsScreen({ navigation }) {
     return 0;
   };
 
+  const cleanupApk = async (uri) => {
+    if (!uri) return;
+    try {
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+      if (uri === downloadUri) setDownloadUri(null);
+      console.log('[APKCleanup] Removed file:', uri);
+    } catch (err) {
+      console.warn('[APKCleanup] Failed to remove file:', err);
+    }
+  };
+
   const downloadAndInstallApk = async (url, version) => {
     const fileName = `PriyoChat-${version}.apk`;
     const fileUri = `${FileSystem.documentDirectory}${fileName}`;
     try {
       setCheckingUpdate(true);
+      
+      // Clean up any existing stale download before starting a new one
+      if (downloadUri) await cleanupApk(downloadUri);
+
       const { uri } = await FileSystem.downloadAsync(url, fileUri, {
         cache: true,
       });
       setDownloadUri(uri);
-      Alert.alert('Download Complete', 'APK downloaded. The installer will open now.', [
+      
+      Alert.alert('Download Complete', 'APK downloaded successfully. Do you want to install it now?', [
         {
           text: 'Install', onPress: async () => {
             try {
@@ -227,19 +243,19 @@ export default function SettingsScreen({ navigation }) {
                 flags: 1,
                 type: 'application/vnd.android.package-archive',
               });
+              // The AppState listener will handle deletion when user returns to app
             } catch (installError) {
               Alert.alert('Install Failed', 'Could not start the APK installer. Please open the downloaded file manually.');
-              try {
-                await FileSystem.deleteAsync(uri, { idempotent: true });
-              } catch (cleanupError) {
-                console.warn('Failed to remove APK after install failure', cleanupError);
-              }
-              setDownloadUri(null);
+              await cleanupApk(uri);
             }
           },
           style: 'default',
         },
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => cleanupApk(uri)
+        },
       ]);
     } catch (downloadError) {
       console.error('[APKDownload] Error:', downloadError);
