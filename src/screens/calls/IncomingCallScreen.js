@@ -43,7 +43,7 @@ export default function IncomingCallScreen({ navigation }) {
         } else if (globalUri) {
           soundSource = { uri: globalUri };
         } else {
-          soundSource = require('../../assets/ringtone.wav');
+          soundSource = require('../../../assets/ringtone.wav');
         }
 
         const { sound } = await Audio.Sound.createAsync(
