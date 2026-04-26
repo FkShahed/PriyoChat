@@ -3,6 +3,7 @@ const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const Report = require('../models/Report');
 const BugReport = require('../models/BugReport');
+const AppUpdate = require('../models/AppUpdate');
 const AuditLog = require('../models/AuditLog');
 const { logAdminAction } = require('../middleware/role');
 const { sendPushNotification, sendExpoPushBatch } = require('../config/firebase');
@@ -285,6 +286,43 @@ const getBugReports = async (req, res) => {
   }
 };
 
+// GET /api/admin/app-update
+const getAppUpdate = async (req, res) => {
+  try {
+    const update = await AppUpdate.findOne().sort('-updatedAt');
+    if (!update) return res.status(404).json({ message: 'No app update data found' });
+    res.json(update);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// PUT /api/admin/app-update
+const setAppUpdate = async (req, res) => {
+  try {
+    const { version, apkUrl, releaseNotes = '' } = req.body;
+    if (!version || !apkUrl) {
+      return res.status(400).json({ message: 'Version and APK URL are required' });
+    }
+
+    const update = await AppUpdate.findOneAndUpdate(
+      {},
+      {
+        version,
+        apkUrl,
+        releaseNotes,
+        updatedBy: req.user._id,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    await logAdminAction(req.user._id, 'UPDATE_APP_UPDATE', 'AppUpdate', update._id, { version, apkUrl }, req.ip);
+    res.json(update);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // PUT /api/admin/bug-reports/:id/status
 const updateBugReportStatus = async (req, res) => {
   try {
@@ -350,4 +388,6 @@ module.exports = {
   getBugReports,
   updateBugReportStatus,
   broadcastNotification,
+  getAppUpdate,
+  setAppUpdate,
 };

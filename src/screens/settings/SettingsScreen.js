@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
+import * as FileSystem from 'expo-file-system';
+import * as IntentLauncher from 'expo-intent-launcher';
 import Constants, { AppOwnership } from 'expo-constants';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
@@ -45,6 +47,7 @@ export default function SettingsScreen({ navigation }) {
     storage: false,
   });
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [downloadUri, setDownloadUri] = useState(null);
 
   const getAndroidPerms = (type) => {
     switch (type) {
@@ -93,6 +96,20 @@ export default function SettingsScreen({ navigation }) {
     });
     return () => sub.remove();
   }, []);
+
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', async (state) => {
+      if (state === 'active' && downloadUri) {
+        try {
+          await FileSystem.deleteAsync(downloadUri, { idempotent: true });
+          setDownloadUri(null);
+        } catch (err) {
+          console.warn('Cleanup APK file failed', err);
+        }
+      }
+    });
+    return () => listener.remove();
+  }, [downloadUri]);
 
   const togglePermission = async (type) => {
     if (perms[type]) {
@@ -178,46 +195,118 @@ export default function SettingsScreen({ navigation }) {
     }
   };
   
+  const compareVersions = (a, b) => {
+    if (!a || !b) return 0;
+    const normalize = (v) => String(v).split('.').map((part) => parseInt(part, 10) || 0);
+    const [aParts, bParts] = [normalize(a), normalize(b)];
+    const len = Math.max(aParts.length, bParts.length);
+    for (let i = 0; i < len; i += 1) {
+      const aVal = aParts[i] || 0;
+      const bVal = bParts[i] || 0;
+      if (aVal > bVal) return 1;
+      if (aVal < bVal) return -1;
+    }
+    return 0;
+  };
+
+  const downloadAndInstallApk = async (url, version) => {
+    const fileName = `PriyoChat-${version}.apk`;
+    const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+    try {
+      setCheckingUpdate(true);
+      const { uri } = await FileSystem.downloadAsync(url, fileUri, {
+        cache: true,
+      });
+      setDownloadUri(uri);
+      Alert.alert('Download Complete', 'APK downloaded. The installer will open now.', [
+        {
+          text: 'Install', onPress: async () => {
+            try {
+              await IntentLauncher.startActivityAsync(IntentLauncher.ACTION_VIEW, {
+                data: uri,
+                flags: 1,
+                type: 'application/vnd.android.package-archive',
+              });
+            } catch (installError) {
+              Alert.alert('Install Failed', 'Could not start the APK installer. Please open the downloaded file manually.');
+              try {
+                await FileSystem.deleteAsync(uri, { idempotent: true });
+              } catch (cleanupError) {
+                console.warn('Failed to remove APK after install failure', cleanupError);
+              }
+              setDownloadUri(null);
+            }
+          },
+          style: 'default',
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    } catch (downloadError) {
+      Alert.alert('Download Failed', 'Could not download the APK. Please check your internet connection and try again.');
+      console.warn('APK download error', downloadError);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
   const onUpdateCheck = async () => {
     if (Platform.OS === 'web') {
       Alert.alert('Not Supported', 'Updates are managed by the browser on web.');
       return;
     }
 
-    if (Constants.appOwnership === AppOwnership.Expo) {
-      Alert.alert('Expo Go', 'You are currently using Expo Go. Updates are handled automatically by the Expo Go app. This "Check for Updates" feature is for standalone APK/IPA builds.');
-      return;
-    }
-
-    if (!Updates.isEnabled) {
-      Alert.alert('Update Info', 'Updates are only enabled in standalone builds (APK/IPA). In development, changes are applied instantly via live reloading.');
+    if (Platform.OS !== 'android') {
+      Alert.alert('Unsupported Platform', 'APK download and install is only supported on Android builds.');
       return;
     }
 
     setCheckingUpdate(true);
+
     try {
-      const update = await Updates.checkForUpdateAsync();
-      if (update.isAvailable) {
-        Alert.alert('Update Available', 'A new version of PriyoChat is available. Download and restart now?', [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Update', onPress: async () => {
-            try {
-              setCheckingUpdate(true);
-              await Updates.fetchUpdateAsync();
-              await Updates.reloadAsync();
-            } catch (err) {
-              Alert.alert('Update Failed', 'Could not download the update. Please check your internet connection.');
-            } finally {
-              setCheckingUpdate(false);
-            }
-          }}
-        ]);
-      } else {
-        Alert.alert('Up to Date', 'You are running the latest version of PriyoChat.');
+      // Get current version from various possible sources
+      const currentVersion = 
+        Constants.expoConfig?.version || 
+        Constants.manifest2?.extra?.expoClient?.version ||
+        Constants.nativeAppVersion || 
+        '0.0.0';
+      
+      console.log('[UpdateCheck] Current Version:', currentVersion);
+      
+      const { data } = await userApi.getAppUpdate();
+      console.log('[UpdateCheck] Server Data:', data);
+
+      const latestVersion = data?.version || '';
+      const apkUrl = data?.apkUrl || '';
+      const releaseNotes = data?.releaseNotes || '';
+
+      if (!latestVersion || !apkUrl) {
+        Alert.alert('Update Info Missing', 'The server has not been configured with the latest APK details yet.');
+        return;
       }
-    } catch (e) {
-      console.warn('Update check error', e);
-      Alert.alert('Update Service Error', e.message || 'Could not connect to the update service.');
+
+      const comparison = compareVersions(latestVersion, currentVersion);
+      console.log(`[UpdateCheck] Comparison Result: ${comparison} (Latest: ${latestVersion} vs Current: ${currentVersion})`);
+
+      if (comparison <= 0) {
+        Alert.alert('Up to Date', `You are running the latest version (${currentVersion}).`);
+        return;
+      }
+
+      Alert.alert(
+        'Update Available',
+        `A new update is available (${latestVersion}).\n\nRelease notes:\n${releaseNotes || 'No release notes provided.'}`,
+        [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Download & Install',
+            onPress: () => downloadAndInstallApk(apkUrl, latestVersion),
+          },
+        ]
+      );
+    } catch (err) {
+      console.error('[UpdateCheck] Error:', err);
+      const errMsg = err.response?.data?.message || err.message || 'Failed to check for updates.';
+      Alert.alert('Update Check Failed', errMsg);
     } finally {
       setCheckingUpdate(false);
     }

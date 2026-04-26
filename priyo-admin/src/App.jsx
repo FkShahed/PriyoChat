@@ -9,6 +9,7 @@ import ReportsPage from './pages/ReportsPage';
 import BugReportsPage from './pages/BugReportsPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import BroadcastPage from './pages/BroadcastPage';
+import ApkControlPage from './pages/ApkControlPage';
 import './components/AdminLayout.css';
 
 function ProtectedRoute({ children }) {
@@ -31,6 +32,7 @@ function AppRoutes() {
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/bug-reports" element={<BugReportsPage />} />
                 <Route path="/broadcast" element={<BroadcastPage />} />
+                <Route path="/apk-control" element={<ApkControlPage />} />
                 <Route path="/audit-logs" element={<AuditLogsPage />} />
               </Routes>
             </AdminLayout>

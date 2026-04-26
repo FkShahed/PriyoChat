@@ -15,6 +15,7 @@ export const userApi = {
     }),
   updateFcmToken: (fcmToken) => api.put('/users/fcm-token', { fcmToken }),
   reportBug: (data) => api.post('/users/bug-report', data),
+  getAppUpdate: () => api.get('/users/app-update'),
 };
 
 export const requestApi = {
