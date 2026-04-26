@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image, ScrollView,
-  Alert, ActivityIndicator, TextInput, Platform, Linking, Switch, PermissionsAndroid, AppState
+  Alert, ActivityIndicator, TextInput, Platform, Linking, Switch, PermissionsAndroid, AppState, Modal
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,7 +14,7 @@ import Constants from 'expo-constants';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
-import { userApi } from '../../api/services';
+import { userApi, configApi } from '../../api/services';
 import { getInitials } from '../../utils/helpers';
 
 const THEME_OPTIONS = [
@@ -49,6 +50,10 @@ export default function SettingsScreen({ navigation }) {
   const [updateInfo, setUpdateInfo] = useState({ apkUrl: null, latestVersion: null, isLatest: true });
   
   const [customRingtoneName, setCustomRingtoneName] = useState(null);
+  const [curatedRingtones, setCuratedRingtones] = useState([]);
+  const [showCuratedModal, setShowCuratedModal] = useState(false);
+  const [previewSound, setPreviewSound] = useState(null);
+  const [playingIndex, setPlayingIndex] = useState(null);
 
   const getAndroidPerms = (type) => {
     switch (type) {
@@ -102,13 +107,21 @@ export default function SettingsScreen({ navigation }) {
         const uri = await AsyncStorage.getItem('custom_ringtone_uri');
         const name = await AsyncStorage.getItem('custom_ringtone_name');
         if (uri && name) setCustomRingtoneName(name);
+
+        const { data: config } = await configApi.getGlobal();
+        if (config?.availableRingtones) {
+          setCuratedRingtones(config.availableRingtones);
+        }
       } catch (e) {
         console.warn('Error loading custom ringtone', e);
       }
     };
     loadRingtone();
     
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      if (previewSound) previewSound.unloadAsync();
+    };
   }, []);
 
   const togglePermission = async (type) => {
@@ -307,6 +320,44 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
+  const stopPreview = async () => {
+    if (previewSound) {
+      await previewSound.stopAsync();
+      await previewSound.unloadAsync();
+      setPreviewSound(null);
+      setPlayingIndex(null);
+    }
+  };
+
+  const handlePreviewRingtone = async (ringtone, index) => {
+    try {
+      await stopPreview();
+      if (playingIndex === index) return; // If same clicked, just stop
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: ringtone.url },
+        { shouldPlay: true, isLooping: true }
+      );
+      setPreviewSound(sound);
+      setPlayingIndex(index);
+    } catch (err) {
+      console.warn('Preview error:', err);
+    }
+  };
+
+  const handleSelectCuratedRingtone = async (ringtone) => {
+    try {
+      await stopPreview();
+      await AsyncStorage.setItem('custom_ringtone_uri', ringtone.url);
+      await AsyncStorage.setItem('custom_ringtone_name', ringtone.name);
+      setCustomRingtoneName(ringtone.name);
+      setShowCuratedModal(false);
+      Alert.alert('Success', `${ringtone.name} has been set as your ringtone.`);
+    } catch (err) {
+      console.warn('Select error:', err);
+    }
+  };
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: C.bg }]}>
       {/* ── Profile header ──────────────────────────────────────── */}
@@ -457,12 +508,22 @@ export default function SettingsScreen({ navigation }) {
         </View>
 
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+          {curatedRingtones.length > 0 && (
+            <TouchableOpacity
+              style={[styles.updateBtn, { flex: 1, marginTop: 0, backgroundColor: 'rgba(0,132,255,0.1)' }]}
+              onPress={() => setShowCuratedModal(true)}
+            >
+              <Ionicons name="library-outline" size={18} color="#0084FF" />
+              <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>Library</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={[styles.updateBtn, { flex: 1, marginTop: 0 }]}
             onPress={handlePickRingtone}
           >
-            <Ionicons name="musical-notes-outline" size={18} color="#0084FF" />
-            <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>Select MP3</Text>
+            <Ionicons name="folder-open-outline" size={18} color="#0084FF" />
+            <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>Files</Text>
           </TouchableOpacity>
           
           {customRingtoneName && (
@@ -545,6 +606,34 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       <View style={{ height: 40 }} />
+
+      {/* Curated Ringtones Modal */}
+      <Modal visible={showCuratedModal} transparent animationType="slide" onRequestClose={() => { stopPreview(); setShowCuratedModal(false); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: C.surface }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>Curated Ringtones</Text>
+              <TouchableOpacity onPress={() => { stopPreview(); setShowCuratedModal(false); }}>
+                <Ionicons name="close" size={24} color={C.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 400 }}>
+              {curatedRingtones.map((r, idx) => (
+                <View key={idx} style={styles.ringtoneItem}>
+                  <TouchableOpacity style={styles.ringtonePlayBtn} onPress={() => handlePreviewRingtone(r, idx)}>
+                    <Ionicons name={playingIndex === idx ? "stop" : "play"} size={20} color="#FFF" />
+                  </TouchableOpacity>
+                  <Text style={[styles.ringtoneName, { color: C.text }]} numberOfLines={1}>{r.name}</Text>
+                  <TouchableOpacity style={styles.ringtoneSelectBtn} onPress={() => handleSelectCuratedRingtone(r)}>
+                    <Text style={styles.ringtoneSelectText}>Select</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -612,4 +701,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end'
+  },
+  modalContent: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40
+  },
+  ringtoneItem: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: 'rgba(150,150,150,0.2)'
+  },
+  ringtonePlayBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#0084FF', alignItems: 'center', justifyContent: 'center', marginRight: 12
+  },
+  ringtoneName: {
+    flex: 1, fontSize: 16, fontWeight: '500'
+  },
+  ringtoneSelectBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(0,132,255,0.1)'
+  },
+  ringtoneSelectText: {
+    color: '#0084FF', fontWeight: '600', fontSize: 13
+  }
 });

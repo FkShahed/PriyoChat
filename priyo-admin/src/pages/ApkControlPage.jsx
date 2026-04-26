@@ -9,6 +9,8 @@ export default function ApkControlPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [globalRingtoneUrl, setGlobalRingtoneUrl] = useState('');
+  const [availableRingtones, setAvailableRingtones] = useState([]);
+  const [newRingtoneName, setNewRingtoneName] = useState('');
 
   const fetchInfo = async () => {
     try {
@@ -22,6 +24,7 @@ export default function ApkControlPage() {
       setReleaseNotes(infoRes.data.releaseNotes || '');
       setHistory(historyRes.data || []);
       setGlobalRingtoneUrl(configRes.data.defaultRingtoneUrl || '');
+      setAvailableRingtones(configRes.data.availableRingtones || []);
     } catch (err) {
       console.error('Fetch error:', err);
     }
@@ -100,6 +103,58 @@ export default function ApkControlPage() {
     } finally {
       setLoading(false);
       e.target.value = ''; // reset file input
+    }
+  };
+
+  const handleAddCuratedRingtone = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !newRingtoneName.trim()) {
+      alert('Please enter a name for the ringtone before uploading.');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+
+      // 1. Upload to Cloudinary
+      const uploadRes = await api.post('/media/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const newUrl = uploadRes.data[0]?.url;
+      if (!newUrl) throw new Error('Upload failed');
+
+      // 2. Add to array and save
+      const updatedRingtones = [...availableRingtones, { name: newRingtoneName.trim(), url: newUrl }];
+      await api.put('/admin/config', { availableRingtones: updatedRingtones });
+      setAvailableRingtones(updatedRingtones);
+      setNewRingtoneName('');
+      setMessage('Ringtone added to library successfully.');
+    } catch (err) {
+      console.error(err);
+      setMessage(err.response?.data?.message || 'Failed to add ringtone to library.');
+    } finally {
+      setLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteCuratedRingtone = async (indexToDelete) => {
+    if (!window.confirm('Are you sure you want to remove this ringtone from the library?')) return;
+    
+    setLoading(true);
+    try {
+      const updatedRingtones = availableRingtones.filter((_, idx) => idx !== indexToDelete);
+      await api.put('/admin/config', { availableRingtones: updatedRingtones });
+      setAvailableRingtones(updatedRingtones);
+      setMessage('Ringtone removed successfully.');
+    } catch (err) {
+      console.error(err);
+      setMessage('Failed to remove ringtone.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -252,6 +307,72 @@ export default function ApkControlPage() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Admin Curated Ringtones Library Section */}
+      <div className="card" style={{ marginBottom: '40px' }}>
+        <h3 style={{ marginBottom: '20px', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '20px' }}>🎵</span> Curated Ringtone Library
+        </h3>
+        <p style={{ opacity: 0.7, fontSize: '14px', marginBottom: '16px' }}>
+          Upload ringtones that users can select from inside the mobile app.
+        </p>
+
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
+          <input
+            className="form-input"
+            value={newRingtoneName}
+            onChange={(e) => setNewRingtoneName(e.target.value)}
+            placeholder="Ringtone Name (e.g., Classical Piano)"
+            style={{ flex: 1 }}
+          />
+          <label htmlFor="curated-upload" className="primary-btn" style={{
+            background: 'linear-gradient(135deg, #0084FF, #7C00FF)',
+            cursor: (!newRingtoneName.trim() || loading) ? 'not-allowed' : 'pointer',
+            opacity: (!newRingtoneName.trim() || loading) ? 0.5 : 1,
+            margin: 0
+          }}>
+            {loading ? 'Uploading...' : 'Upload MP3'}
+          </label>
+          <input 
+            type="file" 
+            id="curated-upload" 
+            accept="audio/*" 
+            style={{ display: 'none' }} 
+            onChange={handleAddCuratedRingtone} 
+            disabled={!newRingtoneName.trim() || loading}
+          />
+        </div>
+
+        {availableRingtones.length > 0 ? (
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {availableRingtones.map((ringtone, idx) => (
+              <div key={idx} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px'
+              }}>
+                <div>
+                  <div style={{ fontWeight: '600', color: '#e6edf3', fontSize: '14px' }}>{ringtone.name}</div>
+                  <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '4px' }}>{ringtone.url}</div>
+                </div>
+                <button 
+                  onClick={() => handleDeleteCuratedRingtone(idx)}
+                  disabled={loading}
+                  style={{
+                    background: 'rgba(255,69,58,0.1)', color: '#ff453a', border: '1px solid rgba(255,69,58,0.2)',
+                    padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600'
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state" style={{ padding: '20px' }}>
+            <div style={{ opacity: 0.5 }}>No curated ringtones added yet.</div>
+          </div>
+        )}
       </div>
 
       {/* History Table */}

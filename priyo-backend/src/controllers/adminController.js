@@ -414,17 +414,19 @@ const getAppConfig = async (req, res) => {
 // PUT /api/admin/config
 const updateAppConfig = async (req, res) => {
   try {
-    const { defaultRingtoneUrl } = req.body;
+    const { defaultRingtoneUrl, availableRingtones } = req.body;
     let config = await AppConfig.findOne({ configKey: 'global' });
     if (!config) {
       config = new AppConfig({ configKey: 'global' });
     }
     
     if (defaultRingtoneUrl !== undefined) config.defaultRingtoneUrl = defaultRingtoneUrl;
+    if (availableRingtones !== undefined) config.availableRingtones = availableRingtones;
+    
     config.updatedBy = req.user._id;
     await config.save();
     
-    await logAdminAction(req.user._id, 'UPDATE_APP_CONFIG', 'System', null, { defaultRingtoneUrl }, req.ip);
+    await logAdminAction(req.user._id, 'UPDATE_APP_CONFIG', 'System', null, { defaultRingtoneUrl, ringtoneCount: availableRingtones?.length }, req.ip);
     res.json(config);
   } catch (err) {
     res.status(500).json({ message: err.message });

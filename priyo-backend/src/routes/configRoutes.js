@@ -6,9 +6,12 @@ router.get('/', async (req, res) => {
   try {
     let config = await AppConfig.findOne({ configKey: 'global' });
     if (!config) {
-      config = { defaultRingtoneUrl: '' };
+      config = { defaultRingtoneUrl: '', availableRingtones: [] };
     }
-    res.json({ defaultRingtoneUrl: config.defaultRingtoneUrl });
+    res.json({ 
+      defaultRingtoneUrl: config.defaultRingtoneUrl,
+      availableRingtones: config.availableRingtones || []
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
