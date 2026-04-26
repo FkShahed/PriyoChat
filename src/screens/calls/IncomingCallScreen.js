@@ -4,16 +4,11 @@ import {
 } from 'react-native';
 import { Animated as RNAnimated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import { getInitials } from '../../utils/helpers';
-
-let InCallManager = null;
-try {
-  InCallManager = require('react-native-incall-manager').default;
-} catch (e) {
-  console.warn('[InCallManager] Not available:', e.message);
-}
 
 export default function IncomingCallScreen({ navigation }) {
   const { remoteUser, callType, callState, setCallAccepted, resetCall } = useCallStore();
@@ -21,6 +16,7 @@ export default function IncomingCallScreen({ navigation }) {
   const { emit } = useSocketStore();
   const slideAnim = useRef(new RNAnimated.Value(60)).current;
   const opacityAnim = useRef(new RNAnimated.Value(0)).current;
+  const soundRef = useRef(null);
   const hasActed = useRef(false); // prevent double-navigation
 
   useEffect(() => {
@@ -29,22 +25,36 @@ export default function IncomingCallScreen({ navigation }) {
       RNAnimated.timing(opacityAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
     ]).start();
 
-    // Start ringing
-    if (InCallManager) {
+    // Play ringtone using expo-av
+    const playRingtone = async () => {
       try {
-        InCallManager.startRingtone('_DEFAULT_');
-        console.log('[InCallManager] startRingtone');
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+        });
+
+        const customUri = await AsyncStorage.getItem('custom_ringtone_uri');
+        const soundSource = customUri ? { uri: customUri } : require('../../assets/ringtone.wav');
+
+        const { sound } = await Audio.Sound.createAsync(
+          soundSource,
+          { shouldPlay: true, isLooping: true }
+        );
+        soundRef.current = sound;
+        console.log('[Ringtone] Started looping');
       } catch (e) {
-        console.warn('[InCallManager] startRingtone error:', e);
+        console.warn('[Ringtone] Play error:', e);
       }
-    }
+    };
+    
+    playRingtone();
 
     return () => {
       // Stop ringing if screen is unmounted
-      if (InCallManager) {
-        try {
-          InCallManager.stopRingtone();
-        } catch (e) {}
+      if (soundRef.current) {
+        soundRef.current.stopAsync().catch(() => {});
+        soundRef.current.unloadAsync().catch(() => {});
       }
     };
   }, []);
@@ -60,8 +70,8 @@ export default function IncomingCallScreen({ navigation }) {
   const handleAccept = () => {
     if (hasActed.current) return;
     hasActed.current = true;
-    if (InCallManager) {
-      try { InCallManager.stopRingtone(); } catch (e) {}
+    if (soundRef.current) {
+      soundRef.current.stopAsync().catch(() => {});
     }
     // Don't emit call_answer here — useWebRTCCall hook in CallScreen
     // will create the real SDP answer and emit it after setting up media.
@@ -73,8 +83,8 @@ export default function IncomingCallScreen({ navigation }) {
   const handleReject = () => {
     if (hasActed.current) return;
     hasActed.current = true;
-    if (InCallManager) {
-      try { InCallManager.stopRingtone(); } catch (e) {}
+    if (soundRef.current) {
+      soundRef.current.stopAsync().catch(() => {});
     }
     emit('call_reject', { to: remoteUser._id });
     resetCall(); // instant reset to idle

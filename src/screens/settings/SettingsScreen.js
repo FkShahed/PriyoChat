@@ -6,7 +6,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
@@ -45,6 +47,8 @@ export default function SettingsScreen({ navigation }) {
   });
   const [checkingUpdate, setCheckingUpdate] = useState(true);
   const [updateInfo, setUpdateInfo] = useState({ apkUrl: null, latestVersion: null, isLatest: true });
+  
+  const [customRingtoneName, setCustomRingtoneName] = useState(null);
 
   const getAndroidPerms = (type) => {
     switch (type) {
@@ -91,6 +95,19 @@ export default function SettingsScreen({ navigation }) {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') checkPermissions();
     });
+    
+    // Load custom ringtone info on mount
+    const loadRingtone = async () => {
+      try {
+        const uri = await AsyncStorage.getItem('custom_ringtone_uri');
+        const name = await AsyncStorage.getItem('custom_ringtone_name');
+        if (uri && name) setCustomRingtoneName(name);
+      } catch (e) {
+        console.warn('Error loading custom ringtone', e);
+      }
+    };
+    loadRingtone();
+    
     return () => sub.remove();
   }, []);
 
@@ -259,6 +276,37 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
+  const handlePickRingtone = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp3', 'audio/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        await AsyncStorage.setItem('custom_ringtone_uri', file.uri);
+        await AsyncStorage.setItem('custom_ringtone_name', file.name || 'Custom Ringtone');
+        setCustomRingtoneName(file.name || 'Custom Ringtone');
+        Alert.alert('Success', 'Custom ringtone has been set.');
+      }
+    } catch (err) {
+      console.warn('Error picking ringtone:', err);
+      Alert.alert('Error', 'Failed to pick audio file.');
+    }
+  };
+
+  const handleResetRingtone = async () => {
+    try {
+      await AsyncStorage.removeItem('custom_ringtone_uri');
+      await AsyncStorage.removeItem('custom_ringtone_name');
+      setCustomRingtoneName(null);
+      Alert.alert('Success', 'Ringtone reset to default.');
+    } catch (err) {
+      console.warn('Error resetting ringtone:', err);
+    }
+  };
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: C.bg }]}>
       {/* ── Profile header ──────────────────────────────────────── */}
@@ -392,6 +440,41 @@ export default function SettingsScreen({ navigation }) {
             />
           </View>
         ))}
+      </View>
+
+      {/* ── Call Settings section ───────────────────────────────── */}
+      <View style={[styles.section, { backgroundColor: C.surface }]}>
+        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Call Settings</Text>
+        <Text style={{ color: C.text, fontSize: 13, marginBottom: 12, lineHeight: 18, opacity: 0.8 }}>
+          Choose a custom sound to play when receiving an audio or video call.
+        </Text>
+        
+        <View style={styles.infoRow}>
+          <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Ringtone</Text>
+          <Text style={[styles.infoValue, { color: C.text }]} numberOfLines={1}>
+            {customRingtoneName || 'Default'}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+          <TouchableOpacity
+            style={[styles.updateBtn, { flex: 1, marginTop: 0 }]}
+            onPress={handlePickRingtone}
+          >
+            <Ionicons name="musical-notes-outline" size={18} color="#0084FF" />
+            <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>Select MP3</Text>
+          </TouchableOpacity>
+          
+          {customRingtoneName && (
+            <TouchableOpacity
+              style={[styles.updateBtn, { flex: 1, marginTop: 0, borderColor: '#FF3B30', backgroundColor: 'rgba(255,59,48,0.1)' }]}
+              onPress={handleResetRingtone}
+            >
+              <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+              <Text style={[styles.updateBtnText, { color: '#FF3B30' }]}>Reset</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* ── Account section ─────────────────────────────────────── */}
