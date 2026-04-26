@@ -332,6 +332,19 @@ const getAppUpdateHistory = async (req, res) => {
   }
 };
 
+// DELETE /api/admin/app-update/:id
+const deleteAppUpdate = async (req, res) => {
+  try {
+    const update = await AppUpdate.findByIdAndDelete(req.params.id);
+    if (!update) return res.status(404).json({ message: 'App update record not found' });
+    
+    await logAdminAction(req.user._id, 'DELETE_APP_UPDATE', 'AppUpdate', req.params.id, { version: update.version }, req.ip);
+    res.json({ message: 'App update record deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // PUT /api/admin/bug-reports/:id/status
 const updateBugReportStatus = async (req, res) => {
   try {
@@ -400,4 +413,5 @@ module.exports = {
   getAppUpdate,
   setAppUpdate,
   getAppUpdateHistory,
+  deleteAppUpdate,
 };

@@ -52,6 +52,24 @@ export default function ApkControlPage() {
     }
   };
 
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this APK version history?')) {
+      return;
+    }
+    
+    setLoading(true);
+    setMessage('');
+    try {
+      await api.delete(`/admin/app-update/${id}`);
+      setMessage('APK version history deleted successfully.');
+      fetchInfo();
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Failed to delete APK update info.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="page-container" style={{ maxWidth: '1200px' }}>
       <div className="page-header">
@@ -168,7 +186,8 @@ export default function ApkControlPage() {
               <th>Release Date</th>
               <th>Release Notes</th>
               <th>APK URL</th>
-              <th style={{ paddingRight: '24px' }}>Published By</th>
+              <th>Published By</th>
+              <th style={{ paddingRight: '24px', textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -201,14 +220,32 @@ export default function ApkControlPage() {
                       Download APK
                     </a>
                   </td>
-                  <td style={{ paddingRight: '24px' }}>
+                  <td>
                     <div style={{ fontSize: '13px' }}>{item.updatedBy?.name || 'Admin'}</div>
+                  </td>
+                  <td style={{ paddingRight: '24px', textAlign: 'right' }}>
+                    <button 
+                      onClick={() => handleDelete(item._id)}
+                      disabled={loading}
+                      style={{
+                        background: 'rgba(255,69,58,0.1)',
+                        color: '#ff453a',
+                        border: '1px solid rgba(255,69,58,0.2)',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '600'
+                      }}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="5" className="empty-state">
+                <td colSpan="6" className="empty-state">
                   <div className="empty-icon">📂</div>
                   <div>No release history found.</div>
                 </td>
