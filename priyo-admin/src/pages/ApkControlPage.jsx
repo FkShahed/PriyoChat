@@ -328,8 +328,8 @@ export default function ApkControlPage() {
           />
           <label htmlFor="curated-upload" className="primary-btn" style={{
             background: 'linear-gradient(135deg, #0084FF, #7C00FF)',
-            cursor: (!newRingtoneName.trim() || loading) ? 'not-allowed' : 'pointer',
-            opacity: (!newRingtoneName.trim() || loading) ? 0.5 : 1,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.5 : 1,
             margin: 0
           }}>
             {loading ? 'Uploading...' : 'Upload MP3'}
@@ -340,7 +340,7 @@ export default function ApkControlPage() {
             accept="audio/*" 
             style={{ display: 'none' }} 
             onChange={handleAddCuratedRingtone} 
-            disabled={!newRingtoneName.trim() || loading}
+            disabled={loading}
           />
         </div>
 
