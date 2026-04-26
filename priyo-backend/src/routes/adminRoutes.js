@@ -5,7 +5,7 @@ const {
   getAllUsers, banUser, suspendUser, warnUser, removeWarning,
   getReports, resolveReport, getAnalytics, getAuditLogs,
   getBugReports, updateBugReportStatus,
-  getAppUpdate, setAppUpdate,
+  getAppUpdate, setAppUpdate, getAppUpdateHistory,
   broadcastNotification
 } = require('../controllers/adminController');
 
@@ -27,6 +27,7 @@ router.put('/bug-reports/:id/status', updateBugReportStatus);
 router.get('/analytics', getAnalytics);
 router.get('/audit-logs', getAuditLogs);
 router.get('/app-update', getAppUpdate);
+router.get('/app-update/history', getAppUpdateHistory);
 router.put('/app-update', setAppUpdate);
 
 router.post('/broadcast', broadcastNotification);

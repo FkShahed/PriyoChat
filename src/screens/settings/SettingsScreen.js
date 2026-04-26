@@ -242,8 +242,11 @@ export default function SettingsScreen({ navigation }) {
         { text: 'Cancel', style: 'cancel' },
       ]);
     } catch (downloadError) {
-      Alert.alert('Download Failed', 'Could not download the APK. Please check your internet connection and try again.');
-      console.warn('APK download error', downloadError);
+      console.error('[APKDownload] Error:', downloadError);
+      Alert.alert(
+        'Download Failed',
+        `Could not download the APK.\n\nError: ${downloadError.message || 'Unknown error'}\n\nMake sure the APK URL is correct and accessible from your device.`
+      );
     } finally {
       setCheckingUpdate(false);
     }

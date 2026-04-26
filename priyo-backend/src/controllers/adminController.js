@@ -305,19 +305,28 @@ const setAppUpdate = async (req, res) => {
       return res.status(400).json({ message: 'Version and APK URL are required' });
     }
 
-    const update = await AppUpdate.findOneAndUpdate(
-      {},
-      {
-        version,
-        apkUrl,
-        releaseNotes,
-        updatedBy: req.user._id,
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+    // Always create a new record for history
+    const update = await AppUpdate.create({
+      version,
+      apkUrl,
+      releaseNotes,
+      updatedBy: req.user._id,
+    });
 
     await logAdminAction(req.user._id, 'UPDATE_APP_UPDATE', 'AppUpdate', update._id, { version, apkUrl }, req.ip);
     res.json(update);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// GET /api/admin/app-update/history
+const getAppUpdateHistory = async (req, res) => {
+  try {
+    const history = await AppUpdate.find()
+      .populate('updatedBy', 'name email')
+      .sort('-createdAt');
+    res.json(history);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -390,4 +399,5 @@ module.exports = {
   broadcastNotification,
   getAppUpdate,
   setAppUpdate,
+  getAppUpdateHistory,
 };
