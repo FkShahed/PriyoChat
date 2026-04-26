@@ -32,7 +32,7 @@ export default function IncomingCallScreen({ navigation }) {
     // Start ringing
     if (InCallManager) {
       try {
-        InCallManager.startRingtone('_BUNDLE_');
+        InCallManager.startRingtone('_DEFAULT_');
         console.log('[InCallManager] startRingtone');
       } catch (e) {
         console.warn('[InCallManager] startRingtone error:', e);

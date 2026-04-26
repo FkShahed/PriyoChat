@@ -80,7 +80,6 @@ class NotificationService {
         content: {
           title: callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call',
           body: `${callerName} is calling you...`,
-          sound: 'default',
           data: { type: 'call' },
           ...(Platform.OS === 'android' && { channelId: 'calls_ringtone', sticky: true }),
         },
@@ -120,10 +119,10 @@ class NotificationService {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 200, 500, 200, 500],
       lightColor: '#34C759',
-      sound: 'default',
       enableLights: true,
       enableVibrate: true,
       bypassDnd: true,
+      sound: null, // Let InCallManager handle the actual sound
       audioAttributes: {
         usage: Notifications.AndroidAudioUsage.NOTIFICATION_RINGTONE,
         contentType: Notifications.AndroidAudioContentType.SONIFICATION,
