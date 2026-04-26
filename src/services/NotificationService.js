@@ -81,7 +81,7 @@ class NotificationService {
           title: callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call',
           body: `${callerName} is calling you...`,
           data: { type: 'call' },
-          ...(Platform.OS === 'android' && { channelId: 'calls_ringtone', sticky: true }),
+          ...(Platform.OS === 'android' && { channelId: 'incoming_calls_channel', sticky: true }),
         },
         trigger: null,
       });
@@ -114,7 +114,7 @@ class NotificationService {
     });
 
     // Calls — MAX importance, bypass DND, ringtone usage
-    await Notifications.setNotificationChannelAsync('calls_ringtone', {
+    await Notifications.setNotificationChannelAsync('incoming_calls_channel', {
       name: 'Incoming Calls',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 200, 500, 200, 500],

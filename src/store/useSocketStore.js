@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import useChatStore from './useChatStore';
 import useCallStore from './useCallStore';
 import useAuthStore from './useAuthStore';
@@ -102,11 +102,13 @@ const useSocketStore = create((set, get) => ({
     // ── Call events ──────────────────────────────────────────────────
     newSocket.on('incoming_call', (data) => {
       useCallStore.getState().setIncomingCall(data);
-      // Show a heads-up notification so user sees it even when phone is locked
-      NotificationService.showCallNotification({
-        callerName: data.caller?.name || 'Someone',
-        callType: data.callType,
-      });
+      // Show a heads-up notification ONLY if app is backgrounded
+      if (AppState.currentState !== 'active') {
+        NotificationService.showCallNotification({
+          callerName: data.caller?.name || 'Someone',
+          callType: data.callType,
+        });
+      }
     });
 
     newSocket.on('call_answered', ({ answer }) => {
