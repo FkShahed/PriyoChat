@@ -8,6 +8,13 @@ import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import { getInitials } from '../../utils/helpers';
 
+let InCallManager = null;
+try {
+  InCallManager = require('react-native-incall-manager').default;
+} catch (e) {
+  console.warn('[InCallManager] Not available:', e.message);
+}
+
 export default function IncomingCallScreen({ navigation }) {
   const { remoteUser, callType, callState, setCallAccepted, resetCall } = useCallStore();
   console.log('[IncomingCallScreen] remoteUser:', remoteUser?._id, remoteUser?.name);
@@ -21,6 +28,25 @@ export default function IncomingCallScreen({ navigation }) {
       RNAnimated.timing(slideAnim, { toValue: 0, duration: 450, easing: Easing.out(Easing.ease), useNativeDriver: true }),
       RNAnimated.timing(opacityAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
     ]).start();
+
+    // Start ringing
+    if (InCallManager) {
+      try {
+        InCallManager.startRingtone('_BUNDLE_');
+        console.log('[InCallManager] startRingtone');
+      } catch (e) {
+        console.warn('[InCallManager] startRingtone error:', e);
+      }
+    }
+
+    return () => {
+      // Stop ringing if screen is unmounted
+      if (InCallManager) {
+        try {
+          InCallManager.stopRingtone();
+        } catch (e) {}
+      }
+    };
   }, []);
 
   // If caller hung up or call expired before we answered → auto dismiss
@@ -34,6 +60,9 @@ export default function IncomingCallScreen({ navigation }) {
   const handleAccept = () => {
     if (hasActed.current) return;
     hasActed.current = true;
+    if (InCallManager) {
+      try { InCallManager.stopRingtone(); } catch (e) {}
+    }
     // Don't emit call_answer here — useWebRTCCall hook in CallScreen
     // will create the real SDP answer and emit it after setting up media.
     // Mark as 'connecting' — the hook will set 'active' when WebRTC connects.
@@ -44,6 +73,9 @@ export default function IncomingCallScreen({ navigation }) {
   const handleReject = () => {
     if (hasActed.current) return;
     hasActed.current = true;
+    if (InCallManager) {
+      try { InCallManager.stopRingtone(); } catch (e) {}
+    }
     emit('call_reject', { to: remoteUser._id });
     resetCall(); // instant reset to idle
     navigation.goBack();

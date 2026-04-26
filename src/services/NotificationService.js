@@ -82,7 +82,7 @@ class NotificationService {
           body: `${callerName} is calling you...`,
           sound: 'default',
           data: { type: 'call' },
-          ...(Platform.OS === 'android' && { channelId: 'calls', sticky: true }),
+          ...(Platform.OS === 'android' && { channelId: 'calls_ringtone', sticky: true }),
         },
         trigger: null,
       });
@@ -114,8 +114,8 @@ class NotificationService {
       sound: 'default',
     });
 
-    // Calls — MAX importance, bypass DND
-    await Notifications.setNotificationChannelAsync('calls', {
+    // Calls — MAX importance, bypass DND, ringtone usage
+    await Notifications.setNotificationChannelAsync('calls_ringtone', {
       name: 'Incoming Calls',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 200, 500, 200, 500],
@@ -124,6 +124,10 @@ class NotificationService {
       enableLights: true,
       enableVibrate: true,
       bypassDnd: true,
+      audioAttributes: {
+        usage: Notifications.AndroidAudioUsage.NOTIFICATION_RINGTONE,
+        contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+      },
     });
   }
 
