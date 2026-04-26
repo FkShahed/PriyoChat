@@ -28,7 +28,7 @@
           "icon": "./assets/icon.png",
           "color": "#0084FF",
           "defaultChannel": "messages",
-          "sounds": []
+          "sounds": ["./assets/ringtone.wav"]
         }
       ]
     ],
