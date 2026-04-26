@@ -7,7 +7,7 @@ buildscript {
     compileSdkVersion = 35
     targetSdkVersion = 35
     ndkVersion = "26.1.10909125"
-    kotlinVersion = "1.9.24"
+    kotlinVersion = "2.0.21"
   }
   repositories {
     google()
@@ -27,7 +27,7 @@ allprojects {
     maven { url 'https://www.jitpack.io' }
   }
 
-  // Force subprojects to use the same compileSdk and fix Gradle 8 properties
+  // Force subprojects to use the same compileSdk
   subprojects {
     afterEvaluate { project ->
       if (project.hasProperty('android')) {
@@ -40,20 +40,10 @@ allprojects {
           }
         }
       }
-      
-      // Fix 'classifier' error in Gradle 8+
-      tasks.withType(Jar).configureEach {
-        if (it.hasProperty('classifier')) {
-          try {
-            it.archiveClassifier = it.classifier
-          } catch (Exception e) {
-            // Property might be read-only or already removed
-          }
-        }
-      }
     }
   }
 }
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
