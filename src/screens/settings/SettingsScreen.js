@@ -54,6 +54,8 @@ export default function SettingsScreen({ navigation }) {
   const [showCuratedModal, setShowCuratedModal] = useState(false);
   const [previewSound, setPreviewSound] = useState(null);
   const [playingIndex, setPlayingIndex] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const isProcessingDownload = React.useRef(false);
 
   const getAndroidPerms = (type) => {
     switch (type) {
@@ -242,10 +244,21 @@ export default function SettingsScreen({ navigation }) {
     checkVersion();
   }, []);
   const handleDownloadUpdate = async () => {
-    if (!updateInfo.apkUrl) return;
+    if (!updateInfo.apkUrl || isProcessingDownload.current) return;
+    
+    isProcessingDownload.current = true;
+    setDownloading(true);
+    
     try {
       await Linking.openURL(updateInfo.apkUrl);
+      // Keep it disabled for a while to prevent multiple clicks
+      setTimeout(() => {
+        isProcessingDownload.current = false;
+        setDownloading(false);
+      }, 3000);
     } catch (err) {
+      isProcessingDownload.current = false;
+      setDownloading(false);
       Alert.alert('Error', 'Could not open the download link. Please try again.');
     }
   };
@@ -564,20 +577,19 @@ export default function SettingsScreen({ navigation }) {
             }
           ]}
           onPress={handleDownloadUpdate}
-          disabled={checkingUpdate || updateInfo.isLatest}
+          disabled={checkingUpdate || !updateInfo.apkUrl || downloading}
         >
-          {checkingUpdate ? (
+          {checkingUpdate || downloading ? (
             <ActivityIndicator color={C.textSecondary} size="small" />
-          ) : updateInfo.isLatest ? (
-            <>
-              <Ionicons name="checkmark-circle-outline" size={18} color="#34C759" />
-              <Text style={[styles.updateBtnText, { color: C.text }]}>You're up to date</Text>
-            </>
           ) : (
             <>
-              <Ionicons name="cloud-download-outline" size={18} color="#0084FF" />
-              <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>
-                Download v{updateInfo.latestVersion}
+              <Ionicons 
+                name={updateInfo.isLatest ? "checkmark-circle-outline" : "cloud-download-outline"} 
+                size={18} 
+                color={updateInfo.isLatest ? "#34C759" : "#0084FF"} 
+              />
+              <Text style={[styles.updateBtnText, { color: updateInfo.isLatest ? C.text : '#0084FF' }]}>
+                {updateInfo.isLatest ? `Download Latest (v${currentVersion})` : `Download v${updateInfo.latestVersion}`}
               </Text>
             </>
           )}
