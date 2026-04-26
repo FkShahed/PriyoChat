@@ -97,15 +97,20 @@ export default function SettingsScreen({ navigation }) {
     return () => sub.remove();
   }, []);
 
+  // Cleanup downloaded APK when user returns to app after installation
   useEffect(() => {
     const listener = AppState.addEventListener('change', async (state) => {
       if (state === 'active' && downloadUri) {
         try {
-          await FileSystem.deleteAsync(downloadUri, { idempotent: true });
-          setDownloadUri(null);
+          const info = await FileSystem.getInfoAsync(downloadUri);
+          if (info.exists) {
+            await FileSystem.deleteAsync(downloadUri, { idempotent: true });
+            console.log('[APKCleanup] Removed APK after returning to app:', downloadUri);
+          }
         } catch (err) {
-          console.warn('Cleanup APK file failed', err);
+          console.warn('[APKCleanup] Failed to clean up APK on resume:', err);
         }
+        setDownloadUri(null);
       }
     });
     return () => listener.remove();
@@ -212,57 +217,94 @@ export default function SettingsScreen({ navigation }) {
   const cleanupApk = async (uri) => {
     if (!uri) return;
     try {
-      await FileSystem.deleteAsync(uri, { idempotent: true });
-      if (uri === downloadUri) setDownloadUri(null);
-      console.log('[APKCleanup] Removed file:', uri);
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.exists) {
+        await FileSystem.deleteAsync(uri, { idempotent: true });
+        console.log('[APKCleanup] Removed file:', uri);
+      }
     } catch (err) {
       console.warn('[APKCleanup] Failed to remove file:', err);
     }
+    if (uri === downloadUri) setDownloadUri(null);
   };
 
   const downloadAndInstallApk = async (url, version) => {
     const fileName = `PriyoChat-${version}.apk`;
-    const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-    try {
-      setCheckingUpdate(true);
-      
-      // Clean up any existing stale download before starting a new one
-      if (downloadUri) await cleanupApk(downloadUri);
+    const destUri = FileSystem.cacheDirectory + fileName;
 
-      const { uri } = await FileSystem.downloadAsync(url, fileUri, {
-        cache: true,
-      });
-      setDownloadUri(uri);
-      
-      Alert.alert('Download Complete', 'APK downloaded successfully. Do you want to install it now?', [
-        {
-          text: 'Install', onPress: async () => {
-            try {
-              await IntentLauncher.startActivityAsync(IntentLauncher.ACTION_VIEW, {
-                data: uri,
-                flags: 1,
-                type: 'application/vnd.android.package-archive',
-              });
-              // The AppState listener will handle deletion when user returns to app
-            } catch (installError) {
-              Alert.alert('Install Failed', 'Could not start the APK installer. Please open the downloaded file manually.');
-              await cleanupApk(uri);
-            }
+    setCheckingUpdate(true);
+    try {
+      // Clean up any stale leftover APK first
+      await cleanupApk(destUri);
+
+      console.log('[APKDownload] Downloading from:', url);
+
+      const downloadResumable = FileSystem.createDownloadResumable(
+        url,
+        destUri,
+        {},
+        (progress) => {
+          if (progress.totalBytesExpectedToWrite > 0) {
+            const pct = Math.round(
+              (progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100
+            );
+            console.log(`[APKDownload] Progress: ${pct}%`);
+          }
+        }
+      );
+
+      const result = await downloadResumable.downloadAsync();
+      if (!result?.uri) throw new Error('Download returned no file URI.');
+
+      const localUri = result.uri;
+      setDownloadUri(localUri);
+      console.log('[APKDownload] Saved to:', localUri);
+
+      // Get a content:// URI that the Android package installer can accept
+      const contentUri = await FileSystem.getContentUriAsync(localUri);
+      console.log('[APKDownload] Content URI:', contentUri);
+
+      Alert.alert(
+        'Download Complete',
+        `PriyoChat v${version} downloaded. Install it now?`,
+        [
+          {
+            text: 'Install',
+            onPress: async () => {
+              try {
+                await IntentLauncher.startActivityAsync(
+                  'android.intent.action.VIEW',
+                  {
+                    data: contentUri,
+                    flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+                    type: 'application/vnd.android.package-archive',
+                  }
+                );
+                // AppState listener will delete the file once the user returns to the app
+              } catch (installErr) {
+                console.error('[APKInstall] Error:', installErr);
+                Alert.alert(
+                  'Install Failed',
+                  `Could not open the APK installer.\n\nError: ${installErr.message || 'Unknown'}\n\nMake sure "Install from unknown sources" is enabled for this app in your device settings.`
+                );
+                await cleanupApk(localUri);
+              }
+            },
           },
-          style: 'default',
-        },
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => cleanupApk(uri)
-        },
-      ]);
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => cleanupApk(localUri),
+          },
+        ]
+      );
     } catch (downloadError) {
       console.error('[APKDownload] Error:', downloadError);
       Alert.alert(
         'Download Failed',
-        `Could not download the APK.\n\nError: ${downloadError.message || 'Unknown error'}\n\nMake sure the APK URL is correct and accessible from your device.`
+        `Could not download the APK.\n\nError: ${downloadError.message || 'Unknown error'}\n\nCheck that the APK URL is accessible from your network.`
       );
+      await cleanupApk(destUri);
     } finally {
       setCheckingUpdate(false);
     }
