@@ -1,14 +1,6 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-  ext {
-    buildToolsVersion = "35.0.0"
-    minSdkVersion = 24
-    compileSdkVersion = 35
-    targetSdkVersion = 35
-    ndkVersion = "27.1.12297006"
-    kotlinVersion = "2.0.21"
-  }
   repositories {
     google()
     mavenCentral()
@@ -26,33 +18,7 @@ allprojects {
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
   }
-
-  // Force subprojects to use the same compileSdk
-  subprojects {
-    afterEvaluate { project ->
-      if (project.hasProperty('android')) {
-        project.android {
-          if (project.android.hasProperty('compileSdkVersion')) {
-             compileSdkVersion rootProject.ext.compileSdkVersion
-          }
-          if (project.android.hasProperty('buildToolsVersion')) {
-             buildToolsVersion rootProject.ext.buildToolsVersion
-          }
-        }
-      }
-      
-      // Force Java 17 compatibility for all Java/Kotlin compilation tasks
-      project.tasks.withType(JavaCompile).configureEach {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-      }
-      project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-        kotlinOptions.jvmTarget = "17"
-      }
-    }
-  }
 }
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
-
