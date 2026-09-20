@@ -45,6 +45,9 @@ export default function CallScreen({ route, navigation }) {
   const [cameraFront, setCameraFront] = useState(true);
 
   const ringAnim = useRef(new RNAnimated.Value(0)).current;
+  const ripple1 = useRef(new RNAnimated.Value(0)).current;
+  const ripple2 = useRef(new RNAnimated.Value(0)).current;
+  const ripple3 = useRef(new RNAnimated.Value(0)).current;
   const loopRef = useRef(null);
   const timerRef = useRef(null);
   const hasNavigatedBack = useRef(false);
@@ -65,22 +68,35 @@ export default function CallScreen({ route, navigation }) {
     }, []),
   });
 
-  // ── Pulsing ring (while ringing/connecting) ───────────────────────
+  // ── Ripple animation ─────────────────────────────────────────────
   useEffect(() => {
-    loopRef.current = RNAnimated.loop(
-      RNAnimated.sequence([
-        RNAnimated.timing(ringAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        RNAnimated.timing(ringAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
-      ])
-    );
-    loopRef.current.start();
+    const DURATION = 2000; // one ripple cycle
+
+    const makeRipple = (anim, delay) =>
+      RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.delay(delay),
+          RNAnimated.timing(anim, {
+            toValue: 1,
+            duration: DURATION,
+            useNativeDriver: true,
+          }),
+          RNAnimated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ])
+      );
+
+    const a1 = makeRipple(ripple1, 0);
+    const a2 = makeRipple(ripple2, DURATION / 3);
+    const a3 = makeRipple(ripple3, (DURATION / 3) * 2);
+
+    a1.start(); a2.start(); a3.start();
 
     if (!isReceiver) {
       Vibration.vibrate([0, 400, 200, 400]);
     }
 
     return () => {
-      loopRef.current?.stop();
+      a1.stop(); a2.stop(); a3.stop();
       Vibration.cancel();
     };
   }, []);
@@ -160,8 +176,16 @@ export default function CallScreen({ route, navigation }) {
     }
   };
 
-  const scale = ringAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
-  const opacity = ringAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0] });
+  const makeRippleStyle = (anim) => ({
+    transform: [{
+      scale: anim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }),
+    }],
+    opacity: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0.5, 0] }),
+  });
+
+  const r1Style = makeRippleStyle(ripple1);
+  const r2Style = makeRippleStyle(ripple2);
+  const r3Style = makeRippleStyle(ripple3);
 
   const getStatusLabel = () => {
     if (callState === 'active') return `🔴  ${formatDuration(callDuration)}`;
@@ -265,8 +289,10 @@ export default function CallScreen({ route, navigation }) {
 
       {/* ── TOP SECTION: avatar + name + status ── */}
       <View style={styles.topSection}>
-        {/* Avatar glow ring */}
-        <RNAnimated.View style={[styles.glowRing, { transform: [{ scale }], opacity }]} />
+        {/* 3 staggered ripple rings expanding from avatar */}
+        <RNAnimated.View style={[styles.rippleRing, r1Style]} />
+        <RNAnimated.View style={[styles.rippleRing, r2Style]} />
+        <RNAnimated.View style={[styles.rippleRing, r3Style]} />
 
         <View style={styles.avatarContainer}>
           {otherUser.avatar ? (
@@ -346,10 +372,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: 60,
   },
-  glowRing: {
+  rippleRing: {
     position: 'absolute',
-    width: 200, height: 200, borderRadius: 100,
-    backgroundColor: 'rgba(29, 111, 235, 0.25)',
+    width: 140, height: 140,
+    borderRadius: 70,
+    borderWidth: 2,
+    borderColor: 'rgba(29, 111, 235, 0.6)',
+    backgroundColor: 'rgba(29, 111, 235, 0.08)',
   },
   avatarContainer: {
     width: 130, height: 130,
