@@ -170,7 +170,6 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 100,
     height: 100,
-    borderRadius: 24,
     marginBottom: 20,
     shadowColor: '#0084FF',
     shadowOffset: { width: 0, height: 10 },

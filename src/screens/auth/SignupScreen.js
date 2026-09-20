@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   // ── Header — same visual as Login, just tighter margin ────────────────
   header: { alignItems: 'center', marginBottom: 20 },
   logoImg: {
-    width: 60, height: 60, borderRadius: 16,
+    width: 60, height: 60,
     marginBottom: 14,
     shadowColor: '#0084FF',
     shadowOffset: { width: 0, height: 6 },
