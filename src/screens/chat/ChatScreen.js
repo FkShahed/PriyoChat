@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   Image, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
@@ -152,7 +152,7 @@ export default function ChatScreen({ route, navigation }) {
   const scrollToBottom = useCallback((animated = true) => {
     if (flatListRef.current) {
       try {
-        flatListRef.current.scrollToEnd({ animated });
+        flatListRef.current.scrollToOffset({ offset: 0, animated });
       } catch (err) {
         // safe ignore during unmount or layout transition
       }
@@ -166,17 +166,12 @@ export default function ChatScreen({ route, navigation }) {
 
     const showSub = Keyboard.addListener(showEvent, () => {
       isKeyboardVisible.current = true;
-      requestAnimationFrame(() => scrollToBottom(false));
-      setTimeout(() => scrollToBottom(false), 50);
-      setTimeout(() => scrollToBottom(true), 120);
-      setTimeout(() => scrollToBottom(true), 280);
-      setTimeout(() => scrollToBottom(true), 450);
+      scrollToBottom(false);
+      setTimeout(() => scrollToBottom(true), 80);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
       isKeyboardVisible.current = false;
-      setTimeout(() => scrollToBottom(false), 50);
-      setTimeout(() => scrollToBottom(true), 150);
     });
 
     return () => {
@@ -213,7 +208,7 @@ export default function ChatScreen({ route, navigation }) {
 
   useEffect(() => {
     if (convoMessages.length > 0 && !searchVisible) {
-      setTimeout(() => scrollToBottom(true), 100);
+      scrollToBottom(true);
     }
   }, [convoMessages.length, searchVisible, scrollToBottom]);
 
@@ -288,9 +283,12 @@ export default function ChatScreen({ route, navigation }) {
     ]);
   };
 
-  const displayedMessages = searchQuery.trim()
-    ? convoMessages.filter(m => m.text?.toLowerCase()?.includes(searchQuery.toLowerCase()))
-    : convoMessages;
+  const displayedMessages = useMemo(() => {
+    const list = searchQuery.trim()
+      ? convoMessages.filter(m => m.text?.toLowerCase()?.includes(searchQuery.toLowerCase()))
+      : convoMessages;
+    return [...list].reverse();
+  }, [convoMessages, searchQuery]);
 
   // ── Render message ──────────────────────────────────────────────────
   const renderMessage = ({ item: msg }) => {
@@ -466,32 +464,20 @@ export default function ChatScreen({ route, navigation }) {
         <FlatList
           style={{ flex: 1 }}
           ref={flatListRef}
+          inverted
           data={displayedMessages}
           keyExtractor={(item) => item._id}
           renderItem={renderMessage}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 24, paddingHorizontal: 8 }}
-          initialNumToRender={30}
-          maxToRenderPerBatch={30}
-          windowSize={21}
+          contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 8 }}
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={15}
           onEndReached={() => hasMore && !searchVisible && loadMessages(page + 1, true)}
           onEndReachedThreshold={0.3}
-          onLayout={() => {
-            if (convoMessages.length > 0 && !searchVisible) {
-              requestAnimationFrame(() => scrollToBottom(false));
-              setTimeout(() => scrollToBottom(false), 50);
-              setTimeout(() => scrollToBottom(true), 180);
-            }
-          }}
-          onContentSizeChange={() => {
-            if (convoMessages.length > 0 && !searchVisible) {
-              scrollToBottom(false);
-              setTimeout(() => scrollToBottom(true), 80);
-            }
-          }}
-          ListFooterComponent={isTyping ? <TypingIndicator theme={theme} /> : null}
+          ListHeaderComponent={isTyping ? <TypingIndicator theme={theme} /> : null}
           ListEmptyComponent={
             searchQuery ? (
-              <View style={{ alignItems: 'center', marginTop: 48 }}>
+              <View style={{ alignItems: 'center', marginTop: 48, transform: [{ scaleY: -1 }] }}>
                 <Ionicons name="search" size={42} color="#8E8E93" />
                 <Text style={{ color: '#8E8E93', marginTop: 10, fontSize: 15 }}>No messages found</Text>
               </View>
@@ -526,10 +512,7 @@ export default function ChatScreen({ route, navigation }) {
             value={text}
             onChangeText={handleTyping}
             onFocus={() => {
-              requestAnimationFrame(() => scrollToBottom(false));
-              setTimeout(() => scrollToBottom(false), 50);
-              setTimeout(() => scrollToBottom(true), 150);
-              setTimeout(() => scrollToBottom(true), 320);
+              scrollToBottom(true);
             }}
             placeholder="Message..."
             placeholderTextColor={theme.placeholderText}

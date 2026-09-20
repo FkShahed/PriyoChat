@@ -24,18 +24,30 @@ const useChatStore = create((set, get) => ({
     }
   },
 
-  setMessages: (conversationId, messages) =>
+  setMessages: (conversationId, messages) => {
+    const sorted = [...messages].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     set((state) => ({
-      messages: { ...state.messages, [conversationId]: messages },
-    })),
+      messages: { ...state.messages, [conversationId]: sorted },
+    }));
+  },
 
   appendMessages: (conversationId, newMessages) => {
     const { messages } = get();
     const existing = messages[conversationId] || [];
+    const map = new Map();
+    for (const m of existing) {
+      if (m?._id) map.set(m._id.toString(), m);
+    }
+    for (const m of newMessages) {
+      if (m?._id) map.set(m._id.toString(), m);
+    }
+    const merged = Array.from(map.values()).sort(
+      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+    );
     set({
       messages: {
         ...messages,
-        [conversationId]: [...existing, ...newMessages],
+        [conversationId]: merged,
       },
     });
   },
@@ -43,12 +55,14 @@ const useChatStore = create((set, get) => ({
   addMessage: (conversationId, message) => {
     const { messages } = get();
     const existing = messages[conversationId] || [];
-    // Avoid duplicates
     if (existing.find((m) => m._id === message._id)) return;
+    const updated = [...existing, message].sort(
+      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+    );
     set({
       messages: {
         ...messages,
-        [conversationId]: [...existing, message],
+        [conversationId]: updated,
       },
     });
   },
