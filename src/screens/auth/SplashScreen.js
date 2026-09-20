@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import LogoSVG from '../../components/common/LogoSVG';
 
 import useAuthStore from '../../store/useAuthStore';
 
@@ -60,11 +61,9 @@ export default function SplashScreen({ navigation }) {
         ]}
       >
         {/* Logo */}
-        <Image
-          source={require('../../../assets/logo_transparent.png')}
-          style={styles.logoImage}
-          resizeMode="cover"
-        />
+        <View style={styles.logoImage}>
+          <LogoSVG size={120} />
+        </View>
 
         {/* Brand Name */}
         <Text style={styles.appName}>PriyoChat</Text>

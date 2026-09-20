@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import LogoSVG from '../../components/common/LogoSVG';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import GoogleSignInButton from '../../components/common/GoogleSignInButton';
@@ -86,11 +87,9 @@ export default function SignupScreen({ navigation }) {
           >
             {/* ── Header (same layout as Login) ── */}
             <View style={styles.header}>
-              <Image
-                source={require('../../../assets/logo_transparent.png')}
-                style={styles.logoImg}
-                resizeMode="cover"
-              />
+              <View style={styles.logoImg}>
+                <LogoSVG size={84} />
+              </View>
               <Text style={styles.title}>Create Account</Text>
               <Text style={styles.subtitle}>Join PriyoChat for free</Text>
             </View>

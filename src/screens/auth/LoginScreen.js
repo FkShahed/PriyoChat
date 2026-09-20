@@ -6,6 +6,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import LogoSVG from '../../components/common/LogoSVG';
+
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import GoogleSignInButton from '../../components/common/GoogleSignInButton';
@@ -91,13 +93,11 @@ export default function LoginScreen({ navigation }) {
               { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] },
             ]}
           >
-            {/* ── Header ── */}
+            {/* ── Header — same visual as Signup, just tighter margin ──────────────── */}
             <View style={styles.header}>
-              <Image
-                source={require('../../../assets/logo_transparent.png')}
-                style={styles.logoImg}
-                resizeMode="cover"
-              />
+              <View style={styles.logoImg}>
+                <LogoSVG size={84} />
+              </View>
               <Text style={styles.title}>Welcome back</Text>
               <Text style={styles.subtitle}>Sign in to your account</Text>
             </View>
