@@ -4,6 +4,7 @@ import {
   Image, Vibration, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { Animated as RNAnimated } from 'react-native';
 import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
@@ -216,7 +217,16 @@ export default function CallScreen({ route, navigation }) {
 
   // ── AUDIO CALL layout ─────────────────────────────────────────────
   return (
-    <LinearGradient colors={['#0D1117', '#1A2332', '#0D1117']} style={styles.container}>
+    <View style={styles.container}>
+      {/* ── Background & Orbs ── */}
+      <LinearGradient
+        colors={['#070B19', '#0D1A3A', '#060A17']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View style={styles.orbTopRight} />
+      <View style={styles.orbBottomLeft} />
+
       <View style={styles.content}>
         <View style={styles.pulseContainer}>
           <View style={[styles.pulseRing, styles.pulse3]} />
@@ -226,7 +236,7 @@ export default function CallScreen({ route, navigation }) {
             {otherUser.avatar ? (
               <Image source={{ uri: otherUser.avatar }} style={styles.avatar} />
             ) : (
-              <LinearGradient colors={['#0084FF', '#0060CC']} style={styles.avatarFallback}>
+              <LinearGradient colors={['#0084FF', '#00C6FF']} style={styles.avatarFallback}>
                 <Text style={styles.initials}>{getInitials(otherUser.name)}</Text>
               </LinearGradient>
             )}
@@ -238,42 +248,75 @@ export default function CallScreen({ route, navigation }) {
 
       <View style={styles.controls}>
         <TouchableOpacity style={styles.muteBtn} onPress={toggleMute}>
-          <Text style={styles.controlEmoji}>{muted ? '🔇' : '🎙️'}</Text>
+          <View style={[styles.controlCircle, muted && styles.controlCircleActive]}>
+            <Ionicons name={muted ? 'mic-off' : 'mic'} size={28} color="#FFF" />
+          </View>
           <Text style={styles.controlLabel}>{muted ? 'Unmute' : 'Mute'}</Text>
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.endBtn} onPress={handleEndCall}>
-          <Text style={{ fontSize: 28 }}>📵</Text>
+          <LinearGradient colors={['#FF453A', '#FF3B30']} style={styles.endCircle}>
+            <Ionicons name="call" size={36} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+          </LinearGradient>
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.speakerBtn} onPress={() => { setSpeakerOn((s) => { const next = !s; setSpeaker?.(next); return next; }); }}>
-          <Text style={styles.controlEmoji}>{speakerOn ? '🔊' : '🔈'}</Text>
+          <View style={[styles.controlCircle, speakerOn && styles.controlCircleActive]}>
+            <Ionicons name={speakerOn ? 'volume-high' : 'volume-medium'} size={28} color="#FFF" />
+          </View>
           <Text style={styles.controlLabel}>Speaker</Text>
         </TouchableOpacity>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   // ── Audio ──
-  container: { flex: 1, justifyContent: 'space-between', paddingVertical: 80 },
+  container: { flex: 1, justifyContent: 'space-between', paddingVertical: 80, backgroundColor: '#070B19' },
+  orbTopRight: {
+    position: 'absolute', top: -100, right: -100,
+    width: 300, height: 300, borderRadius: 150,
+    backgroundColor: 'rgba(0, 198, 255, 0.15)',
+    transform: [{ scale: 1.5 }],
+  },
+  orbBottomLeft: {
+    position: 'absolute', bottom: -100, left: -100,
+    width: 350, height: 350, borderRadius: 175,
+    backgroundColor: 'rgba(0, 132, 255, 0.15)',
+    transform: [{ scale: 1.5 }],
+  },
   content: { alignItems: 'center' },
   pulseContainer: { alignItems: 'center', justifyContent: 'center', marginBottom: 32, position: 'relative' },
   pulseRing: { position: 'absolute', borderRadius: 999, borderWidth: 1 },
-  pulse3: { width: 200, height: 200, borderColor: 'rgba(0,132,255,0.1)' },
-  pulse2: { width: 160, height: 160, borderColor: 'rgba(0,132,255,0.2)' },
-  pulse1: { width: 130, height: 130, borderColor: 'rgba(0,132,255,0.3)' },
+  pulse3: { width: 220, height: 220, borderColor: 'rgba(0, 198, 255, 0.15)', backgroundColor: 'rgba(0, 198, 255, 0.05)' },
+  pulse2: { width: 170, height: 170, borderColor: 'rgba(0, 198, 255, 0.25)', backgroundColor: 'rgba(0, 198, 255, 0.1)' },
+  pulse1: { width: 140, height: 140, borderColor: 'rgba(0, 198, 255, 0.4)' },
   avatarWrapper: { zIndex: 1 },
-  avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)' },
-  avatarFallback: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)' },
-  initials: { fontSize: 36, color: '#FFF', fontWeight: '700' },
-  name: { fontSize: 28, fontWeight: '700', color: '#FFF', marginBottom: 8 },
-  callStatus: { color: 'rgba(255,255,255,0.6)', fontSize: 16 },
-  controls: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 40 },
+  avatar: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, borderColor: '#00C6FF' },
+  avatarFallback: { width: 110, height: 110, borderRadius: 55, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#00C6FF' },
+  initials: { fontSize: 40, color: '#FFF', fontWeight: '800' },
+  name: { fontSize: 32, fontWeight: '800', color: '#FFF', marginBottom: 8 },
+  callStatus: { color: 'rgba(255,255,255,0.7)', fontSize: 16, letterSpacing: 1 },
+  controls: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 40, marginBottom: 20 },
   muteBtn: { alignItems: 'center' },
   speakerBtn: { alignItems: 'center' },
-  controlEmoji: { fontSize: 28 },
-  controlLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 4 },
-  endBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  controlCircle: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 8,
+  },
+  controlCircleActive: {
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  controlLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '600' },
+  endBtn: { alignItems: 'center', justifyContent: 'center' },
+  endCircle: {
+    width: 76, height: 76, borderRadius: 38,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.6, shadowRadius: 12, elevation: 8,
+  },
   // ── Video ──
   videoContainer: { flex: 1, backgroundColor: '#000' },
   remoteVideo: {
