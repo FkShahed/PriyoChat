@@ -30,7 +30,18 @@ export default function SettingsScreen({ navigation }) {
   const updateUser = useAuthStore((s) => s.updateUser);
   const disconnect = useSocketStore((s) => s.disconnect);
   const { appTheme, setAppTheme } = useThemeStore();
-  const C = useColors();
+  const baseC = useColors();
+  
+  // Override colors for Settings to match Auth theme with Glassmorphism
+  const C = {
+    ...baseC,
+    bg: '#070B19',
+    surface: 'rgba(255, 255, 255, 0.05)',
+    surfaceAlt: 'rgba(255, 255, 255, 0.08)',
+    text: '#FFFFFF',
+    textSecondary: 'rgba(255, 255, 255, 0.6)',
+    border: 'rgba(255, 255, 255, 0.1)'
+  };
 
   const [name, setName] = useState(user?.name || '');
   const [status, setStatus] = useState(user?.status || '');
@@ -383,24 +394,33 @@ export default function SettingsScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: C.bg }]}>
-      {/* ── Profile header ──────────────────────────────────────── */}
-      <LinearGradient colors={['#0084FF', '#0060CC']} style={styles.headerGrad}>
-        <TouchableOpacity onPress={pickAvatar} style={styles.avatarWrapper}>
-          {user?.avatar ? (
-            <Image source={{ uri: user.avatar }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, { backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' }]}>
-              <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 36 }}>{getInitials(user?.name)}</Text>
+    <View style={[styles.container, { backgroundColor: '#070B19' }]}>
+      <LinearGradient
+        colors={['#070B19', '#0D1A3A', '#060A17']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View style={styles.orbTopRight} />
+      <View style={styles.orbBottomLeft} />
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+        {/* ── Profile header ──────────────────────────────────────── */}
+        <View style={styles.headerGrad}>
+          <TouchableOpacity onPress={pickAvatar} style={styles.avatarWrapper}>
+            {user?.avatar ? (
+              <Image source={{ uri: user.avatar }} style={styles.avatar} />
+            ) : (
+              <LinearGradient colors={['#0084FF', '#00C6FF']} style={[styles.avatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 36 }}>{getInitials(user?.name)}</Text>
+              </LinearGradient>
+            )}
+            <View style={styles.cameraOverlay}>
+              {loading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="camera" size={16} color="#FFF" />}
             </View>
-          )}
-          <View style={styles.cameraOverlay}>
-            {loading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="camera" size={16} color="#FFF" />}
-          </View>
-        </TouchableOpacity>
-        <Text style={styles.headerName}>{user?.name}</Text>
-        <Text style={styles.headerEmail}>{user?.email}</Text>
-      </LinearGradient>
+          </TouchableOpacity>
+          <Text style={styles.headerName}>{user?.name}</Text>
+          <Text style={styles.headerEmail}>{user?.email}</Text>
+        </View>
 
       {/* ── Profile section ─────────────────────────────────────── */}
       <View style={[styles.section, { backgroundColor: C.surface }]}>
@@ -657,13 +677,24 @@ export default function SettingsScreen({ navigation }) {
         </View>
       </Modal>
 
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerGrad: { alignItems: 'center', paddingTop: 64, paddingBottom: 28 },
+  orbTopRight: {
+    position: 'absolute', top: -100, right: -100,
+    width: 350, height: 350, borderRadius: 175,
+    backgroundColor: 'rgba(0, 132, 255, 0.12)',
+  },
+  orbBottomLeft: {
+    position: 'absolute', bottom: -100, left: -120,
+    width: 400, height: 400, borderRadius: 200,
+    backgroundColor: 'rgba(0, 198, 255, 0.08)',
+  },
+  headerGrad: { alignItems: 'center', paddingTop: 64, paddingBottom: 24 },
   avatarWrapper: { position: 'relative', marginBottom: 12 },
   avatar: { width: 94, height: 94, borderRadius: 47, borderWidth: 3, borderColor: 'rgba(255,255,255,0.5)' },
   cameraOverlay: {
@@ -673,29 +704,29 @@ const styles = StyleSheet.create({
   },
   headerName: { fontSize: 22, fontWeight: '700', color: '#FFF', marginBottom: 4 },
   headerEmail: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
-  section: { margin: 16, borderRadius: 16, padding: 16, gap: 14, marginBottom: 0 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  section: { margin: 16, borderRadius: 20, padding: 20, gap: 16, marginBottom: 0, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)' },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  infoLabel: { fontSize: 15 },
-  infoValue: { fontSize: 15, fontWeight: '500', flex: 1, textAlign: 'right', marginLeft: 12 },
+  infoLabel: { fontSize: 15, fontWeight: '500' },
+  infoValue: { fontSize: 15, fontWeight: '600', flex: 1, textAlign: 'right', marginLeft: 12 },
   editInput: {
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15,
+    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15,
   },
   actionBtn: { backgroundColor: '#0084FF', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   actionBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   // Theme picker
   themeRow: { flexDirection: 'row', gap: 10 },
   themeBtn: {
-    flex: 1, borderRadius: 12, borderWidth: 1.5,
-    paddingVertical: 12, alignItems: 'center', gap: 2,
+    flex: 1, borderRadius: 14, borderWidth: 1.5,
+    paddingVertical: 14, alignItems: 'center', gap: 4,
   },
-  themeBtnActive: { borderColor: '#0084FF', backgroundColor: 'rgba(0,132,255,0.08)' },
-  themeBtnLabel: { fontSize: 14, fontWeight: '600', color: '#1C1C1E' },
+  themeBtnActive: { borderColor: '#0084FF', backgroundColor: 'rgba(0,132,255,0.15)' },
+  themeBtnLabel: { fontSize: 14, fontWeight: '600' },
   themeBtnDesc: { fontSize: 11 },
   // Logout
   dangerBtn: {
-    borderRadius: 12, paddingVertical: 13, alignItems: 'center',
-    borderWidth: 1.5, borderColor: '#FF3B30', backgroundColor: 'transparent',
+    borderRadius: 14, paddingVertical: 14, alignItems: 'center',
+    borderWidth: 1.5, borderColor: '#FF3B30', backgroundColor: 'rgba(255,59,48,0.1)',
   },
   dangerBtnText: { color: '#FF3B30', fontWeight: '700', fontSize: 15 },
   // Permissions
