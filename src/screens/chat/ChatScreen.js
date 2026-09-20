@@ -307,6 +307,13 @@ export default function ChatScreen({ route, navigation }) {
     return theme.inputBg || 'rgba(255, 255, 255, 0.9)';
   }, [isDarkTheme, theme.inputBg]);
 
+  const statusColor = useMemo(() => {
+    if (isDarkTheme) {
+      return 'rgba(255, 255, 255, 0.55)';
+    }
+    return theme.timestampColor || 'rgba(0, 0, 0, 0.45)';
+  }, [isDarkTheme, theme.timestampColor]);
+
   const convoMessages = messages[conversationId] || [];
 
   const [text, setText] = useState('');
@@ -423,6 +430,18 @@ export default function ChatScreen({ route, navigation }) {
       scrollToBottom(true);
     }
   }, [convoMessages.length, searchVisible, scrollToBottom]);
+
+  useEffect(() => {
+    if (convoMessages.length > 0) {
+      const lastMsg = convoMessages[convoMessages.length - 1];
+      const isMine =
+        lastMsg?.sender?._id?.toString() === currentUser?._id?.toString() ||
+        lastMsg?.sender?.toString() === currentUser?._id?.toString();
+      if (!isMine && lastMsg?.status !== 'seen') {
+        emit('message_seen', { conversationId });
+      }
+    }
+  }, [convoMessages.length, conversationId, currentUser]);
 
   // ── Typing ──────────────────────────────────────────────────────────
   const handleTyping = (val) => {
@@ -700,8 +719,8 @@ export default function ChatScreen({ route, navigation }) {
   const renderStatusFooter = (msg, isMine) => {
     if (!isMine) {
       return (
-        <View style={styles.timeRow}>
-          <Text style={[styles.msgTime, { color: theme.timestampColor }]}>
+        <View style={[styles.statusFooterRow, styles.statusFooterTheir]}>
+          <Text style={[styles.statusFooterText, { color: statusColor }]}>
             {formatMessageTime(msg.createdAt)}
           </Text>
         </View>
@@ -711,39 +730,30 @@ export default function ChatScreen({ route, navigation }) {
     const isLastMyMsg = lastMyMessage?._id?.toString() === msg._id?.toString();
     const isSending = msg.status === 'sending';
     const isFailed = msg.status === 'failed';
-    const timeColor = 'rgba(255, 255, 255, 0.7)';
+
+    let statusText = '';
+    if (isSending) {
+      statusText = 'Sending...';
+    } else if (isFailed) {
+      statusText = 'Failed';
+    } else if (isLastMyMsg) {
+      if (msg.status === 'seen') {
+        const seenTime = formatMessageTime(msg.seenAt || msg.updatedAt || msg.createdAt);
+        statusText = `Seen ${seenTime}`;
+      } else if (msg.status === 'delivered') {
+        statusText = 'Delivered';
+      } else {
+        statusText = `Sent • ${formatMessageTime(msg.createdAt)}`;
+      }
+    } else {
+      statusText = formatMessageTime(msg.createdAt);
+    }
 
     return (
-      <View style={styles.timeRow}>
-        <Text style={[styles.msgTime, { color: timeColor }]}>
-          {formatMessageTime(msg.createdAt)}
+      <View style={[styles.statusFooterRow, styles.statusFooterMine]}>
+        <Text style={[styles.statusFooterText, { color: isFailed ? '#FF3B30' : statusColor }]}>
+          {statusText}
         </Text>
-        <View style={styles.statusIndicatorWrapper}>
-          {isSending ? (
-            <Text style={styles.sendingBadge}>Sending...</Text>
-          ) : isFailed ? (
-            <Text style={styles.failedBadge}>Failed</Text>
-          ) : isLastMyMsg ? (
-            <Text style={styles.messengerStatusText}>
-              {msg.status === 'seen'
-                ? 'Seen'
-                : msg.status === 'delivered'
-                ? 'Delivered'
-                : 'Sent'}
-            </Text>
-          ) : (
-            <Ionicons
-              name={
-                msg.status === 'seen' || msg.status === 'delivered'
-                  ? 'checkmark-done'
-                  : 'checkmark'
-              }
-              size={13}
-              color={msg.status === 'seen' ? '#34B7F1' : 'rgba(255, 255, 255, 0.6)'}
-              style={{ marginLeft: 3 }}
-            />
-          )}
-        </View>
       </View>
     );
   };
@@ -780,7 +790,7 @@ export default function ChatScreen({ route, navigation }) {
         )}
         <View style={styles.bubbleContent}>
           {msg.images?.length > 0 && (
-            <View style={[styles.imageBubbleContainer, !msg.text && styles.imageOnlyWrapper]}>
+            <View style={styles.imageBubbleContainer}>
               <View style={styles.imageGrid}>
                 {msg.images.map((img, i) => (
                   <TouchableOpacity
@@ -794,16 +804,6 @@ export default function ChatScreen({ route, navigation }) {
                   </TouchableOpacity>
                 ))}
               </View>
-              {!msg.text && (
-                <View
-                  style={[
-                    styles.imageMetaBadge,
-                    { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble },
-                  ]}
-                >
-                  {renderStatusFooter(msg, isMine)}
-                </View>
-              )}
             </View>
           )}
           {msg.isVoiceNote || msg.voiceNoteUrl ? (
@@ -814,7 +814,6 @@ export default function ChatScreen({ route, navigation }) {
                 isMine={isMine}
                 theme={theme}
               />
-              {renderStatusFooter(msg, isMine)}
             </View>
           ) : null}
           {msg.text ? (
@@ -822,9 +821,9 @@ export default function ChatScreen({ route, navigation }) {
               <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 15, lineHeight: 22 }}>
                 {msg.text}
               </Text>
-              {renderStatusFooter(msg, isMine)}
             </View>
           ) : null}
+          {renderStatusFooter(msg, isMine)}
         </View>
       </TouchableOpacity>
     );
@@ -1343,35 +1342,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
   },
-  imageOnlyWrapper: {
-    paddingBottom: 2,
-  },
-  imageMetaBadge: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: 'flex-end',
-    marginTop: 4,
-    maxWidth: '100%',
-  },
-  statusIndicatorWrapper: {
+  statusFooterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 4,
+    marginTop: 2,
+    marginBottom: 2,
+    paddingHorizontal: 2,
+    backgroundColor: 'transparent',
   },
-  sendingBadge: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
+  statusFooterMine: {
+    justifyContent: 'flex-end',
+    alignSelf: 'flex-end',
   },
-  messengerStatusText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
+  statusFooterTheir: {
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
   },
-  failedBadge: {
+  statusFooterText: {
     fontSize: 10,
-    fontWeight: '600',
-    color: '#FF453A',
+    fontWeight: '400',
+    backgroundColor: 'transparent',
   },
 });

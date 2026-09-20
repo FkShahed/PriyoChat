@@ -55,6 +55,14 @@ const setupSocket = (io) => {
           return callback?.({ error: 'Conversation not found' });
         }
 
+        // Check if any recipient is currently online
+        const otherParticipants = conversation.participants.filter(
+          (p) => p._id.toString() !== userId
+        );
+        const isRecipientOnline = otherParticipants.some(
+          (p) => onlineUsers.has(p._id.toString())
+        );
+
         const message = await Message.create({
           conversation: conversationId,
           sender: userId,
@@ -63,7 +71,7 @@ const setupSocket = (io) => {
           isVoiceNote,
           voiceNoteUrl,
           voiceNoteDuration,
-          status: 'sent',
+          status: isRecipientOnline ? 'delivered' : 'sent',
         });
 
         await message.populate('sender', 'name avatar');
@@ -103,6 +111,7 @@ const setupSocket = (io) => {
         if (msg) {
           io.to(msg.conversation.toString()).emit('message_status_updated', {
             messageId,
+            conversationId: msg.conversation.toString(),
             status: 'delivered',
           });
         }
@@ -114,11 +123,16 @@ const setupSocket = (io) => {
     // ─── Message Seen ──────────────────────────────────────────────
     socket.on('message_seen', async ({ conversationId }) => {
       try {
+        const seenAt = new Date();
         await Message.updateMany(
           { conversation: conversationId, sender: { $ne: userId }, status: { $ne: 'seen' } },
-          { status: 'seen' }
+          { status: 'seen', seenAt }
         );
-        io.to(conversationId).emit('messages_seen', { conversationId, seenBy: userId });
+        io.to(conversationId).emit('messages_seen', {
+          conversationId,
+          seenBy: userId,
+          seenAt: seenAt.toISOString(),
+        });
       } catch (err) {
         console.error('message_seen error:', err.message);
       }

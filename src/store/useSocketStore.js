@@ -46,6 +46,21 @@ const useSocketStore = create((set, get) => ({
         lastMessage: message,
         updatedAt: message.createdAt,
       });
+
+      const currentUserId = useAuthStore.getState().user?._id;
+      const senderId = message.sender?._id || message.sender;
+
+      // If we are the recipient, notify server that message is delivered
+      if (currentUserId && senderId?.toString() !== currentUserId.toString()) {
+        newSocket.emit('message_delivered', { messageId: message._id });
+
+        // If we are currently active inside this conversation, also mark seen
+        const activeId = useChatStore.getState().activeConversationId;
+        if (activeId === message.conversation) {
+          newSocket.emit('message_seen', { conversationId: message.conversation });
+        }
+      }
+
       // Show push notification if user is NOT in this conversation
       const activeId = useChatStore.getState().activeConversationId;
       if (activeId !== message.conversation) {
@@ -59,20 +74,19 @@ const useSocketStore = create((set, get) => ({
       }
     });
 
-    newSocket.on('message_status_updated', ({ messageId, status, conversationId }) => {
-      // Update all conversations' messages - find the right one
+    newSocket.on('message_status_updated', ({ messageId, status, conversationId, seenAt }) => {
+      // Update message status in store
       const { messages } = useChatStore.getState();
-      for (const convId of Object.keys(messages)) {
-        const found = messages[convId]?.find((m) => m._id === messageId);
-        if (found) {
-          useChatStore.getState().updateMessageStatus(convId, messageId, status);
-          break;
-        }
+      const targetConvoId = conversationId || Object.keys(messages).find((convId) =>
+        messages[convId]?.some((m) => m._id === messageId)
+      );
+      if (targetConvoId) {
+        useChatStore.getState().updateMessageStatus(targetConvoId, messageId, status, seenAt);
       }
     });
 
-    newSocket.on('messages_seen', ({ conversationId }) => {
-      useChatStore.getState().markConvoAsSeen(conversationId);
+    newSocket.on('messages_seen', ({ conversationId, seenAt }) => {
+      useChatStore.getState().markConvoAsSeen(conversationId, seenAt);
     });
 
     newSocket.on('message_deleted', ({ messageId, conversationId }) => {

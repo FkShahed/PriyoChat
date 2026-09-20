@@ -97,19 +97,30 @@ const useChatStore = create((set, get) => ({
     set({ messages: { ...messages, [conversationId]: updated } });
   },
 
-  updateMessageStatus: (conversationId, messageId, status) => {
+  updateMessageStatus: (conversationId, messageId, status, seenAt) => {
     const { messages } = get();
     const convoMsgs = messages[conversationId] || [];
     const updated = convoMsgs.map((m) =>
-      m._id === messageId ? { ...m, status } : m
+      m._id === messageId
+        ? {
+            ...m,
+            status,
+            ...(seenAt ? { seenAt } : {}),
+          }
+        : m
     );
     set({ messages: { ...messages, [conversationId]: updated } });
   },
 
-  markConvoAsSeen: (conversationId) => {
+  markConvoAsSeen: (conversationId, seenAt) => {
     const { messages } = get();
     const convoMsgs = messages[conversationId] || [];
-    const updated = convoMsgs.map((m) => ({ ...m, status: 'seen' }));
+    const timestamp = seenAt || new Date().toISOString();
+    const updated = convoMsgs.map((m) => ({
+      ...m,
+      status: 'seen',
+      seenAt: m.seenAt || timestamp,
+    }));
     set({ messages: { ...messages, [conversationId]: updated } });
   },
 
