@@ -434,11 +434,19 @@ export default function useWebRTCCall({
       try {
         InCallManager.setForceSpeakerphoneOn(on);
         console.log('[InCallManager] Speaker:', on);
+        
+        const state = useCallStore.getState().callState;
+        if (!isReceiver && state === 'connecting') {
+          InCallManager.stopRingback();
+          setTimeout(() => {
+            InCallManager.startRingback('_DEFAULT_');
+          }, 100);
+        }
       } catch (e) {
         console.warn('[InCallManager] setSpeaker error:', e);
       }
     }
-  }, []);
+  }, [isReceiver]);
 
   return { cleanup, setSpeaker };
 }
