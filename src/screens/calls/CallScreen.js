@@ -95,44 +95,6 @@ export default function CallScreen({ route, navigation }) {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [callState]);
 
-  // ── Dial tone (Outgoing Call) ─────────────────────────────────────
-  useEffect(() => {
-    let soundObject = null;
-    
-    const playDialTone = async () => {
-      try {
-        const isDialing = callState === 'calling' || callState === 'ringing';
-        if (!isReceiver && isDialing) {
-          await Audio.setAudioModeAsync({
-            playsInSilentModeIOS: true,
-            staysActiveInBackground: true,
-            shouldDuckAndroid: true,
-            playThroughEarpieceAndroid: !speakerOn,
-          });
-          const { sound } = await Audio.Sound.createAsync(
-            require('../../../assets/ringtone.wav'),
-            { shouldPlay: true, isLooping: true }
-          );
-          soundObject = sound;
-        }
-      } catch (e) {
-        console.warn('[CallScreen] Dial tone error:', e);
-      }
-    };
-
-    const isDialing = callState === 'calling' || callState === 'ringing';
-    if (!isReceiver && isDialing) {
-      playDialTone();
-    }
-
-    return () => {
-      if (soundObject) {
-        soundObject.stopAsync().catch(() => {});
-        soundObject.unloadAsync().catch(() => {});
-      }
-    };
-  }, [callState, isReceiver, speakerOn]);
-
   // ── Remote party ended/rejected ──────────────────────────────────
   useEffect(() => {
     if ((callState === 'ended' || callState === 'idle') && !hasNavigatedBack.current) {
