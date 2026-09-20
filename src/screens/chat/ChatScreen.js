@@ -90,6 +90,23 @@ function DropdownMenu({ visible, onClose, items }) {
   );
 }
 
+function isLightHeader(theme) {
+  if (!theme) return false;
+  if (theme.headerText === '#1C1C1C' || theme.headerText === '#000000' || theme.headerText === '#111111') return true;
+  const firstColor = theme.gradient?.[0] || theme.headerBg || '';
+  if (firstColor.startsWith('#')) {
+    const hex = firstColor.replace('#', '');
+    if (hex.length === 6) {
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return luminance > 0.65;
+    }
+  }
+  return false;
+}
+
 export default function ChatScreen({ route, navigation }) {
   const { conversation: initialConvo, otherUser } = route.params;
   const currentUser = useAuthStore((s) => s.user);
@@ -125,6 +142,13 @@ export default function ChatScreen({ route, navigation }) {
       theme = THEMES[baseTheme.lightVariant];
     }
   }
+
+  const isHeaderLight = isLightHeader(theme);
+  const headerIconColor = isHeaderLight ? (theme.headerText || '#1C1C1C') : '#FFFFFF';
+  const headerNameColor = isHeaderLight ? (theme.headerText || '#1C1C1C') : '#FFFFFF';
+  const headerStatusColor = isHeaderLight ? 'rgba(0, 0, 0, 0.65)' : 'rgba(255, 255, 255, 0.8)';
+  const statusBarStyle = isHeaderLight ? 'dark-content' : 'light-content';
+
   const convoMessages = messages[conversationId] || [];
 
   const [text, setText] = useState('');
@@ -389,12 +413,12 @@ export default function ChatScreen({ route, navigation }) {
   // ── Main content (shared between View and ImageBackground wrappers)
   const content = (
     <KeyboardWrapper {...wrapperProps}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={statusBarStyle} />
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <LinearGradient colors={theme.gradient} style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={28} color="#FFF" />
+          <Ionicons name="chevron-back" size={28} color={headerIconColor} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -407,8 +431,16 @@ export default function ChatScreen({ route, navigation }) {
           {otherUser?.avatar ? (
             <Image source={{ uri: otherUser.avatar }} style={styles.headerAvatar} />
           ) : (
-            <View style={[styles.headerAvatar, { backgroundColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' }]}>
-              <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 16 }}>{getInitials(otherUser?.name)}</Text>
+            <View style={[
+              styles.headerAvatar,
+              {
+                backgroundColor: isHeaderLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.3)',
+                borderColor: isHeaderLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.4)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }
+            ]}>
+              <Text style={{ color: headerNameColor, fontWeight: '700', fontSize: 16 }}>{getInitials(otherUser?.name)}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -421,10 +453,10 @@ export default function ChatScreen({ route, navigation }) {
             lastSeen: otherUser?.lastSeen || otherUser?.updatedAt,
           })}
         >
-          <Text style={styles.headerName} numberOfLines={1}>{otherUser?.name}</Text>
+          <Text style={[styles.headerName, { color: headerNameColor }]} numberOfLines={1}>{otherUser?.name}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             {isOtherOnline && <View style={styles.onlinePip} />}
-            <Text style={styles.headerStatus}>{lastSeenText}</Text>
+            <Text style={[styles.headerStatus, { color: headerStatusColor }]}>{lastSeenText}</Text>
           </View>
         </TouchableOpacity>
 
@@ -436,7 +468,7 @@ export default function ChatScreen({ route, navigation }) {
             navigation.navigate('Call', { otherUser, callType: 'audio' });
           }}
         >
-          <Ionicons name="call-outline" size={21} color="#FFF" />
+          <Ionicons name="call-outline" size={21} color={headerIconColor} />
         </TouchableOpacity>
 
         {/* Video call */}
@@ -447,12 +479,12 @@ export default function ChatScreen({ route, navigation }) {
             navigation.navigate('Call', { otherUser, callType: 'video' });
           }}
         >
-          <Ionicons name="videocam-outline" size={22} color="#FFF" />
+          <Ionicons name="videocam-outline" size={22} color={headerIconColor} />
         </TouchableOpacity>
 
         {/* 3-dot menu */}
         <TouchableOpacity style={styles.headerBtn} onPress={() => setMenuVisible(true)}>
-          <Ionicons name="ellipsis-vertical" size={20} color="#FFF" />
+          <Ionicons name="ellipsis-vertical" size={20} color={headerIconColor} />
         </TouchableOpacity>
       </LinearGradient>
 
