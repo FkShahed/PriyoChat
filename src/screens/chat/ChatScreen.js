@@ -986,7 +986,7 @@ export default function ChatScreen({ route, navigation }) {
         ? (isVideo ? (isMine ? 'Outgoing video call' : 'Incoming video call') : (isMine ? 'Outgoing call' : 'Incoming call'))
         : (isVideo ? 'Video call' : 'Voice call');
 
-      const accentColor = isRejected ? '#FF453A' : isMine ? '#4CAF50' : '#2196F3';
+      const accentColor = isRejected ? '#FF453A' : '#0084FF';
       const bgColor = isMine ? theme.sentBubble : theme.receivedBubble;
       const textColor = isMine ? theme.sentText : theme.receivedText;
 
