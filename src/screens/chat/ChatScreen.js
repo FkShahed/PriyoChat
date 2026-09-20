@@ -52,26 +52,96 @@ function TypingIndicator({ theme }) {
   );
 }
 
-// ── Full-screen image viewer ──────────────────────────────────────────
+// ── Full-screen image viewer with pinch-to-zoom ───────────────────────
 function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
+  const scale = useRef(new RNAnimated.Value(1)).current;
+  const lastScale = useRef(1);
+  const translateX = useRef(new RNAnimated.Value(0)).current;
+  const translateY = useRef(new RNAnimated.Value(0)).current;
+
+  // Reset transforms when modal opens/closes
+  React.useEffect(() => {
+    if (!visible) {
+      scale.setValue(1);
+      lastScale.current = 1;
+      translateX.setValue(0);
+      translateY.setValue(0);
+    }
+  }, [visible]);
+
   if (!data) return null;
+
+  let PinchGestureHandler, PanGestureHandler, State;
+  try {
+    const gh = require('react-native-gesture-handler');
+    PinchGestureHandler = gh.PinchGestureHandler;
+    PanGestureHandler = gh.PanGestureHandler;
+    State = gh.State;
+  } catch (e) {
+    // fallback: no zoom
+  }
+
+  const onPinchEvent = RNAnimated.event(
+    [{ nativeEvent: { scale: scale } }],
+    { useNativeDriver: true }
+  );
+
+  const onPinchStateChange = (event) => {
+    if (event.nativeEvent.oldState === (State?.ACTIVE || 4)) {
+      lastScale.current *= event.nativeEvent.scale;
+      if (lastScale.current < 1) lastScale.current = 1;
+      if (lastScale.current > 5) lastScale.current = 5;
+      scale.setValue(lastScale.current);
+    }
+  };
+
+  const onDoubleTap = () => {
+    const toValue = lastScale.current > 1 ? 1 : 2.5;
+    lastScale.current = toValue;
+    RNAnimated.spring(scale, { toValue, useNativeDriver: true }).start();
+    if (toValue === 1) {
+      RNAnimated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      RNAnimated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+    }
+  };
+
+  const imageEl = (
+    <RNAnimated.Image
+      source={{ uri: data.uri }}
+      style={[styles.imageViewerImg, { transform: [{ scale }, { translateX }, { translateY }] }]}
+      resizeMode="contain"
+    />
+  );
+
+  const content = PinchGestureHandler ? (
+    <PinchGestureHandler onGestureEvent={onPinchEvent} onHandlerStateChange={onPinchStateChange}>
+      <RNAnimated.View style={{ flex: 1 }}>
+        <TouchableOpacity onPress={onClose} onLongPress={onDoubleTap} activeOpacity={1} style={{ flex: 1 }}>
+          {imageEl}
+        </TouchableOpacity>
+      </RNAnimated.View>
+    </PinchGestureHandler>
+  ) : (
+    <TouchableOpacity onPress={onClose} activeOpacity={1} style={{ flex: 1 }}>
+      {imageEl}
+    </TouchableOpacity>
+  );
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.imageViewerBg}>
-          <View style={styles.imageViewerHeader}>
-            <TouchableOpacity style={styles.imageViewerHeaderBtn} onPress={onClose}>
-              <Ionicons name="close" size={24} color="#FFF" />
+      <View style={styles.imageViewerBg}>
+        <View style={styles.imageViewerHeader}>
+          <TouchableOpacity style={styles.imageViewerHeaderBtn} onPress={onClose}>
+            <Ionicons name="close" size={24} color="#FFF" />
+          </TouchableOpacity>
+          {canDelete && onDelete ? (
+            <TouchableOpacity style={styles.imageViewerHeaderBtn} onPress={onDelete}>
+              <Ionicons name="trash-outline" size={22} color="#FF453A" />
             </TouchableOpacity>
-            {canDelete && onDelete ? (
-              <TouchableOpacity style={styles.imageViewerHeaderBtn} onPress={onDelete}>
-                <Ionicons name="trash-outline" size={22} color="#FF453A" />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-          <Image source={{ uri: data.uri }} style={styles.imageViewerImg} resizeMode="contain" />
+          ) : null}
         </View>
-      </TouchableWithoutFeedback>
+        {content}
+      </View>
     </Modal>
   );
 }
