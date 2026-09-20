@@ -6,6 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Animated as RNAnimated } from 'react-native';
+import { Audio } from 'expo-av';
 import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import useWebRTCCall from '../../hooks/useWebRTCCall';
@@ -93,6 +94,41 @@ export default function CallScreen({ route, navigation }) {
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [callState]);
+
+  // ── Dial tone (Outgoing Call) ─────────────────────────────────────
+  useEffect(() => {
+    let soundObject = null;
+    
+    const playDialTone = async () => {
+      try {
+        if (!isReceiver && callState === 'connecting') {
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+            shouldDuckAndroid: true,
+          });
+          const { sound } = await Audio.Sound.createAsync(
+            require('../../../assets/ringtone.wav'),
+            { shouldPlay: true, isLooping: true }
+          );
+          soundObject = sound;
+        }
+      } catch (e) {
+        console.warn('[CallScreen] Dial tone error:', e);
+      }
+    };
+
+    if (!isReceiver && callState === 'connecting') {
+      playDialTone();
+    }
+
+    return () => {
+      if (soundObject) {
+        soundObject.stopAsync().catch(() => {});
+        soundObject.unloadAsync().catch(() => {});
+      }
+    };
+  }, [callState, isReceiver]);
 
   // ── Remote party ended/rejected ──────────────────────────────────
   useEffect(() => {
