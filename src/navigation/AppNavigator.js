@@ -159,7 +159,6 @@ export default function AppNavigator() {
       <LogoutObserver />
       <NavigationContainer ref={navigationRef}>
         <Stack.Navigator 
-          key={isAuthenticated ? 'auth-app' : 'guest-app'}
           screenOptions={{ headerShown: false }} 
           initialRouteName={initialRoute}
         >
