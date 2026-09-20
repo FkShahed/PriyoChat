@@ -53,12 +53,9 @@ export default function SettingsScreen({ navigation }) {
     notifications: false, 
     camera: false, 
     microphone: false,
-    calendar: false,
-    contacts: false,
-    location: false,
-    phone: false,
     storage: false,
   });
+
   const [checkingUpdate, setCheckingUpdate] = useState(true);
   const [updateInfo, setUpdateInfo] = useState({ apkUrl: null, latestVersion: null, isLatest: true });
   
@@ -74,10 +71,6 @@ export default function SettingsScreen({ navigation }) {
     switch (type) {
       case 'camera': return [PermissionsAndroid.PERMISSIONS.CAMERA];
       case 'microphone': return [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
-      case 'calendar': return [PermissionsAndroid.PERMISSIONS.READ_CALENDAR, PermissionsAndroid.PERMISSIONS.WRITE_CALENDAR];
-      case 'contacts': return [PermissionsAndroid.PERMISSIONS.READ_CONTACTS];
-      case 'location': return [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
-      case 'phone': return [PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE];
       case 'storage':
         if (Platform.Version >= 33) return [PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES, PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO];
         return [PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE];
@@ -91,7 +84,7 @@ export default function SettingsScreen({ navigation }) {
       const { status } = await Notifications.getPermissionsAsync();
       newPerms.notifications = status === 'granted';
       if (Platform.OS === 'android') {
-        const types = ['camera', 'microphone', 'calendar', 'contacts', 'location', 'phone', 'storage'];
+        const types = ['camera', 'microphone', 'storage'];
         for (let t of types) {
           const required = getAndroidPerms(t);
           let allGranted = true;
@@ -183,7 +176,7 @@ export default function SettingsScreen({ navigation }) {
       }
       
       if (Platform.OS === 'android') {
-        const types = ['camera', 'microphone', 'calendar', 'contacts', 'location', 'phone', 'storage'];
+        const types = ['camera', 'microphone', 'storage'];
         let toRequest = [];
         for (let t of types) {
           if (!perms[t]) toRequest.push(...getAndroidPerms(t));
@@ -523,10 +516,6 @@ export default function SettingsScreen({ navigation }) {
           { key: 'camera', label: 'Camera', icon: 'camera-outline' },
           { key: 'microphone', label: 'Microphone', icon: 'mic-outline' },
           { key: 'storage', label: 'Photos & Videos', icon: 'images-outline' },
-          { key: 'location', label: 'Location', icon: 'location-outline' },
-          { key: 'contacts', label: 'Contacts', icon: 'people-outline' },
-          { key: 'calendar', label: 'Calendar', icon: 'calendar-outline' },
-          { key: 'phone', label: 'Phone Status', icon: 'call-outline' },
         ].map((p) => (
           <View style={styles.permRow} key={p.key}>
             <View style={styles.permInfo}>
