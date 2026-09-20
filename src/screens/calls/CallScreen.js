@@ -276,16 +276,16 @@ export default function CallScreen({ route, navigation }) {
   // ── AUDIO CALL layout ─────────────────────────────────────────────
   return (
     <View style={{ flex: 1 }}>
-      {/* Full blurred background — avatar fills everything */}
+      {/* Full blurred background — auth theme */}
       <LinearGradient
-        colors={['#0B0F1E', '#121A36', '#0B0F1E']}
+        colors={['#070B19', '#0D1A3A', '#060A17']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
 
-      {/* Soft glow blobs */}
-      <View style={styles.blob1} />
-      <View style={styles.blob2} />
+      {/* Ambient glow orbs matching auth theme */}
+      <View style={styles.orbTopRight} />
+      <View style={styles.orbBottomLeft} />
 
       {/* ── TOP SECTION: avatar + name + status ── */}
       <View style={styles.topSection}>
@@ -356,15 +356,15 @@ export default function CallScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   // ── Audio Call ──────────────────────────────────────────────────────
-  blob1: {
-    position: 'absolute', top: -80, right: -80,
-    width: 280, height: 280, borderRadius: 140,
-    backgroundColor: 'rgba(29, 111, 235, 0.18)',
+  orbTopRight: {
+    position: 'absolute', top: -80, right: -100,
+    width: 350, height: 350, borderRadius: 175,
+    backgroundColor: 'rgba(0, 132, 255, 0.16)',
   },
-  blob2: {
-    position: 'absolute', bottom: -60, left: -80,
-    width: 320, height: 320, borderRadius: 160,
-    backgroundColor: 'rgba(0, 198, 255, 0.12)',
+  orbBottomLeft: {
+    position: 'absolute', bottom: -100, left: -120,
+    width: 400, height: 400, borderRadius: 200,
+    backgroundColor: 'rgba(0, 198, 255, 0.10)',
   },
   topSection: {
     flex: 1,
