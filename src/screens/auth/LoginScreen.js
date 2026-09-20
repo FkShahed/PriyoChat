@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   // ── Header — same visual as Signup, just tighter margin ────────────────
   header: { alignItems: 'center', marginBottom: 20 },
   logoImg: {
-    width: 60, height: 60,
+    width: 84, height: 84,
     marginBottom: 14,
   },
   title: {

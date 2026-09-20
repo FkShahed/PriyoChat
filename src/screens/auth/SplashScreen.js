@@ -168,8 +168,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   logoImage: {
-    width: 60,
-    height: 60,
+    width: 84,
+    height: 84,
     marginBottom: 14,
   },
   appName: {
