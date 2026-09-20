@@ -473,9 +473,6 @@ export default function SettingsScreen({ navigation }) {
                   <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }}>{user?.name}</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => setEditing(true)}>
-                <Ionicons name="create-outline" size={20} color="#0084FF" />
-              </TouchableOpacity>
             </View>
 
             <View style={[styles.permRow, { borderBottomWidth: 0 }]}>
@@ -483,17 +480,22 @@ export default function SettingsScreen({ navigation }) {
                 <View style={[styles.iconBox, { backgroundColor: 'rgba(52,199,89,0.1)' }]}>
                   <Ionicons name="chatbubble-ellipses" size={18} color="#34C759" />
                 </View>
-                <View style={{ flex: 1, marginRight: 8 }}>
+                <View style={{ flex: 1 }}>
                   <Text style={[styles.permLabel, { color: C.text }]}>Status</Text>
                   <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }} numberOfLines={2}>
                     {user?.status || 'No status set'}
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => setEditing(true)}>
-                <Ionicons name="create-outline" size={20} color="#0084FF" />
-              </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 12, backgroundColor: 'rgba(0,132,255,0.1)' }}
+              onPress={() => setEditing(true)}
+            >
+              <Ionicons name="create-outline" size={17} color="#0084FF" />
+              <Text style={{ color: '#0084FF', fontSize: 14, fontWeight: '600' }}>Edit Profile</Text>
+            </TouchableOpacity>
           </>
         )}
       </View>
