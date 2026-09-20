@@ -95,6 +95,38 @@ export default function CallScreen({ route, navigation }) {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [callState]);
 
+  // ── Ringback tone (Outgoing call while waiting) ────────────────────
+  useEffect(() => {
+    if (isReceiver) return;
+    const isDialing = callState === 'calling' || callState === 'ringing';
+    if (!isDialing) return;
+    let sound = null;
+    const play = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: !speakerOn,
+        });
+        const { sound: s } = await Audio.Sound.createAsync(
+          require('../../../assets/ringback.wav'),
+          { shouldPlay: true, isLooping: true, volume: 1.0 }
+        );
+        sound = s;
+      } catch (e) {
+        console.warn('[CallScreen] ringback error:', e);
+      }
+    };
+    play();
+    return () => {
+      if (sound) {
+        sound.stopAsync().catch(() => {});
+        sound.unloadAsync().catch(() => {});
+      }
+    };
+  }, [callState, isReceiver, speakerOn]);
+
   // ── Remote party ended/rejected ──────────────────────────────────
   useEffect(() => {
     if ((callState === 'ended' || callState === 'idle') && !hasNavigatedBack.current) {

@@ -229,7 +229,7 @@ export default function useWebRTCCall({
     if (InCallManager) {
       try {
         const ringback = isReceiver ? '' : '_DEFAULT_';
-        InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback });
+        InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
         InCallManager.setForceSpeakerphoneOn(callType === 'video');
         console.log('[InCallManager] Started, speakerphone:', callType === 'video');
       } catch (e) {
