@@ -10,6 +10,7 @@ import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import { formatTime, getInitials } from '../../utils/helpers';
 import { useColors } from '../../store/useThemeStore';
+import LogoSVG from '../../components/common/LogoSVG';
 
 const AVATAR_COLORS = [
   ['#0084FF', '#00C6FF'],
@@ -179,22 +180,16 @@ export default function ChatListScreen({ navigation }) {
       {/* ── Modern Top Header Bar ────────────────────────────────────────── */}
       <View style={[styles.headerContainer, { backgroundColor: headerBg }]}>
         <View style={styles.headerRow}>
-          {/* User Profile Shortcut */}
+          {/* User Profile Shortcut -> Changed to Logo */}
           <TouchableOpacity
             onPress={() => navigation.navigate('Settings')}
             activeOpacity={0.8}
             style={styles.profileBtn}
           >
-            {user?.avatar ? (
-              <Image source={{ uri: user.avatar }} style={styles.headerUserAvatar} />
-            ) : (
-              <LinearGradient colors={['#0084FF', '#00C6FF']} style={styles.headerUserAvatar}>
-                <Text style={styles.headerUserInitials}>{getInitials(user?.name)}</Text>
-              </LinearGradient>
-            )}
+            <LogoSVG size={36} />
           </TouchableOpacity>
 
-          <Text style={[styles.headerTitleText, { color: isDark ? '#FFFFFF' : '#1C1E21' }]}>Chats</Text>
+          <Text style={[styles.headerTitleText, { color: isDark ? '#FFFFFF' : '#1C1E21' }]}>PriyoChat</Text>
 
           {/* Action Buttons */}
           <View style={styles.headerActions}>
