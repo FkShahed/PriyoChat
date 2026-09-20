@@ -746,11 +746,7 @@ export default function ChatScreen({ route, navigation }) {
     if (isLastMyMsg && msg.status === 'seen') {
       const seenTime = formatMessageTime(msg.seenAt || msg.updatedAt || msg.createdAt);
       return (
-        <TouchableOpacity
-          onPress={() => setShowSeenTime((prev) => !prev)}
-          activeOpacity={0.7}
-          style={[styles.statusFooterRow, styles.statusFooterMine, { alignItems: 'center' }]}
-        >
+        <View style={[styles.statusFooterRow, styles.statusFooterMine, { alignItems: 'center' }]}>
           {showSeenTime && (
             <Text style={[styles.statusFooterText, { color: statusColor, marginRight: 5 }]}>
               {`Seen ${seenTime}`}
@@ -768,7 +764,7 @@ export default function ChatScreen({ route, navigation }) {
               </Text>
             </View>
           )}
-        </TouchableOpacity>
+        </View>
       );
     }
 
