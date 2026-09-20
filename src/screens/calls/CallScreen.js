@@ -101,7 +101,8 @@ export default function CallScreen({ route, navigation }) {
     
     const playDialTone = async () => {
       try {
-        if (!isReceiver && callState === 'connecting') {
+        const isDialing = callState === 'calling' || callState === 'ringing';
+        if (!isReceiver && isDialing) {
           await Audio.setAudioModeAsync({
             playsInSilentModeIOS: true,
             staysActiveInBackground: true,
@@ -119,7 +120,8 @@ export default function CallScreen({ route, navigation }) {
       }
     };
 
-    if (!isReceiver && callState === 'connecting') {
+    const isDialing = callState === 'calling' || callState === 'ringing';
+    if (!isReceiver && isDialing) {
       playDialTone();
     }
 
@@ -170,6 +172,7 @@ export default function CallScreen({ route, navigation }) {
   const getStatusLabel = () => {
     if (callState === 'active') return `🔴  ${formatDuration(callDuration)}`;
     if (callState === 'connecting') return `${callType === 'video' ? '📹' : '📞'} Connecting...`;
+    if (callState === 'ringing') return `${callType === 'video' ? '📹' : '📞'} Ringing...`;
     if (isReceiver) return `${callType === 'video' ? '📹' : '📞'} Connecting...`;
     return `${callType === 'video' ? '📹' : '📞'} Calling...`;
   };

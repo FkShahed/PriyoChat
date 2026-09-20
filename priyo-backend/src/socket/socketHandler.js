@@ -176,6 +176,10 @@ const setupSocket = (io) => {
       });
     });
 
+    socket.on('call_ringing', ({ to }) => {
+      io.to(to).emit('call_ringing', { from: userId });
+    });
+
     socket.on('call_answer', async ({ to, answer, callId }) => {
       if (callId) {
         await Call.findByIdAndUpdate(callId, { status: 'completed' }); // Simplified: mark as completed once answered

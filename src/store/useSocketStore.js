@@ -116,6 +116,7 @@ const useSocketStore = create((set, get) => ({
     // ── Call events ──────────────────────────────────────────────────
     newSocket.on('incoming_call', (data) => {
       useCallStore.getState().setIncomingCall(data);
+      newSocket.emit('call_ringing', { to: data.from });
       // Show a heads-up notification ONLY if app is backgrounded
       if (AppState.currentState !== 'active') {
         NotificationService.showCallNotification({
@@ -123,6 +124,10 @@ const useSocketStore = create((set, get) => ({
           callType: data.callType,
         });
       }
+    });
+
+    newSocket.on('call_ringing', () => {
+      useCallStore.getState().setCallRinging();
     });
 
     newSocket.on('call_answered', ({ answer }) => {

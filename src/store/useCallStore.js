@@ -66,6 +66,10 @@ const useCallStore = create(
         set({ callState: 'calling', remoteUser, callType, iceCandidates: [], endReason: null, isReceiver: false, offer: null, answer: null });
       },
 
+      setCallRinging: () => {
+        set((state) => (state.callState === 'calling' ? { callState: 'ringing' } : {}));
+      },
+
       // Incoming call from socket — this user is the receiver
       setIncomingCall: (data) => {
         console.log('[useCallStore] setIncomingCall, callId:', data.callId, 'from:', data.from);
