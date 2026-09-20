@@ -49,7 +49,7 @@ export default function LogoSVG({ size = 100, style }) {
       <Path
         d="M52 46.5 C52 46.5, 45 40.5, 45 36.5 C45 33.5, 47.5 31, 50.5 31 C52 31, 53.5 31.8, 54 33 C54.5 31.8, 56 31, 57.5 31 C60.5 31, 63 33.5, 63 36.5 C63 40.5, 56 46.5, 56 46.5 L54 48.5 L52 46.5 Z"
         fill="#FFFFFF"
-        transform="translate(-2, -3)"
+        transform="translate(-2, 0)"
       />
     </Svg>
   );
