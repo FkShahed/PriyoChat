@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Image,
-  TextInput, ActivityIndicator, StatusBar, Alert
+  TextInput, ActivityIndicator, StatusBar, ScrollView, RefreshControl
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,18 +12,18 @@ import { formatTime, getInitials } from '../../utils/helpers';
 import { useColors } from '../../store/useThemeStore';
 
 const AVATAR_COLORS = [
-  ['#FF6B6B', '#FF8E53'],
-  ['#4ECDC4', '#44A08D'],
-  ['#A855F7', '#EC4899'],
-  ['#F093FB', '#F5576C'],
-  ['#4facfe', '#00f2fe'],
-  ['#43e97b', '#38f9d7'],
-  ['#fa709a', '#fee140'],
-  ['#a18cd1', '#fbc2eb'],
+  ['#0084FF', '#00C6FF'],
+  ['#FF512F', '#DD2476'],
+  ['#8E2DE2', '#4A00E0'],
+  ['#11998e', '#38ef7d'],
+  ['#FC466B', '#3F5EFB'],
+  ['#F7971E', '#FFD200'],
+  ['#e1eec3', '#f05053'],
+  ['#654ea3', '#eaafc8'],
 ];
 
 function avatarGradient(name = '') {
-  const code = name.charCodeAt(0) || 0;
+  const code = name ? name.charCodeAt(0) : 0;
   return AVATAR_COLORS[code % AVATAR_COLORS.length];
 }
 
@@ -31,12 +31,11 @@ export default function ChatListScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
   const { conversations, setConversations, onlineUsers } = useChatStore();
   const C = useColors();
-  const isDark = C.bg === '#121212';
+  const isDark = C.bg === '#121212' || C.bg === '#0D1117' || C.bg?.toLowerCase()?.includes('12');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -52,112 +51,189 @@ export default function ChatListScreen({ navigation }) {
 
   useEffect(() => { loadConversations(); }, []);
 
-  const filtered = conversations.filter((c) => {
-    const other = c.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
-    return other?.name?.toLowerCase()?.includes(search.toLowerCase());
-  });
+  // Filter conversations by search
+  const filtered = useMemo(() => {
+    return conversations.filter((c) => {
+      const other = c.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
+      return other?.name?.toLowerCase()?.includes(search.toLowerCase());
+    });
+  }, [conversations, search, user]);
 
+  // Extract online friends for top "Active Now" bar
+  const onlineFriends = useMemo(() => {
+    const list = [];
+    const seenIds = new Set();
+    conversations.forEach((c) => {
+      const other = c.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
+      if (other && !seenIds.has(other._id)) {
+        seenIds.add(other._id);
+        const isOnline = onlineUsers[other._id] ?? other.isOnline;
+        if (isOnline) {
+          list.push({ ...other, conversation: c });
+        }
+      }
+    });
+    return list;
+  }, [conversations, onlineUsers, user]);
+
+  // Render individual chat row
   const renderItem = ({ item }) => {
     const other = item.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
     const isOnline = onlineUsers[other?._id] ?? other?.isOnline;
     const lastMsg = item.lastMessage;
     const isDeleted = lastMsg?.isDeleted;
+    const unreadCount = item.unreadCount || 0;
+    const isUnread = unreadCount > 0;
+
     const preview = isDeleted
       ? 'Message deleted'
       : lastMsg?.images?.length
-      ? `${lastMsg.images.length} photo${lastMsg.images.length > 1 ? 's' : ''}`
+      ? `📷 Photo${lastMsg.images.length > 1 ? 's' : ''}`
+      : lastMsg?.voiceNoteUrl || lastMsg?.isVoiceNote
+      ? '🎤 Voice note'
       : lastMsg?.text || 'Start a conversation';
 
     const gradColors = avatarGradient(other?.name || '');
-    const isMine = lastMsg?.sender === user?._id;
+    const isMine = lastMsg?.sender === user?._id || lastMsg?.sender?._id === user?._id;
 
     let statusIcon = null;
     if (isMine && lastMsg) {
-      const color = lastMsg.status === 'seen' ? '#0084FF' : C.textSecondary;
+      const color = lastMsg.status === 'seen' ? '#0084FF' : (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)');
       const iconName = lastMsg.status === 'sent' ? 'checkmark' : 'checkmark-done';
-      statusIcon = <Ionicons name={iconName} size={13} color={color} style={{ marginRight: 3 }} />;
+      statusIcon = <Ionicons name={iconName} size={14} color={color} style={{ marginRight: 4 }} />;
     }
 
     return (
       <TouchableOpacity
-        style={[styles.item, { backgroundColor: C.surface }]}
+        style={[
+          styles.itemCard,
+          { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF' }
+        ]}
         onPress={() => navigation.navigate('Chat', { conversation: item, otherUser: other })}
-        activeOpacity={0.75}
+        activeOpacity={0.7}
       >
-        <View style={styles.avatarWrapper}>
+        <View style={styles.avatarContainer}>
           {other?.avatar ? (
-            <Image source={{ uri: other.avatar }} style={styles.avatar} />
+            <Image source={{ uri: other.avatar }} style={styles.avatarImage} />
           ) : (
-            <LinearGradient colors={gradColors} style={styles.avatar}>
-              <Text style={styles.initials}>{getInitials(other?.name)}</Text>
+            <LinearGradient colors={gradColors} style={styles.avatarImage}>
+              <Text style={styles.avatarInitials}>{getInitials(other?.name)}</Text>
             </LinearGradient>
           )}
-          {isOnline && <View style={[styles.onlineDot, { borderColor: C.surface }]} />}
+          {isOnline && <View style={[styles.onlineBadge, { borderColor: isDark ? '#141A24' : '#FFFFFF' }]} />}
         </View>
 
-        <View style={styles.info}>
-          <View style={styles.row}>
-            <Text style={[styles.name, { color: C.text }]} numberOfLines={1}>{other?.name || 'Unknown'}</Text>
-            <Text style={[styles.time, { color: C.textSecondary }]}>{lastMsg ? formatTime(lastMsg.createdAt) : ''}</Text>
+        <View style={styles.infoContainer}>
+          <View style={styles.nameRow}>
+            <Text
+              style={[
+                styles.userName,
+                { color: isDark ? '#FFFFFF' : '#1C1E21' },
+                isUnread && styles.unreadText
+              ]}
+              numberOfLines={1}
+            >
+              {other?.name || 'User'}
+            </Text>
+            {lastMsg && (
+              <Text style={[styles.timeText, { color: isUnread ? '#0084FF' : (isDark ? '#8E8E93' : '#8E8E93') }, isUnread && { fontWeight: '700' }]}>
+                {formatTime(lastMsg.createdAt)}
+              </Text>
+            )}
           </View>
-          <View style={[styles.row, { marginTop: 3 }]}>
-            <View style={styles.previewRow}>
+
+          <View style={styles.messageRow}>
+            <View style={styles.previewWrapper}>
               {statusIcon}
               <Text
-                style={[styles.preview, { color: C.textSecondary }, isDeleted && { fontStyle: 'italic' }]}
+                style={[
+                  styles.previewText,
+                  { color: isUnread ? (isDark ? '#FFFFFF' : '#1C1E21') : (isDark ? 'rgba(255,255,255,0.55)' : '#65676B') },
+                  isUnread && styles.unreadText,
+                  isDeleted && { fontStyle: 'italic' }
+                ]}
                 numberOfLines={1}
               >
                 {isMine ? `You: ${preview}` : preview}
               </Text>
             </View>
+
+            {isUnread && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
           </View>
         </View>
-
-        <Ionicons name="chevron-forward" size={15} color={C.border} style={{ marginLeft: 6 }} />
       </TouchableOpacity>
     );
   };
 
-  const headerGrad = isDark ? ['#1A1A2E', '#16213E'] : ['#006EE6', '#0084FF'];
+  const pageBg = isDark ? '#0D1117' : '#F7F8FA';
+  const headerBg = isDark ? '#161B22' : '#FFFFFF';
 
   return (
-    <View style={[styles.container, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+    <View style={[styles.container, { backgroundColor: pageBg }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
 
-      <LinearGradient colors={headerGrad} style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>Messages</Text>
-            <Text style={styles.headerSub}>
-              {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.newBtn} onPress={() => navigation.navigate('SearchUsers')} activeOpacity={0.8}>
-            <Ionicons name="create-outline" size={22} color="#FFF" />
+      {/* ── Modern Top Header Bar ────────────────────────────────────────── */}
+      <View style={[styles.headerContainer, { backgroundColor: headerBg }]}>
+        <View style={styles.headerRow}>
+          {/* User Profile Shortcut */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            activeOpacity={0.8}
+            style={styles.profileBtn}
+          >
+            {user?.avatar ? (
+              <Image source={{ uri: user.avatar }} style={styles.headerUserAvatar} />
+            ) : (
+              <LinearGradient colors={['#0084FF', '#00C6FF']} style={styles.headerUserAvatar}>
+                <Text style={styles.headerUserInitials}>{getInitials(user?.name)}</Text>
+              </LinearGradient>
+            )}
           </TouchableOpacity>
+
+          <Text style={[styles.headerTitleText, { color: isDark ? '#FFFFFF' : '#1C1E21' }]}>Chats</Text>
+
+          {/* Action Buttons */}
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={[styles.actionIconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+              onPress={() => navigation.navigate('SearchUsers')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create" size={20} color={isDark ? '#FFF' : '#1C1E21'} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
-          <Ionicons name="search" size={17} color="rgba(255,255,255,0.6)" style={{ marginRight: 8 }} />
+        {/* ── Messenger Pill Search Box ──────────────────────────────────── */}
+        <View
+          style={[
+            styles.searchPill,
+            { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }
+          ]}
+        >
+          <Ionicons name="search" size={18} color={isDark ? 'rgba(255,255,255,0.5)' : '#8E8E93'} style={{ marginRight: 8 }} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: isDark ? '#FFF' : '#1C1E21' }]}
             value={search}
             onChangeText={setSearch}
-            placeholder="Search conversations…"
-            placeholderTextColor="rgba(255,255,255,0.5)"
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
+            placeholder="Search"
+            placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : '#8E8E93'}
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.6)" />
+              <Ionicons name="close-circle" size={18} color={isDark ? 'rgba(255,255,255,0.5)' : '#8E8E93'} />
             </TouchableOpacity>
           )}
         </View>
-      </LinearGradient>
+      </View>
 
+      {/* ── Account Warning Banner ───────────────────────────────────────── */}
       {user?.warnings > 0 && (
-        <TouchableOpacity 
+        <TouchableOpacity
           activeOpacity={0.8}
           style={[styles.warningBanner, { backgroundColor: isDark ? '#332200' : '#FFF9E6' }]}
           onPress={() => navigation.navigate('WarningDetails')}
@@ -167,30 +243,84 @@ export default function ChatListScreen({ navigation }) {
             <Text style={[styles.warningTitle, { color: isDark ? '#FFD699' : '#995500' }]}>
               Account Warning ({user.warnings})
             </Text>
-            <Text style={[styles.warningSub, { color: isDark ? 'rgba(255,214,153,0.7)' : '#B36600' }]}>
+            <Text style={[styles.warningSub, { color: isDark ? 'rgba(251,214,153,0.7)' : '#B36600' }]}>
               Tap to see details and reason.
             </Text>
           </View>
         </TouchableOpacity>
       )}
 
+      {/* ── Active Now Horizontal Stories / Online Bar ─────────────────── */}
+      {!search && (
+        <View style={styles.activeNowContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.activeNowScrollContent}
+          >
+            {/* Create Story / New Chat Bubble */}
+            <TouchableOpacity
+              style={styles.activeItem}
+              onPress={() => navigation.navigate('SearchUsers')}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.createStoryRing, { backgroundColor: isDark ? 'rgba(0,132,255,0.15)' : 'rgba(0,132,255,0.1)' }]}>
+                <Ionicons name="add" size={24} color="#0084FF" />
+              </View>
+              <Text style={[styles.activeItemName, { color: isDark ? '#8E8E93' : '#65676B' }]} numberOfLines={1}>
+                Your Note
+              </Text>
+            </TouchableOpacity>
+
+            {/* Online Friends */}
+            {onlineFriends.map((friend) => (
+              <TouchableOpacity
+                key={friend._id}
+                style={styles.activeItem}
+                onPress={() => navigation.navigate('Chat', { conversation: friend.conversation, otherUser: friend })}
+                activeOpacity={0.8}
+              >
+                <View style={styles.activeAvatarWrapper}>
+                  {friend.avatar ? (
+                    <Image source={{ uri: friend.avatar }} style={styles.activeAvatar} />
+                  ) : (
+                    <LinearGradient colors={avatarGradient(friend.name)} style={styles.activeAvatar}>
+                      <Text style={styles.activeInitials}>{getInitials(friend.name)}</Text>
+                    </LinearGradient>
+                  )}
+                  <View style={[styles.activeOnlineDot, { borderColor: pageBg }]} />
+                </View>
+                <Text style={[styles.activeItemName, { color: isDark ? '#E4E6EB' : '#1C1E21' }]} numberOfLines={1}>
+                  {friend.name?.split(' ')[0] || 'User'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── Conversations List ────────────────────────────────────────── */}
       {loading ? (
         <ActivityIndicator style={{ marginTop: 48 }} color="#0084FF" size="large" />
       ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <View style={[styles.emptyIcon, { backgroundColor: isDark ? 'rgba(0,132,255,0.12)' : 'rgba(0,132,255,0.07)' }]}>
-            <Ionicons name="chatbubbles-outline" size={52} color="#0084FF" />
+        <View style={styles.emptyContainer}>
+          <View style={[styles.emptyIconCircle, { backgroundColor: isDark ? 'rgba(0,132,255,0.12)' : 'rgba(0,132,255,0.07)' }]}>
+            <Ionicons name="chatbubbles" size={48} color="#0084FF" />
           </View>
-          <Text style={[styles.emptyTitle, { color: C.text }]}>
-            {search ? 'No results found' : 'No conversations yet'}
+          <Text style={[styles.emptyTitle, { color: isDark ? '#FFF' : '#1C1E21' }]}>
+            {search ? 'No results found' : 'No chats yet'}
           </Text>
-          <Text style={[styles.emptySub, { color: C.textSecondary }]}>
-            {search ? 'Try a different name' : 'Find friends to start chatting'}
+          <Text style={[styles.emptySub, { color: isDark ? '#8E8E93' : '#65676B' }]}>
+            {search ? 'Try searching for someone else' : 'Start a conversation with your friends!'}
           </Text>
           {!search && (
-            <TouchableOpacity onPress={() => navigation.navigate('SearchUsers')} style={styles.emptyBtn} activeOpacity={0.85}>
-              <Ionicons name="person-add-outline" size={17} color="#FFF" style={{ marginRight: 6 }} />
-              <Text style={styles.emptyBtnText}>Find Friends</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('SearchUsers')}
+              style={styles.findFriendsBtn}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="person-add" size={17} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={styles.findFriendsBtnText}>Find Friends</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -199,10 +329,15 @@ export default function ChatListScreen({ navigation }) {
           data={filtered}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
-          refreshing={refreshing}
-          onRefresh={() => { setRefreshing(true); loadConversations(); }}
-          contentContainerStyle={{ paddingBottom: 24, paddingTop: 6 }}
-          ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: C.border }]} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); loadConversations(); }}
+              tintColor="#0084FF"
+              colors={['#0084FF']}
+            />
+          }
+          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 24, paddingTop: 4 }}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -211,56 +346,65 @@ export default function ChatListScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { paddingTop: 52, paddingHorizontal: 20, paddingBottom: 20 },
-  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  headerTitle: { fontSize: 26, fontWeight: '800', color: '#FFF', letterSpacing: -0.5 },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
-  newBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
+  container: {
+    flex: 1,
   },
-  searchBox: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  headerContainer: {
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 8 : 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  searchBoxFocused: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderColor: 'rgba(255,255,255,0.35)',
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  searchInput: { flex: 1, fontSize: 15, color: '#FFF', paddingVertical: 0 },
-  item: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13 },
-  sep: { height: 0.5, marginLeft: 84 },
-  avatarWrapper: { position: 'relative', marginRight: 14 },
-  avatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
-  initials: { fontSize: 19, fontWeight: '700', color: '#FFF' },
-  onlineDot: {
-    position: 'absolute', bottom: 1, right: 1,
-    width: 15, height: 15, borderRadius: 7.5,
-    backgroundColor: '#25D366', borderWidth: 2.5,
+  profileBtn: {
+    marginRight: 10,
   },
-  info: { flex: 1, minWidth: 0 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 8 },
-  time: { fontSize: 12 },
-  previewRow: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  preview: { fontSize: 13, flex: 1 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyIcon: {
-    width: 96, height: 96, borderRadius: 48,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+  headerUserAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
-  emptySub: { fontSize: 14, textAlign: 'center', marginBottom: 28 },
-  emptyBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#0084FF', borderRadius: 14,
-    paddingHorizontal: 24, paddingVertical: 13,
+  headerUserInitials: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
-  emptyBtnText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  headerTitleText: {
+    fontSize: 26,
+    fontWeight: '800',
+    flex: 1,
+    letterSpacing: -0.5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  searchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    height: 40,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: 0,
+  },
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -276,5 +420,185 @@ const styles = StyleSheet.create({
   warningSub: {
     fontSize: 11,
     fontWeight: '500',
+  },
+
+  // ── Active Now Bar Styles ─────────────────────────────────────────────
+  activeNowContainer: {
+    paddingVertical: 12,
+  },
+  activeNowScrollContent: {
+    paddingHorizontal: 12,
+  },
+  activeItem: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 62,
+  },
+  activeAvatarWrapper: {
+    position: 'relative',
+    marginBottom: 4,
+  },
+  activeAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeInitials: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  activeOnlineDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#31A24C',
+    borderWidth: 2,
+  },
+  createStoryRing: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  activeItemName: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+
+  // ── Conversation Card Styles ─────────────────────────────────────────
+  itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    marginVertical: 3,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  avatarImage: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    color: '#FFF',
+    fontSize: 19,
+    fontWeight: '700',
+  },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    backgroundColor: '#31A24C',
+    borderWidth: 2.5,
+  },
+  infoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 8,
+  },
+  timeText: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  messageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  previewWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  previewText: {
+    fontSize: 14,
+    flex: 1,
+  },
+  unreadText: {
+    fontWeight: '700',
+  },
+  unreadBadge: {
+    backgroundColor: '#0084FF',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // ── Empty State Styles ──────────────────────────────────────────────
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    marginTop: 32,
+  },
+  emptyIconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  emptySub: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  findFriendsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0084FF',
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+  },
+  findFriendsBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
