@@ -998,9 +998,18 @@ export default function ChatScreen({ route, navigation }) {
               onPress={() => emit('call_offer', { to: isMine ? otherUser._id : msg.sender?._id || otherUser._id, callType: cd.callType })}
               activeOpacity={0.75}
             >
-              <View style={[styles.callBubble, { backgroundColor: bgColor }]}>
-                {/* Left: direction arrow + call icon stacked */}
-                <View style={[styles.callBubbleIconWrap, { backgroundColor: accentColor + '22' }]}>
+              <LinearGradient
+                colors={isRejected
+                  ? ['rgba(255,69,58,0.18)', 'rgba(255,69,58,0.08)']
+                  : ['rgba(0,132,255,0.22)', 'rgba(0,80,200,0.10)']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={[styles.callBubble, {
+                  borderWidth: 1,
+                  borderColor: isRejected ? 'rgba(255,69,58,0.25)' : 'rgba(0,132,255,0.25)',
+                }]}
+              >
+                {/* Left: icon wrap */}
+                <View style={[styles.callBubbleIconWrap, { backgroundColor: accentColor + '28' }]}>
                   <Ionicons name={callIcon} size={22} color={accentColor} />
                   <Ionicons name={arrowIcon} size={11} color={accentColor} style={{ marginTop: 2 }} />
                 </View>
@@ -1024,11 +1033,15 @@ export default function ChatScreen({ route, navigation }) {
                   </View>
                 </View>
 
-                {/* Right: tap-to-call icon */}
-                <View style={[styles.callBubbleCallBtn, { backgroundColor: accentColor }]}>
+                {/* Right: call button */}
+                <LinearGradient
+                  colors={isRejected ? ['#FF453A', '#C0392B'] : ['#0084FF', '#005FCC']}
+                  style={styles.callBubbleCallBtn}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                >
                   <Ionicons name={callIcon} size={16} color="#FFF" />
-                </View>
-              </View>
+                </LinearGradient>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
