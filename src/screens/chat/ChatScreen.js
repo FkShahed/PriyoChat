@@ -289,28 +289,23 @@ export default function ChatScreen({ route, navigation }) {
   const headerStatusColor = isHeaderLight ? 'rgba(0, 0, 0, 0.65)' : 'rgba(255, 255, 255, 0.8)';
   const statusBarStyle = isHeaderLight ? 'dark-content' : 'light-content';
 
-  // Frosted-glass / blur styling for bottom input bar
+  // Frosted-glass styling for bottom input bar
   const isDarkTheme = !theme.isLight;
   const glassGradient = useMemo(() => {
     const baseColor = theme.inputBg || theme.background || (isDarkTheme ? '#141A24' : '#F5F5F5');
     return [
-      hexToRgba(baseColor, 0.68),
-      hexToRgba(baseColor, 0.84),
-      hexToRgba(baseColor, 0.95),
+      hexToRgba(baseColor, 0.72),
+      hexToRgba(baseColor, 0.88),
+      hexToRgba(baseColor, 0.96),
     ];
   }, [theme.inputBg, theme.background, isDarkTheme]);
 
   const textInputBg = useMemo(() => {
-    return isDarkTheme ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.85)';
-  }, [isDarkTheme]);
-
-  const textInputBorder = isDarkTheme
-    ? 'rgba(255, 255, 255, 0.12)'
-    : 'rgba(0, 0, 0, 0.07)';
-
-  const glassBorderTop = isDarkTheme
-    ? 'rgba(255, 255, 255, 0.12)'
-    : 'rgba(0, 0, 0, 0.06)';
+    if (isDarkTheme) {
+      return 'rgba(255, 255, 255, 0.08)';
+    }
+    return theme.inputBg || 'rgba(255, 255, 255, 0.9)';
+  }, [isDarkTheme, theme.inputBg]);
 
   const convoMessages = messages[conversationId] || [];
 
@@ -981,10 +976,10 @@ export default function ChatScreen({ route, navigation }) {
         colors={glassGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
-        style={[styles.glassInputContainer, { borderTopColor: glassBorderTop }]}
+        style={styles.glassInputContainer}
       >
         {selectedImages.length > 0 && (
-          <View style={[styles.imagePreviewContainer, { borderBottomColor: glassBorderTop }]}>
+          <View style={styles.imagePreviewContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {selectedImages.map((img, idx) => (
                 <View key={idx} style={styles.previewImageWrapper}>
@@ -1050,8 +1045,7 @@ export default function ChatScreen({ route, navigation }) {
                 {
                   color: theme.inputText,
                   backgroundColor: textInputBg,
-                  borderColor: textInputBorder,
-                  borderWidth: 1,
+                  borderWidth: 0,
                 },
               ]}
               value={text}
@@ -1063,6 +1057,7 @@ export default function ChatScreen({ route, navigation }) {
               placeholderTextColor={theme.placeholderText}
               multiline
               maxLength={5000}
+              underlineColorAndroid="transparent"
             />
             <TouchableOpacity
               onPress={sendMessage}
@@ -1198,12 +1193,12 @@ const styles = StyleSheet.create({
   imageViewerImg: { width: SCREEN_W, height: SCREEN_H * 0.8 },
   // Input
   glassInputContainer: {
-    borderTopWidth: 0.5,
+    borderTopWidth: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    elevation: 4,
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 0,
   },
   inputRow: {
     flexDirection: 'row',
@@ -1219,7 +1214,7 @@ const styles = StyleSheet.create({
   },
   imagePreviewContainer: {
     padding: 8,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: 0,
   },
   previewImageWrapper: { marginRight: 8, position: 'relative', marginTop: 6 },
   previewImage: { width: 60, height: 60, borderRadius: 8 },
@@ -1233,6 +1228,7 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     minHeight: 40,
     borderRadius: 22,
+    borderWidth: 0,
     paddingHorizontal: 16,
     paddingTop: 9,
     paddingBottom: 9,
