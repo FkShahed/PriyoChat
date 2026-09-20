@@ -778,33 +778,30 @@ export default function ChatScreen({ route, navigation }) {
     return { avatar: null, name: 'U' };
   }, [otherUser, convo?.participants, convoMessages, currentUser]);
 
+  // Find the newest message that the recipient has read or sent (their read head position for the mini avatar)
+  const recipientReadMessage = useMemo(() => {
+    return displayedMessages.find((m) => {
+      if (m.isDeleted) return false;
+      const isMine =
+        m.sender?._id?.toString() === currentUser?._id?.toString() ||
+        m.sender?.toString() === currentUser?._id?.toString();
+      // Recipient has reached this message if it's their own message, or my message marked 'seen'
+      return !isMine || (isMine && m.status === 'seen');
+    });
+  }, [displayedMessages, currentUser]);
+
   const renderStatusFooter = (msg, isMine) => {
     const isTapped = tappedMsgId === msg._id?.toString();
+    const isReadHead = recipientReadMessage?._id?.toString() === msg._id?.toString();
 
-    if (!isMine) {
-      // Their messages: show time only on tap
-      if (!isTapped) return null;
-      return (
-        <View style={[styles.statusFooterRow, styles.statusFooterTheir]}>
-          <Text style={[styles.statusFooterText, { color: statusColor }]}>
-            {formatMessageTime(msg.createdAt)}
-          </Text>
-        </View>
-      );
-    }
-
-    const isLastMyMsg = lastMyMessage?._id?.toString() === msg._id?.toString();
-    const isSending = msg.status === 'sending';
-    const isFailed = msg.status === 'failed';
-
-    // Seen status for last message: always show mini avatar; show seen time when tapped
-    if (isLastMyMsg && msg.status === 'seen') {
-      const seenTime = formatMessageTime(msg.seenAt || msg.updatedAt || msg.createdAt);
+    // 1. If this message is the recipient's read head position -> ALWAYS show mini avatar!
+    if (isReadHead) {
+      const timeStr = formatMessageTime(isMine ? (msg.seenAt || msg.updatedAt || msg.createdAt) : msg.createdAt);
       return (
         <View style={[styles.statusFooterRow, styles.statusFooterMine, { alignItems: 'center' }]}>
           {(showSeenTime || isTapped) && (
             <Text style={[styles.statusFooterText, { color: statusColor, marginRight: 5 }]}>
-              {`Seen ${seenTime}`}
+              {isMine ? `Seen ${timeStr}` : timeStr}
             </Text>
           )}
           {recipientAvatarData.avatar ? (
@@ -823,9 +820,26 @@ export default function ChatScreen({ route, navigation }) {
       );
     }
 
-    // For my messages: show full status only for last msg or when this specific msg is tapped
+    // 2. For THEIR messages that are NOT the read head: show time only if tapped
+    if (!isMine) {
+      if (!isTapped) return null;
+      return (
+        <View style={[styles.statusFooterRow, styles.statusFooterTheir]}>
+          <Text style={[styles.statusFooterText, { color: statusColor }]}>
+            {formatMessageTime(msg.createdAt)}
+          </Text>
+        </View>
+      );
+    }
+
+    // 3. For MY messages: show text status ('Sending...', 'Failed', 'Delivered', 'Sent • time')
+    // for the last message sent by me OR when specifically tapped
+    const isLastMyMsg = lastMyMessage?._id?.toString() === msg._id?.toString();
     const showStatus = isLastMyMsg || isTapped;
     if (!showStatus) return null;
+
+    const isSending = msg.status === 'sending';
+    const isFailed = msg.status === 'failed';
 
     let statusText = '';
     if (isSending) {
