@@ -171,11 +171,6 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     marginBottom: 14,
-    shadowColor: '#0084FF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 4,
   },
   appName: {
     fontSize: 42,
