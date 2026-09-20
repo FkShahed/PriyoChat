@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   Image, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
   ImageBackground, ScrollView, Modal, TouchableWithoutFeedback,
-  StatusBar, Dimensions, Keyboard,
+  StatusBar, Dimensions, Keyboard, PanResponder,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -56,76 +56,69 @@ function TypingIndicator({ theme }) {
 function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
   const scale = useRef(new RNAnimated.Value(1)).current;
   const lastScale = useRef(1);
-  const translateX = useRef(new RNAnimated.Value(0)).current;
-  const translateY = useRef(new RNAnimated.Value(0)).current;
+  const currentScale = useRef(1);
+  const lastDistance = useRef(null);
 
-  // Reset transforms when modal opens/closes
   React.useEffect(() => {
     if (!visible) {
       scale.setValue(1);
       lastScale.current = 1;
-      translateX.setValue(0);
-      translateY.setValue(0);
+      currentScale.current = 1;
+      lastDistance.current = null;
     }
   }, [visible]);
 
-  if (!data) return null;
-
-  let PinchGestureHandler, PanGestureHandler, State;
-  try {
-    const gh = require('react-native-gesture-handler');
-    PinchGestureHandler = gh.PinchGestureHandler;
-    PanGestureHandler = gh.PanGestureHandler;
-    State = gh.State;
-  } catch (e) {
-    // fallback: no zoom
-  }
-
-  const onPinchEvent = RNAnimated.event(
-    [{ nativeEvent: { scale: scale } }],
-    { useNativeDriver: true }
-  );
-
-  const onPinchStateChange = (event) => {
-    if (event.nativeEvent.oldState === (State?.ACTIVE || 4)) {
-      lastScale.current *= event.nativeEvent.scale;
-      if (lastScale.current < 1) lastScale.current = 1;
-      if (lastScale.current > 5) lastScale.current = 5;
-      scale.setValue(lastScale.current);
-    }
+  const getDistance = (touches) => {
+    const [a, b] = touches;
+    return Math.sqrt(
+      Math.pow(a.pageX - b.pageX, 2) + Math.pow(a.pageY - b.pageY, 2)
+    );
   };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        if (evt.nativeEvent.touches.length === 2) {
+          lastDistance.current = getDistance(evt.nativeEvent.touches);
+        }
+      },
+      onPanResponderMove: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length === 2) {
+          const dist = getDistance(touches);
+          if (lastDistance.current !== null) {
+            const delta = dist / lastDistance.current;
+            let next = currentScale.current * delta;
+            next = Math.max(1, Math.min(5, next));
+            scale.setValue(next);
+            currentScale.current = next;
+          }
+          lastDistance.current = dist;
+        }
+      },
+      onPanResponderRelease: () => {
+        lastScale.current = currentScale.current;
+        lastDistance.current = null;
+        // Snap back if below 1
+        if (currentScale.current < 1) {
+          RNAnimated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+          currentScale.current = 1;
+          lastScale.current = 1;
+        }
+      },
+    })
+  ).current;
 
   const onDoubleTap = () => {
-    const toValue = lastScale.current > 1 ? 1 : 2.5;
+    const toValue = currentScale.current > 1 ? 1 : 2.5;
+    currentScale.current = toValue;
     lastScale.current = toValue;
     RNAnimated.spring(scale, { toValue, useNativeDriver: true }).start();
-    if (toValue === 1) {
-      RNAnimated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-      RNAnimated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
-    }
   };
 
-  const imageEl = (
-    <RNAnimated.Image
-      source={{ uri: data.uri }}
-      style={[styles.imageViewerImg, { transform: [{ scale }, { translateX }, { translateY }] }]}
-      resizeMode="contain"
-    />
-  );
-
-  const content = PinchGestureHandler ? (
-    <PinchGestureHandler onGestureEvent={onPinchEvent} onHandlerStateChange={onPinchStateChange}>
-      <RNAnimated.View style={{ flex: 1 }}>
-        <TouchableOpacity onPress={onClose} onLongPress={onDoubleTap} activeOpacity={1} style={{ flex: 1 }}>
-          {imageEl}
-        </TouchableOpacity>
-      </RNAnimated.View>
-    </PinchGestureHandler>
-  ) : (
-    <TouchableOpacity onPress={onClose} activeOpacity={1} style={{ flex: 1 }}>
-      {imageEl}
-    </TouchableOpacity>
-  );
+  if (!data) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -140,9 +133,29 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
             </TouchableOpacity>
           ) : null}
         </View>
-        {content}
+
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={onClose}
+          onLongPress={onDoubleTap}
+          style={{ flex: 1 }}
+        >
+          <RNAnimated.View
+            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+            {...panResponder.panHandlers}
+          >
+            <RNAnimated.Image
+              source={{ uri: data.uri }}
+              style={[styles.imageViewerImg, { transform: [{ scale }] }]}
+              resizeMode="contain"
+            />
+          </RNAnimated.View>
+        </TouchableOpacity>
       </View>
     </Modal>
+  );
+}
+
   );
 }
 
