@@ -796,7 +796,8 @@ export default function ChatScreen({ route, navigation }) {
     const isTapped = tappedMsgId === msg._id?.toString();
 
     if (!isMine) {
-      // Their messages: show time always (not just on tap, consistent with Messenger)
+      // Their messages: show time only on tap
+      if (!isTapped) return null;
       return (
         <View style={[styles.statusFooterRow, styles.statusFooterTheir]}>
           <Text style={[styles.statusFooterText, { color: statusColor }]}>
@@ -1512,8 +1513,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 10,
-    // Inverted FlatList flips the container with scaleY:-1; counter-flip so text is right-side-up
-    transform: [{ scaleY: -1 }],
+    // Inverted FlatList rotates content 180°; counter-rotate so date label is right-side-up
+    transform: [{ rotate: '180deg' }],
   },
   dateSeparatorPill: {
     paddingHorizontal: 14,
