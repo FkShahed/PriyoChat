@@ -23,7 +23,7 @@ export default function LoginScreen({ navigation }) {
   const connect = useSocketStore((s) => s.connect);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.96)).current;
 
   useEffect(() => {
@@ -83,6 +83,7 @@ export default function LoginScreen({ navigation }) {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          scrollEnabled={false}
         >
           <Animated.View
             style={[
@@ -110,7 +111,7 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.fieldLabel}>Email</Text>
                 <View style={[styles.inputWrap, focusedField === 'email' && styles.inputWrapFocused]}>
                   <Ionicons
-                    name="mail-outline" size={18}
+                    name="mail-outline" size={17}
                     color={focusedField === 'email' ? '#00C6FF' : 'rgba(255,255,255,0.35)'}
                     style={styles.inputIcon}
                   />
@@ -133,7 +134,7 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.fieldLabel}>Password</Text>
                 <View style={[styles.inputWrap, focusedField === 'password' && styles.inputWrapFocused]}>
                   <Ionicons
-                    name="lock-closed-outline" size={18}
+                    name="lock-closed-outline" size={17}
                     color={focusedField === 'password' ? '#00C6FF' : 'rgba(255,255,255,0.35)'}
                     style={styles.inputIcon}
                   />
@@ -150,7 +151,7 @@ export default function LoginScreen({ navigation }) {
                   <TouchableOpacity onPress={() => setShowPw((s) => !s)} style={styles.eyeBtn}>
                     <Ionicons
                       name={showPw ? 'eye-off-outline' : 'eye-outline'}
-                      size={18} color="rgba(255,255,255,0.4)"
+                      size={17} color="rgba(255,255,255,0.4)"
                     />
                   </TouchableOpacity>
                 </View>
@@ -174,7 +175,7 @@ export default function LoginScreen({ navigation }) {
                       <>
                         <Text style={styles.primaryBtnText}>Sign In</Text>
                         <View style={styles.btnIconCircle}>
-                          <Ionicons name="arrow-forward" size={16} color="#0066FF" />
+                          <Ionicons name="arrow-forward" size={15} color="#0066FF" />
                         </View>
                       </>
                     )}
@@ -230,105 +231,95 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 48,
+    paddingVertical: 24,
   },
   content: { width: '100%' },
 
-  // ── Header ────────────────────────────────────────────────────────────
-  header: { alignItems: 'center', marginBottom: 32 },
+  // ── Header — same visual as Signup, just tighter margin ────────────────
+  header: { alignItems: 'center', marginBottom: 20 },
   logoBadge: {
-    width: 72, height: 72, borderRadius: 20,
+    width: 60, height: 60, borderRadius: 17,
     backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 14,
     shadowColor: '#0084FF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35, shadowRadius: 14,
     elevation: 0,
   },
-  logoImg: { width: 58, height: 58, borderRadius: 14 },
+  logoImg: { width: 48, height: 48, borderRadius: 12 },
   title: {
-    fontSize: 28, fontWeight: '800', color: '#FFFFFF',
-    letterSpacing: -0.5, marginBottom: 6,
+    fontSize: 24, fontWeight: '800', color: '#FFFFFF',
+    letterSpacing: -0.5, marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14, fontWeight: '400',
+    fontSize: 13, fontWeight: '400',
     color: 'rgba(255,255,255,0.45)',
     letterSpacing: 0.2,
   },
 
-  // ── Glass Card ────────────────────────────────────────────────────────
+  // ── Glass Card — same as Signup, slightly tighter ───────────────────────
   card: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    padding: 24,
-    gap: 16,
+    padding: 20,
+    gap: 12,
   },
 
-  // ── Form Fields ───────────────────────────────────────────────────────
-  fieldGroup: { gap: 7 },
+  // ── Fields ────────────────────────────────────────────────────────────
+  fieldGroup: { gap: 6 },
   fieldLabel: {
-    fontSize: 12, fontWeight: '600',
+    fontSize: 11, fontWeight: '600',
     color: 'rgba(255,255,255,0.55)',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 13, borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 15 : 2,
+    paddingHorizontal: 13,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 0,
   },
   inputWrapFocused: {
     borderColor: 'rgba(0,198,255,0.55)',
     backgroundColor: 'rgba(0,198,255,0.06)',
   },
-  inputIcon: { marginRight: 10 },
+  inputIcon: { marginRight: 9 },
   input: {
-    flex: 1,
-    fontSize: 15,
-    color: '#FFFFFF',
-    paddingVertical: Platform.OS === 'android' ? 13 : 0,
+    flex: 1, fontSize: 14, color: '#FFFFFF',
+    paddingVertical: Platform.OS === 'android' ? 11 : 0,
   },
   eyeBtn: { paddingHorizontal: 4, paddingVertical: 4 },
 
   // ── Primary Button ────────────────────────────────────────────────────
   primaryBtnWrap: {
-    borderRadius: 16, overflow: 'hidden',
-    marginTop: 4,
-    shadowColor: '#0084FF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45, shadowRadius: 16,
-    elevation: 0,
+    borderRadius: 15, overflow: 'hidden',
+    marginTop: 2, elevation: 0,
   },
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 17, paddingHorizontal: 24,
+    paddingVertical: 14, paddingHorizontal: 24,
   },
-  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700', marginRight: 10 },
+  primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700', marginRight: 9 },
   btnIconCircle: {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#FFF',
-    alignItems: 'center', justifyContent: 'center',
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center',
   },
 
   // ── Divider ───────────────────────────────────────────────────────────
   dividerRow: { flexDirection: 'row', alignItems: 'center' },
   dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
   dividerText: {
-    marginHorizontal: 12,
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 12, fontWeight: '600',
+    marginHorizontal: 12, color: 'rgba(255,255,255,0.35)',
+    fontSize: 11, fontWeight: '600',
   },
 
   // ── Switch Link ───────────────────────────────────────────────────────
-  switchLink: { alignItems: 'center', paddingVertical: 10, marginTop: 20 },
-  switchText: { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
+  switchLink: { alignItems: 'center', paddingVertical: 8, marginTop: 16 },
+  switchText: { color: 'rgba(255,255,255,0.45)', fontSize: 13 },
   switchHighlight: { color: '#00C6FF', fontWeight: '700' },
 });
