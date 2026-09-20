@@ -741,27 +741,13 @@ export default function ChatScreen({ route, navigation }) {
     const list = searchQuery.trim()
       ? convoMessages.filter(m => m.text?.toLowerCase()?.includes(searchQuery.toLowerCase()))
       : convoMessages;
-    // Chronological list (oldest first) to inject date separators between days
-    const chrono = [...list]; // already oldest-first from backend
-    const withDates = [];
-    let lastDateKey = null;
-    chrono.forEach((msg) => {
-      const d = new Date(msg.createdAt);
-      const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      if (dateKey !== lastDateKey) {
-        withDates.push({ _id: `date_${dateKey}`, type: 'date', label: formatDateLabel(msg.createdAt) });
-        lastDateKey = dateKey;
-      }
-      withDates.push(msg);
-    });
-    // FlatList is inverted so reverse: newest (+ nearest date header) at the top of the reversed array
-    return withDates.reverse();
+    // Newest-first for inverted FlatList
+    return [...list].reverse();
   }, [convoMessages, searchQuery]);
 
-  // Find the last message sent by currentUser (Messenger shows text status on the last sent message)
+  // Find the last message sent by currentUser
   const lastMyMessage = useMemo(() => {
     return displayedMessages.find((m) => {
-      if (m.type === 'date') return false;
       const isMine =
         m.sender?._id?.toString() === currentUser?._id?.toString() ||
         m.sender?.toString() === currentUser?._id?.toString();
@@ -864,96 +850,111 @@ export default function ChatScreen({ route, navigation }) {
   };
 
   // ── Render message ──────────────────────────────────────────────────
-  const renderMessage = ({ item: msg }) => {
-    // ── Date separator pill ─────────────────────────────────────────
-    if (msg.type === 'date') {
-      return (
-        <View style={styles.dateSeparatorRow}>
-          <View style={[styles.dateSeparatorPill, { backgroundColor: theme.sentBubble ? hexToRgba(theme.sentBubble.startsWith('#') ? theme.sentBubble : '#888888', 0.15) : 'rgba(0,0,0,0.08)' }]}>
-            <Text style={[styles.dateSeparatorText, { color: statusColor }]}>{msg.label}</Text>
-          </View>
-        </View>
-      );
-    }
-
+  const renderMessage = ({ item: msg, index }) => {
     const isMine = msg.sender?._id?.toString() === currentUser?._id?.toString() || msg.sender?.toString() === currentUser?._id?.toString();
     const isLastMyMsg = lastMyMessage?._id?.toString() === msg._id?.toString();
     const isTapped = tappedMsgId === msg._id?.toString();
+
+    // ── Date separator ───────────────────────────────────────────────
+    // displayedMessages is newest-first. index+1 is the OLDER message.
+    // Show a date label above (visually) the oldest message of each day.
+    const olderMsg = displayedMessages[index + 1];
+    const thisDay = msg.createdAt ? new Date(msg.createdAt).toDateString() : null;
+    const olderDay = olderMsg?.createdAt ? new Date(olderMsg.createdAt).toDateString() : null;
+    const showDateSeparator = thisDay && thisDay !== olderDay;
+    const pillBg = theme.sentBubble?.startsWith('#')
+      ? hexToRgba(theme.sentBubble, 0.15)
+      : 'rgba(128,128,128,0.15)';
+
+    const datePill = showDateSeparator ? (
+      <View style={styles.dateSeparatorRow}>
+        <View style={[styles.dateSeparatorPill, { backgroundColor: pillBg }]}>
+          <Text style={[styles.dateSeparatorText, { color: statusColor }]}>
+            {formatDateLabel(msg.createdAt)}
+          </Text>
+        </View>
+      </View>
+    ) : null;
 
     const handlePress = () => {
       if (isLastMyMsg && msg.status === 'seen') {
         setShowSeenTime((prev) => !prev);
       }
-      // Toggle tap highlight for any message
       setTappedMsgId((prev) => (prev === msg._id?.toString() ? null : msg._id?.toString()));
     };
 
     if (msg.isDeleted) {
       return (
-        <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
-          <View style={[styles.deletedBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble, opacity: 0.5 }]}>
-            <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontStyle: 'italic', fontSize: 13 }}>
-              Message deleted
-            </Text>
+        <View>
+          {datePill}
+          <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
+            <View style={[styles.deletedBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble, opacity: 0.5 }]}>
+              <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontStyle: 'italic', fontSize: 13 }}>
+                Message deleted
+              </Text>
+            </View>
           </View>
         </View>
       );
     }
 
     return (
-      <TouchableOpacity
-        onPress={handlePress}
-        onLongPress={() => onLongPressMessage(msg)}
-        style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}
-        activeOpacity={0.85}
-      >
-        {!isMine && (
-          msg.sender?.avatar ? (
-            <Image source={{ uri: msg.sender.avatar }} style={styles.senderAvatar} />
-          ) : (
-            <LinearGradient colors={['#0084FF', '#0040CC']} style={[styles.senderAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
-              <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>{getInitials(msg.sender?.name)}</Text>
-            </LinearGradient>
-          )
-        )}
-        <View style={styles.bubbleContent}>
-          {msg.images?.length > 0 && (
-            <View style={styles.imageBubbleContainer}>
-              <View style={styles.imageGrid}>
-                {msg.images.map((img, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    onPress={() => setImageViewerData({ uri: img.url, msg })}
-                    onLongPress={() => onLongPressMessage(msg)}
-                    delayLongPress={260}
-                    activeOpacity={0.9}
-                  >
-                    <Image source={{ uri: img.url }} style={styles.messageImage} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+      <View>
+        {datePill}
+        <TouchableOpacity
+          onPress={handlePress}
+          onLongPress={() => onLongPressMessage(msg)}
+          style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}
+          activeOpacity={0.85}
+        >
+          {!isMine && (
+            msg.sender?.avatar ? (
+              <Image source={{ uri: msg.sender.avatar }} style={styles.senderAvatar} />
+            ) : (
+              <LinearGradient colors={['#0084FF', '#0040CC']} style={[styles.senderAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>{getInitials(msg.sender?.name)}</Text>
+              </LinearGradient>
+            )
           )}
-          {msg.isVoiceNote || msg.voiceNoteUrl ? (
-            <View style={[styles.voiceBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}>
-              <VoiceNotePlayer
-                url={msg.voiceNoteUrl}
-                duration={msg.voiceNoteDuration}
-                isMine={isMine}
-                theme={theme}
-              />
-            </View>
-          ) : null}
-          {msg.text ? (
-            <View style={[styles.textBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}>
-              <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 15, lineHeight: 22 }}>
-                {msg.text}
-              </Text>
-            </View>
-          ) : null}
-          {renderStatusFooter(msg, isMine)}
-        </View>
-      </TouchableOpacity>
+          <View style={styles.bubbleContent}>
+            {msg.images?.length > 0 && (
+              <View style={styles.imageBubbleContainer}>
+                <View style={styles.imageGrid}>
+                  {msg.images.map((img, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => setImageViewerData({ uri: img.url, msg })}
+                      onLongPress={() => onLongPressMessage(msg)}
+                      delayLongPress={260}
+                      activeOpacity={0.9}
+                    >
+                      <Image source={{ uri: img.url }} style={styles.messageImage} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+            {msg.isVoiceNote || msg.voiceNoteUrl ? (
+              <View style={[styles.voiceBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}>
+                <VoiceNotePlayer
+                  url={msg.voiceNoteUrl}
+                  duration={msg.voiceNoteDuration}
+                  isMine={isMine}
+                  theme={theme}
+                />
+              </View>
+            ) : null}
+            {msg.text ? (
+              <View style={[styles.textBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}>
+                <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 15, lineHeight: 22 }}>
+                  {msg.text}
+                </Text>
+              </View>
+            ) : null}
+            {renderStatusFooter(msg, isMine)}
+          </View>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -1513,8 +1514,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 10,
-    // Inverted FlatList rotates content 180°; counter-rotate so date label is right-side-up
-    transform: [{ rotate: '180deg' }],
   },
   dateSeparatorPill: {
     paddingHorizontal: 14,
