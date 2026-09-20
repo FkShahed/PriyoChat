@@ -992,7 +992,9 @@ export default function ChatScreen({ route, navigation }) {
               activeOpacity={0.7}
               style={[styles.callBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}
             >
-              <Ionicons name={callIcon} size={20} color={iconColor} />
+              <View style={[styles.callIconBadge, { backgroundColor: iconColor }]}>
+                <Ionicons name={isVideo ? 'videocam' : 'call'} size={18} color="#FFF" />
+              </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 14, fontWeight: '600' }}>
                   {label}{durationStr}
@@ -1001,7 +1003,6 @@ export default function ChatScreen({ route, navigation }) {
                   {formatMessageTime(msg.createdAt)}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={isMine ? theme.sentText : theme.receivedText} style={{ opacity: 0.4 }} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1658,5 +1659,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 16,
     minWidth: 190,
+  },
+  callIconBadge: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
   },
 });
