@@ -61,7 +61,7 @@ export default function SplashScreen({ navigation }) {
       >
         {/* Logo */}
         <Image
-          source={require('../../../assets/logo.png')}
+          source={require('../../../assets/logo_transparent.png')}
           style={styles.logoImage}
           resizeMode="cover"
         />

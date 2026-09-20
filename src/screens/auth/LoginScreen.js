@@ -94,7 +94,7 @@ export default function LoginScreen({ navigation }) {
             {/* ── Header ── */}
             <View style={styles.header}>
               <Image
-                source={require('../../../assets/logo.png')}
+                source={require('../../../assets/logo_transparent.png')}
                 style={styles.logoImg}
                 resizeMode="cover"
               />

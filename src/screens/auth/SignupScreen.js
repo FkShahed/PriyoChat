@@ -87,7 +87,7 @@ export default function SignupScreen({ navigation }) {
             {/* ── Header (same layout as Login) ── */}
             <View style={styles.header}>
               <Image
-                source={require('../../../assets/logo.png')}
+                source={require('../../../assets/logo_transparent.png')}
                 style={styles.logoImg}
                 resizeMode="cover"
               />
