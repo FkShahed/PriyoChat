@@ -325,6 +325,16 @@ export default function ChatScreen({ route, navigation }) {
     return theme.timestampColor || 'rgba(0, 0, 0, 0.45)';
   }, [isDarkTheme, theme.timestampColor]);
 
+  // Subtle border that complements the active theme color
+  const textInputBorderColor = useMemo(() => {
+    const base = theme.sentBubble || (isDarkTheme ? '#FFFFFF' : '#000000');
+    // Use hexToRgba for hex values, fallback to fixed opacity rgba
+    if (base.startsWith('#')) {
+      return hexToRgba(base, isDarkTheme ? 0.25 : 0.20);
+    }
+    return isDarkTheme ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.12)';
+  }, [theme.sentBubble, isDarkTheme]);
+
   const convoMessages = messages[conversationId] || [];
 
   const [text, setText] = useState('');
@@ -1084,7 +1094,8 @@ export default function ChatScreen({ route, navigation }) {
                 {
                   color: theme.inputText,
                   backgroundColor: textInputBg,
-                  borderWidth: 0,
+                  borderWidth: 1,
+                  borderColor: textInputBorderColor,
                 },
               ]}
               value={text}
