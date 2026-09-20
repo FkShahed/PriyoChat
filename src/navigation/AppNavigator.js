@@ -38,7 +38,7 @@ function TabIcon({ name, focused, C }) {
   let iconName;
   if (name === 'Chats') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
   else if (name === 'Calls') iconName = focused ? 'call' : 'call-outline';
-  else if (name === 'Requests') iconName = focused ? 'person-add' : 'person-add-outline';
+  else if (name === 'Friends') iconName = focused ? 'people' : 'people-outline';
   else if (name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
 
   return <Ionicons name={iconName} size={24} color={focused ? '#0084FF' : C.textSecondary} />;
@@ -65,7 +65,7 @@ function MainTabs() {
     >
       <Tab.Screen name="Chats" component={ChatListScreen} />
       <Tab.Screen name="Calls" component={CallsListScreen} />
-      <Tab.Screen name="Requests" component={FriendRequestsScreen} />
+      <Tab.Screen name="Friends" component={FriendsListScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
@@ -175,7 +175,7 @@ export default function AppNavigator() {
           <Stack.Screen name="UserProfile" component={UserProfileScreen} />
           <Stack.Screen name="SharedMedia" component={SharedMediaScreen} />
           <Stack.Screen name="SearchUsers" component={SearchUsersScreen} />
-          <Stack.Screen name="FriendsList" component={FriendsListScreen} />
+          <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
           <Stack.Screen name="Call" component={CallScreen} />
           <Stack.Screen name="IncomingCall" component={IncomingCallScreen} />
           <Stack.Screen name="WarningDetails" component={WarningDetailsScreen} />

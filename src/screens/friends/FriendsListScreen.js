@@ -52,6 +52,17 @@ export default function FriendsListScreen({ navigation }) {
         />
       </View>
 
+      <TouchableOpacity
+        style={[styles.requestsBtn, { borderBottomColor: C.border }]}
+        onPress={() => navigation.navigate('FriendRequests')}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Ionicons name="person-add" size={20} color="#0084FF" />
+          <Text style={[styles.requestsText, { color: C.text }]}>Friend Requests</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={C.textSecondary} />
+      </TouchableOpacity>
+
       <FlatList
         data={filteredFriends}
         keyExtractor={(item) => item._id}
@@ -101,6 +112,12 @@ const styles = StyleSheet.create({
     margin: 16, paddingHorizontal: 12, borderRadius: 12, height: 44,
   },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 16 },
+  requestsBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 0.5, marginBottom: 8,
+  },
+  requestsText: { fontSize: 16, fontWeight: '600', marginLeft: 12 },
   friendItem: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12,

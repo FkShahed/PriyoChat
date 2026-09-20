@@ -48,7 +48,12 @@ export default function FriendRequestsScreen({ navigation }) {
     <View style={[styles.container, { backgroundColor: C.bg }]}>
       <StatusBar barStyle={C.bg === '#121212' ? 'light-content' : 'dark-content'} />
       <View style={[styles.header, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
-        <Text style={[styles.title, { color: C.text }]}>Friend Requests</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 12 }}>
+            <Text style={{ color: '#0084FF', fontSize: 24, fontWeight: '700' }}>‹</Text>
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: C.text }]}>Friend Requests</Text>
+        </View>
       </View>
 
       {loading ? (
