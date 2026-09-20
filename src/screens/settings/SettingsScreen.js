@@ -422,25 +422,33 @@ export default function SettingsScreen({ navigation }) {
 
       {/* ── Profile section ─────────────────────────────────────── */}
       <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Profile</Text>
+        <Text style={[styles.sectionTitle, { color: C.textSecondary, marginBottom: -4 }]}>Profile</Text>
 
         {editing ? (
           <>
-            <TextInput
-              style={[styles.editInput, { backgroundColor: C.surfaceAlt, color: C.text }]}
-              value={name}
-              onChangeText={setName}
-              placeholder="Display Name"
-              placeholderTextColor={C.textSecondary}
-            />
-            <TextInput
-              style={[styles.editInput, { backgroundColor: C.surfaceAlt, color: C.text }]}
-              value={status}
-              onChangeText={setStatus}
-              placeholder="Status message"
-              placeholderTextColor={C.textSecondary}
-              maxLength={150}
-            />
+            {/* Name input */}
+            <View style={[styles.inputWrap, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+              <Ionicons name="person-outline" size={18} color={C.textSecondary} style={{ marginRight: 10 }} />
+              <TextInput
+                style={[styles.editInput, { color: C.text, flex: 1 }]}
+                value={name}
+                onChangeText={setName}
+                placeholder="Display Name"
+                placeholderTextColor={C.textSecondary}
+              />
+            </View>
+            {/* Status input */}
+            <View style={[styles.inputWrap, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={C.textSecondary} style={{ marginRight: 10 }} />
+              <TextInput
+                style={[styles.editInput, { color: C.text, flex: 1 }]}
+                value={status}
+                onChangeText={setStatus}
+                placeholder="Status message"
+                placeholderTextColor={C.textSecondary}
+                maxLength={150}
+              />
+            </View>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity style={[styles.actionBtn, { flex: 1 }]} onPress={handleSave} disabled={loading}>
                 {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.actionBtnText}>Save</Text>}
@@ -455,20 +463,37 @@ export default function SettingsScreen({ navigation }) {
           </>
         ) : (
           <>
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Name</Text>
-              <Text style={[styles.infoValue, { color: C.text }]}>{user?.name}</Text>
+            <View style={[styles.permRow, { borderBottomColor: C.border }]}>
+              <View style={styles.permInfo}>
+                <View style={[styles.iconBox, { backgroundColor: 'rgba(0,132,255,0.1)' }]}>
+                  <Ionicons name="person" size={18} color="#0084FF" />
+                </View>
+                <View>
+                  <Text style={[styles.permLabel, { color: C.text }]}>Display Name</Text>
+                  <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }}>{user?.name}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setEditing(true)}>
+                <Ionicons name="create-outline" size={20} color="#0084FF" />
+              </TouchableOpacity>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Status</Text>
-              <Text style={[styles.infoValue, { color: C.text }]} numberOfLines={2}>
-                {user?.status || 'No status set'}
-              </Text>
+
+            <View style={[styles.permRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.permInfo}>
+                <View style={[styles.iconBox, { backgroundColor: 'rgba(52,199,89,0.1)' }]}>
+                  <Ionicons name="chatbubble-ellipses" size={18} color="#34C759" />
+                </View>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={[styles.permLabel, { color: C.text }]}>Status</Text>
+                  <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }} numberOfLines={2}>
+                    {user?.status || 'No status set'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setEditing(true)}>
+                <Ionicons name="create-outline" size={20} color="#0084FF" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={[styles.actionBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]} onPress={() => setEditing(true)}>
-              <Ionicons name="pencil" size={16} color="#FFF" />
-              <Text style={styles.actionBtnText}>Edit Profile</Text>
-            </TouchableOpacity>
           </>
         )}
       </View>
@@ -716,8 +741,17 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   infoLabel: { fontSize: 15, fontWeight: '500' },
   infoValue: { fontSize: 15, fontWeight: '600', flex: 1, textAlign: 'right', marginLeft: 12 },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderWidth: 1,
+  },
   editInput: {
-    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15,
+    fontSize: 15,
+    paddingVertical: 10,
   },
   actionBtn: { backgroundColor: '#0084FF', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   actionBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
