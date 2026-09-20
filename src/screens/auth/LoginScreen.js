@@ -93,12 +93,14 @@ export default function LoginScreen({ navigation }) {
           >
             {/* ── Header ── */}
             <View style={styles.header}>
-              <View style={styles.logoBadge}>
-                <Image
-                  source={require('../../../assets/logo.png')}
-                  style={styles.logoImg}
-                  resizeMode="contain"
-                />
+              <View style={styles.logoBadgeOuter}>
+                <View style={styles.logoBadgeInner}>
+                  <Image
+                    source={require('../../../assets/logo.png')}
+                    style={styles.logoImg}
+                    resizeMode="contain"
+                  />
+                </View>
               </View>
               <Text style={styles.title}>Welcome back</Text>
               <Text style={styles.subtitle}>Sign in to your account</Text>
@@ -237,17 +239,15 @@ const styles = StyleSheet.create({
 
   // ── Header — same visual as Signup, just tighter margin ────────────────
   header: { alignItems: 'center', marginBottom: 20 },
-  logoBadge: {
-    width: 60, height: 60, borderRadius: 17,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 14,
-    shadowColor: '#0084FF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35, shadowRadius: 14,
-    elevation: 0,
+  logoBadgeOuter: {
+    width: 64, height: 64, borderRadius: 20, padding: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.22)',
+    marginBottom: 14, shadowColor: '#0084FF', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 0,
   },
-  logoImg: { width: 48, height: 48, borderRadius: 12 },
+  logoBadgeInner: {
+    flex: 1, borderRadius: 18, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  },
+  logoImg: { width: 56, height: 56, borderRadius: 16 },
   title: {
     fontSize: 24, fontWeight: '800', color: '#FFFFFF',
     letterSpacing: -0.5, marginBottom: 4,
