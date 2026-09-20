@@ -4,13 +4,26 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import useAuthStore from '../../store/useAuthStore';
+
 const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen({ navigation }) {
+  const { isAuthenticated, user, isLoading } = useAuthStore();
   const fadeUpAnim = useRef(new Animated.Value(0)).current;
   const fadeDownAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(50)).current;
   const slideDownAnim = useRef(new Animated.Value(-50)).current;
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      if (user?.profileSetup) {
+        navigation.replace('MainTabs');
+      } else {
+        navigation.replace('ProfileSetup');
+      }
+    }
+  }, [isAuthenticated, isLoading, user]);
 
   useEffect(() => {
     Animated.sequence([

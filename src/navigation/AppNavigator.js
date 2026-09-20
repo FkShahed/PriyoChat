@@ -160,7 +160,11 @@ export default function AppNavigator() {
       <CallObserver />
       <LogoutObserver />
       <NavigationContainer ref={navigationRef}>
-        <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
+        <Stack.Navigator 
+          key={isAuthenticated ? 'auth-app' : 'guest-app'}
+          screenOptions={{ headerShown: false }} 
+          initialRouteName={initialRoute}
+        >
           {/* Auth Flow */}
           <Stack.Screen name="Splash" component={SplashScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
