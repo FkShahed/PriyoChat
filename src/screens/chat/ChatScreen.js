@@ -107,6 +107,28 @@ function isLightHeader(theme) {
   return false;
 }
 
+function hexToRgba(hex, alpha = 0.85) {
+  if (!hex || typeof hex !== 'string') return `rgba(255, 255, 255, ${alpha})`;
+  const rgbMatch = hex.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (rgbMatch) {
+    return `rgba(${rgbMatch[1]}, ${rgbMatch[2]}, ${rgbMatch[3]}, ${alpha})`;
+  }
+  const cleanHex = hex.replace('#', '');
+  if (cleanHex.length === 3) {
+    const r = parseInt(cleanHex[0] + cleanHex[0], 16);
+    const g = parseInt(cleanHex[1] + cleanHex[1], 16);
+    const b = parseInt(cleanHex[2] + cleanHex[2], 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  if (cleanHex.length === 6) {
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return `rgba(255, 255, 255, ${alpha})`;
+}
+
 export default function ChatScreen({ route, navigation }) {
   const { conversation: initialConvo, otherUser } = route.params;
   const currentUser = useAuthStore((s) => s.user);
@@ -148,6 +170,29 @@ export default function ChatScreen({ route, navigation }) {
   const headerNameColor = isHeaderLight ? (theme.headerText || '#1C1C1C') : '#FFFFFF';
   const headerStatusColor = isHeaderLight ? 'rgba(0, 0, 0, 0.65)' : 'rgba(255, 255, 255, 0.8)';
   const statusBarStyle = isHeaderLight ? 'dark-content' : 'light-content';
+
+  // Frosted-glass / blur styling for bottom input bar
+  const isDarkTheme = !theme.isLight;
+  const glassGradient = useMemo(() => {
+    const baseColor = theme.inputBg || theme.background || (isDarkTheme ? '#141A24' : '#F5F5F5');
+    return [
+      hexToRgba(baseColor, 0.68),
+      hexToRgba(baseColor, 0.84),
+      hexToRgba(baseColor, 0.95),
+    ];
+  }, [theme.inputBg, theme.background, isDarkTheme]);
+
+  const textInputBg = useMemo(() => {
+    return isDarkTheme ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.85)';
+  }, [isDarkTheme]);
+
+  const textInputBorder = isDarkTheme
+    ? 'rgba(255, 255, 255, 0.12)'
+    : 'rgba(0, 0, 0, 0.07)';
+
+  const glassBorderTop = isDarkTheme
+    ? 'rgba(255, 255, 255, 0.12)'
+    : 'rgba(0, 0, 0, 0.06)';
 
   const convoMessages = messages[conversationId] || [];
 
@@ -536,18 +581,15 @@ export default function ChatScreen({ route, navigation }) {
         />
       )}
 
-      {/* ── Input bar ──────────────────────────────────────────────── */}
-      <View>
+      {/* ── Input bar (Frosted Glass / Blurry Theme-adaptive Bar) ──── */}
+      <LinearGradient
+        colors={glassGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={[styles.glassInputContainer, { borderTopColor: glassBorderTop }]}
+      >
         {selectedImages.length > 0 && (
-          <View
-            style={[
-              styles.imagePreviewContainer,
-              {
-                backgroundColor: theme.inputBg,
-                borderTopColor: theme.isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)',
-              },
-            ]}
-          >
+          <View style={[styles.imagePreviewContainer, { borderBottomColor: glassBorderTop }]}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {selectedImages.map((img, idx) => (
                 <View key={idx} style={styles.previewImageWrapper}>
@@ -560,20 +602,20 @@ export default function ChatScreen({ route, navigation }) {
             </ScrollView>
           </View>
         )}
-        <View
-          style={[
-            styles.inputRow,
-            {
-              backgroundColor: theme.inputBg,
-              borderTopColor: theme.isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)',
-            },
-          ]}
-        >
+        <View style={styles.inputRow}>
           <TouchableOpacity onPress={pickImages} style={styles.attachBtn} disabled={uploading || sending}>
             <Ionicons name="attach" size={24} color={theme.sentBubble} />
           </TouchableOpacity>
           <TextInput
-            style={[styles.textInput, { color: theme.inputText, backgroundColor: theme.background }]}
+            style={[
+              styles.textInput,
+              {
+                color: theme.inputText,
+                backgroundColor: textInputBg,
+                borderColor: textInputBorder,
+                borderWidth: 1,
+              },
+            ]}
             value={text}
             onChangeText={handleTyping}
             onFocus={() => {
@@ -588,7 +630,11 @@ export default function ChatScreen({ route, navigation }) {
             onPress={sendMessage}
             style={[
               styles.sendBtn,
-              { backgroundColor: theme.sentBubble, opacity: (!text.trim() && selectedImages.length === 0) ? 0.45 : 1 },
+              {
+                backgroundColor: theme.sentBubble,
+                opacity: (!text.trim() && selectedImages.length === 0) ? 0.45 : 1,
+                shadowColor: theme.sentBubble,
+              },
             ]}
             disabled={sending || uploading || (!text.trim() && selectedImages.length === 0)}
           >
@@ -597,7 +643,7 @@ export default function ChatScreen({ route, navigation }) {
               : <Ionicons name="send" size={18} color="#FFF" />}
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* ── Full-screen image viewer ────────────────────────────────── */}
       <ImageViewer
@@ -698,14 +744,29 @@ const styles = StyleSheet.create({
   },
   imageViewerImg: { width: SCREEN_W, height: SCREEN_H * 0.8 },
   // Input
+  glassInputContainer: {
+    borderTopWidth: 0.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 4,
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    padding: 8,
-    borderTopWidth: 0.5,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
   },
-  attachBtn: { padding: 8, justifyContent: 'center' },
-  imagePreviewContainer: { padding: 8, borderTopWidth: 0.5 },
+  attachBtn: {
+    padding: 8,
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  imagePreviewContainer: {
+    padding: 8,
+    borderBottomWidth: 0.5,
+  },
   previewImageWrapper: { marginRight: 8, position: 'relative', marginTop: 6 },
   previewImage: { width: 60, height: 60, borderRadius: 8 },
   removeImageBtn: {
@@ -714,11 +775,28 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF',
   },
   textInput: {
-    flex: 1, maxHeight: 120, minHeight: 40,
-    borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10,
-    fontSize: 15, marginHorizontal: 8,
+    flex: 1,
+    maxHeight: 120,
+    minHeight: 40,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingTop: 9,
+    paddingBottom: 9,
+    fontSize: 15,
+    marginHorizontal: 8,
   },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 2,
+    marginBottom: 2,
+  },
   // Bubbles
   bubble: { marginVertical: 3, maxWidth: '80%' },
   myBubbleRow: { alignSelf: 'flex-end', marginRight: 8 },
