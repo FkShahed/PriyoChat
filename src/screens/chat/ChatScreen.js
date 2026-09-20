@@ -150,10 +150,14 @@ export default function ChatScreen({ route, navigation }) {
     : formatLastSeen(otherUser?.lastSeen || otherUser?.updatedAt);
 
   const scrollToBottom = useCallback((animated = true) => {
-    if (flatListRef.current && convoMessages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated });
+    if (flatListRef.current) {
+      try {
+        flatListRef.current.scrollToEnd({ animated });
+      } catch (err) {
+        // safe ignore during unmount or layout transition
+      }
     }
-  }, [convoMessages.length]);
+  }, []);
 
   // Keep last message visible when keyboard opens
   useEffect(() => {
@@ -162,12 +166,17 @@ export default function ChatScreen({ route, navigation }) {
 
     const showSub = Keyboard.addListener(showEvent, () => {
       isKeyboardVisible.current = true;
-      setTimeout(() => scrollToBottom(true), 50);
-      setTimeout(() => scrollToBottom(true), 150);
+      requestAnimationFrame(() => scrollToBottom(false));
+      setTimeout(() => scrollToBottom(false), 50);
+      setTimeout(() => scrollToBottom(true), 120);
+      setTimeout(() => scrollToBottom(true), 280);
+      setTimeout(() => scrollToBottom(true), 450);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
       isKeyboardVisible.current = false;
+      setTimeout(() => scrollToBottom(false), 50);
+      setTimeout(() => scrollToBottom(true), 150);
     });
 
     return () => {
@@ -460,17 +469,23 @@ export default function ChatScreen({ route, navigation }) {
           data={displayedMessages}
           keyExtractor={(item) => item._id}
           renderItem={renderMessage}
-          contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 8 }}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 24, paddingHorizontal: 8 }}
+          initialNumToRender={30}
+          maxToRenderPerBatch={30}
+          windowSize={21}
           onEndReached={() => hasMore && !searchVisible && loadMessages(page + 1, true)}
           onEndReachedThreshold={0.3}
           onLayout={() => {
             if (convoMessages.length > 0 && !searchVisible) {
-              scrollToBottom(false);
+              requestAnimationFrame(() => scrollToBottom(false));
+              setTimeout(() => scrollToBottom(false), 50);
+              setTimeout(() => scrollToBottom(true), 180);
             }
           }}
           onContentSizeChange={() => {
-            if (convoMessages.length > 0 && !searchVisible && isKeyboardVisible.current) {
-              scrollToBottom(true);
+            if (convoMessages.length > 0 && !searchVisible) {
+              scrollToBottom(false);
+              setTimeout(() => scrollToBottom(true), 80);
             }
           }}
           ListFooterComponent={isTyping ? <TypingIndicator theme={theme} /> : null}
@@ -511,8 +526,10 @@ export default function ChatScreen({ route, navigation }) {
             value={text}
             onChangeText={handleTyping}
             onFocus={() => {
-              setTimeout(() => scrollToBottom(true), 100);
-              setTimeout(() => scrollToBottom(true), 250);
+              requestAnimationFrame(() => scrollToBottom(false));
+              setTimeout(() => scrollToBottom(false), 50);
+              setTimeout(() => scrollToBottom(true), 150);
+              setTimeout(() => scrollToBottom(true), 320);
             }}
             placeholder="Message..."
             placeholderTextColor={theme.placeholderText}
