@@ -29,11 +29,12 @@ export default function SettingsScreen({ navigation }) {
   const logout = useAuthStore((s) => s.logout);
   const updateUser = useAuthStore((s) => s.updateUser);
   const disconnect = useSocketStore((s) => s.disconnect);
-  const { appTheme, setAppTheme } = useThemeStore();
+  const { appTheme, setAppTheme, resolvedTheme } = useThemeStore();
   const baseC = useColors();
+  const isDark = resolvedTheme === 'dark';
   
-  // Override colors for Settings to match Auth theme with Glassmorphism
-  const C = {
+  // Override colors for Settings to match Auth theme with Glassmorphism only if Dark Mode
+  const C = isDark ? {
     ...baseC,
     bg: '#070B19',
     surface: 'rgba(255, 255, 255, 0.05)',
@@ -41,7 +42,7 @@ export default function SettingsScreen({ navigation }) {
     text: '#FFFFFF',
     textSecondary: 'rgba(255, 255, 255, 0.6)',
     border: 'rgba(255, 255, 255, 0.1)'
-  };
+  } : baseC;
 
   const [name, setName] = useState(user?.name || '');
   const [status, setStatus] = useState(user?.status || '');
@@ -394,18 +395,22 @@ export default function SettingsScreen({ navigation }) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: '#070B19' }]}>
-      <LinearGradient
-        colors={['#070B19', '#0D1A3A', '#060A17']}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={styles.orbTopRight} />
-      <View style={styles.orbBottomLeft} />
+    <View style={[styles.container, { backgroundColor: C.bg }]}>
+      {isDark && (
+        <>
+          <LinearGradient
+            colors={['#070B19', '#0D1A3A', '#060A17']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.orbTopRight} />
+          <View style={styles.orbBottomLeft} />
+        </>
+      )}
 
       <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
         {/* ── Profile header ──────────────────────────────────────── */}
-        <View style={styles.headerGrad}>
+        <View style={isDark ? styles.headerGradDark : styles.headerGradLight}>
           <TouchableOpacity onPress={pickAvatar} style={styles.avatarWrapper}>
             {user?.avatar ? (
               <Image source={{ uri: user.avatar }} style={styles.avatar} />
@@ -418,12 +423,12 @@ export default function SettingsScreen({ navigation }) {
               {loading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="camera" size={16} color="#FFF" />}
             </View>
           </TouchableOpacity>
-          <Text style={styles.headerName}>{user?.name}</Text>
-          <Text style={styles.headerEmail}>{user?.email}</Text>
+          <Text style={[styles.headerName, { color: C.text }]}>{user?.name}</Text>
+          <Text style={[styles.headerEmail, { color: C.textSecondary }]}>{user?.email}</Text>
         </View>
 
       {/* ── Profile section ─────────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface }]}>
+      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
         <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Profile</Text>
 
         {editing ? (
@@ -476,7 +481,7 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       {/* ── Appearance section ──────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface }]}>
+      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
         <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Appearance</Text>
         <View style={styles.themeRow}>
           {THEME_OPTIONS.map((opt) => (
@@ -502,7 +507,7 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       {/* ── Permissions section ──────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface }]}>
+      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Permissions</Text>
           <TouchableOpacity onPress={grantAllPermissions}>
@@ -538,7 +543,7 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       {/* ── Call Settings section ───────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface }]}>
+      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
         <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Call Settings</Text>
         <Text style={{ color: C.text, fontSize: 13, marginBottom: 12, lineHeight: 18, opacity: 0.8 }}>
           Choose a custom sound to play when receiving an audio or video call.
@@ -583,7 +588,7 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       {/* ── Account section ─────────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface }]}>
+      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
         <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Account</Text>
         <View style={styles.infoRow}>
           <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Email</Text>
@@ -629,7 +634,7 @@ export default function SettingsScreen({ navigation }) {
 
 
       {/* ── Support section ─────────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface }]}>
+      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
         <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Support</Text>
         <TouchableOpacity 
           style={[styles.updateBtn, { backgroundColor: C.surfaceAlt, borderColor: 'transparent' }]} 
@@ -641,7 +646,7 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       {/* ── Logout ──────────────────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface }]}>
+      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
         <TouchableOpacity style={[styles.dangerBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={19} color="#FF3B30" />
           <Text style={styles.dangerBtnText}>Logout</Text>
@@ -694,7 +699,8 @@ const styles = StyleSheet.create({
     width: 400, height: 400, borderRadius: 200,
     backgroundColor: 'rgba(0, 198, 255, 0.08)',
   },
-  headerGrad: { alignItems: 'center', paddingTop: 64, paddingBottom: 24 },
+  headerGradDark: { alignItems: 'center', paddingTop: 64, paddingBottom: 24 },
+  headerGradLight: { alignItems: 'center', paddingTop: 64, paddingBottom: 24, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
   avatarWrapper: { position: 'relative', marginBottom: 12 },
   avatar: { width: 94, height: 94, borderRadius: 47, borderWidth: 3, borderColor: 'rgba(255,255,255,0.5)' },
   cameraOverlay: {
@@ -702,10 +708,10 @@ const styles = StyleSheet.create({
     width: 30, height: 30, backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 15, alignItems: 'center', justifyContent: 'center',
   },
-  headerName: { fontSize: 22, fontWeight: '700', color: '#FFF', marginBottom: 4 },
-  headerEmail: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
-  section: { margin: 16, borderRadius: 20, padding: 20, gap: 16, marginBottom: 0, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)' },
+  headerName: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
+  headerEmail: { fontSize: 13 },
+  section: { margin: 16, borderRadius: 20, padding: 20, gap: 16, marginBottom: 0, borderWidth: 1 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   infoLabel: { fontSize: 15, fontWeight: '500' },
   infoValue: { fontSize: 15, fontWeight: '600', flex: 1, textAlign: 'right', marginLeft: 12 },
