@@ -86,11 +86,13 @@ export default function SignupScreen({ navigation }) {
           >
             {/* ── Header (same layout as Login) ── */}
             <View style={styles.header}>
-              <Image
-                source={require('../../../assets/logo.png')}
-                style={styles.logoImg}
-                resizeMode="cover"
-              />
+              <View style={styles.logoBadge}>
+                <Image
+                  source={require('../../../assets/logo.png')}
+                  style={styles.logoImg}
+                  resizeMode="cover"
+                />
+              </View>
               <Text style={styles.title}>Create Account</Text>
               <Text style={styles.subtitle}>Join PriyoChat for free</Text>
             </View>
@@ -250,9 +252,14 @@ const styles = StyleSheet.create({
 
   // ── Header — same visual as Login, just tighter margin ────────────────
   header: { alignItems: 'center', marginBottom: 20 },
-  logoImg: {
+  logoBadge: {
     width: 64, height: 64, borderRadius: 16,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.22)',
+    marginBottom: 14, shadowColor: '#0084FF', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 0,
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  },
+  logoImg: {
+    width: '100%', height: '100%',
   },
   title: {
     fontSize: 24, fontWeight: '800', color: '#FFFFFF',
