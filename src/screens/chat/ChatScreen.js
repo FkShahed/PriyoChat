@@ -1512,6 +1512,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 10,
+    // Inverted FlatList flips the container with scaleY:-1; counter-flip so text is right-side-up
+    transform: [{ scaleY: -1 }],
   },
   dateSeparatorPill: {
     paddingHorizontal: 14,
