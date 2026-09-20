@@ -144,6 +144,7 @@ export default function useWebRTCCall({
       console.log('[WebRTC] connectionState:', state);
 
       if (state === 'connected') {
+        if (InCallManager) InCallManager.stopRingback();
         useCallStore.getState().setCallConnected();
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
@@ -161,6 +162,7 @@ export default function useWebRTCCall({
       console.log('[WebRTC] iceConnectionState:', iceState);
 
       if (iceState === 'connected' || iceState === 'completed') {
+        if (InCallManager) InCallManager.stopRingback();
         useCallStore.getState().setCallConnected();
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
@@ -226,7 +228,8 @@ export default function useWebRTCCall({
     // Start InCallManager
     if (InCallManager) {
       try {
-        InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
+        const ringback = isReceiver ? '' : '_DEFAULT_';
+        InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback });
         InCallManager.setForceSpeakerphoneOn(callType === 'video');
         console.log('[InCallManager] Started, speakerphone:', callType === 'video');
       } catch (e) {
