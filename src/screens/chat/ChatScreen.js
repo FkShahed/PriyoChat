@@ -349,6 +349,7 @@ export default function ChatScreen({ route, navigation }) {
   const [imageViewerData, setImageViewerData] = useState(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [showSeenTime, setShowSeenTime] = useState(false);
+  const [tappedMsgId, setTappedMsgId] = useState(null);
 
   // Voice recording state
   const [recording, setRecording] = useState(null);
@@ -721,16 +722,46 @@ export default function ChatScreen({ route, navigation }) {
     ]);
   };
 
+  // Helper: human-readable date label for separators
+  const formatDateLabel = (dateStr) => {
+    const d = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const sameDay = (a, b) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+    if (sameDay(d, today)) return 'Today';
+    if (sameDay(d, yesterday)) return 'Yesterday';
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   const displayedMessages = useMemo(() => {
     const list = searchQuery.trim()
       ? convoMessages.filter(m => m.text?.toLowerCase()?.includes(searchQuery.toLowerCase()))
       : convoMessages;
-    return [...list].reverse();
+    // Chronological list (oldest first) to inject date separators between days
+    const chrono = [...list]; // already oldest-first from backend
+    const withDates = [];
+    let lastDateKey = null;
+    chrono.forEach((msg) => {
+      const d = new Date(msg.createdAt);
+      const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (dateKey !== lastDateKey) {
+        withDates.push({ _id: `date_${dateKey}`, type: 'date', label: formatDateLabel(msg.createdAt) });
+        lastDateKey = dateKey;
+      }
+      withDates.push(msg);
+    });
+    // FlatList is inverted so reverse: newest (+ nearest date header) at the top of the reversed array
+    return withDates.reverse();
   }, [convoMessages, searchQuery]);
 
   // Find the last message sent by currentUser (Messenger shows text status on the last sent message)
   const lastMyMessage = useMemo(() => {
     return displayedMessages.find((m) => {
+      if (m.type === 'date') return false;
       const isMine =
         m.sender?._id?.toString() === currentUser?._id?.toString() ||
         m.sender?.toString() === currentUser?._id?.toString();
@@ -739,7 +770,10 @@ export default function ChatScreen({ route, navigation }) {
   }, [displayedMessages, currentUser]);
 
   const renderStatusFooter = (msg, isMine) => {
+    const isTapped = tappedMsgId === msg._id?.toString();
+
     if (!isMine) {
+      // Their messages: show time always (not just on tap, consistent with Messenger)
       return (
         <View style={[styles.statusFooterRow, styles.statusFooterTheir]}>
           <Text style={[styles.statusFooterText, { color: statusColor }]}>
@@ -753,11 +787,12 @@ export default function ChatScreen({ route, navigation }) {
     const isSending = msg.status === 'sending';
     const isFailed = msg.status === 'failed';
 
+    // Seen status for last message: always show mini avatar; show seen time when tapped
     if (isLastMyMsg && msg.status === 'seen') {
       const seenTime = formatMessageTime(msg.seenAt || msg.updatedAt || msg.createdAt);
       return (
         <View style={[styles.statusFooterRow, styles.statusFooterMine, { alignItems: 'center' }]}>
-          {showSeenTime && (
+          {(showSeenTime || isTapped) && (
             <Text style={[styles.statusFooterText, { color: statusColor, marginRight: 5 }]}>
               {`Seen ${seenTime}`}
             </Text>
@@ -778,19 +813,21 @@ export default function ChatScreen({ route, navigation }) {
       );
     }
 
+    // For my messages: show full status only for last msg or when this specific msg is tapped
+    const showStatus = isLastMyMsg || isTapped;
+    if (!showStatus) return null;
+
     let statusText = '';
     if (isSending) {
       statusText = 'Sending...';
     } else if (isFailed) {
       statusText = 'Failed';
-    } else if (isLastMyMsg) {
-      if (msg.status === 'delivered') {
-        statusText = 'Delivered';
-      } else {
-        statusText = `Sent • ${formatMessageTime(msg.createdAt)}`;
-      }
+    } else if (msg.status === 'seen') {
+      statusText = `Seen • ${formatMessageTime(msg.seenAt || msg.createdAt)}`;
+    } else if (msg.status === 'delivered') {
+      statusText = `Delivered • ${formatMessageTime(msg.createdAt)}`;
     } else {
-      statusText = formatMessageTime(msg.createdAt);
+      statusText = `Sent • ${formatMessageTime(msg.createdAt)}`;
     }
 
     return (
@@ -804,8 +841,29 @@ export default function ChatScreen({ route, navigation }) {
 
   // ── Render message ──────────────────────────────────────────────────
   const renderMessage = ({ item: msg }) => {
+    // ── Date separator pill ─────────────────────────────────────────
+    if (msg.type === 'date') {
+      return (
+        <View style={styles.dateSeparatorRow}>
+          <View style={[styles.dateSeparatorPill, { backgroundColor: theme.sentBubble ? hexToRgba(theme.sentBubble.startsWith('#') ? theme.sentBubble : '#888888', 0.15) : 'rgba(0,0,0,0.08)' }]}>
+            <Text style={[styles.dateSeparatorText, { color: statusColor }]}>{msg.label}</Text>
+          </View>
+        </View>
+      );
+    }
+
     const isMine = msg.sender?._id?.toString() === currentUser?._id?.toString() || msg.sender?.toString() === currentUser?._id?.toString();
     const isLastMyMsg = lastMyMessage?._id?.toString() === msg._id?.toString();
+    const isTapped = tappedMsgId === msg._id?.toString();
+
+    const handlePress = () => {
+      if (isLastMyMsg && msg.status === 'seen') {
+        setShowSeenTime((prev) => !prev);
+      }
+      // Toggle tap highlight for any message
+      setTappedMsgId((prev) => (prev === msg._id?.toString() ? null : msg._id?.toString()));
+    };
+
     if (msg.isDeleted) {
       return (
         <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
@@ -820,11 +878,7 @@ export default function ChatScreen({ route, navigation }) {
 
     return (
       <TouchableOpacity
-        onPress={() => {
-          if (isLastMyMsg && msg.status === 'seen') {
-            setShowSeenTime((prev) => !prev);
-          }
-        }}
+        onPress={handlePress}
         onLongPress={() => onLongPressMessage(msg)}
         style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}
         activeOpacity={0.85}
@@ -1430,5 +1484,21 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 7.5,
     fontWeight: '700',
+  },
+  dateSeparatorRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+    // FlatList is inverted so the separator must not flip visually
+    transform: [{ scaleY: -1 }],
+  },
+  dateSeparatorPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  dateSeparatorText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
 });
