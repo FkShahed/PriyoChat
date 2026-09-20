@@ -637,8 +637,7 @@ export default function SettingsScreen({ navigation }) {
               styles.updateBtn,
               {
                 backgroundColor: checkingUpdate ? C.surfaceAlt : 'rgba(0,132,255,0.1)',
-                borderColor: checkingUpdate ? 'transparent' : '#0084FF',
-                borderWidth: 1,
+                borderWidth: 0,
               }
             ]}
             onPress={handleDownloadUpdate}
