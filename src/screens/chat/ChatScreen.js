@@ -972,7 +972,17 @@ export default function ChatScreen({ route, navigation }) {
       const cd = msg.callData;
       const isRejected = cd.status === 'rejected';
       const isVideo = cd.callType === 'video';
-      const callIcon = isVideo ? 'videocam' : 'call-outline';
+
+      let iconName = '';
+      if (isVideo) {
+        if (isRejected) iconName = 'video-off';
+        else iconName = isMine ? 'video' : 'video'; // video doesn't have direction arrows in MCI usually, but we can use 'video'
+      } else {
+        if (isRejected) iconName = 'phone-missed';
+        else if (isMine) iconName = 'phone-outgoing';
+        else iconName = 'phone-incoming';
+      }
+
       const mins = Math.floor((cd.duration || 0) / 60).toString().padStart(2, '0');
       const secs = ((cd.duration || 0) % 60).toString().padStart(2, '0');
       const durationStr = cd.status === 'completed' && cd.duration > 0 ? ` • ${mins}:${secs}` : '';
@@ -993,7 +1003,7 @@ export default function ChatScreen({ route, navigation }) {
               style={[styles.callBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}
             >
               <View style={[styles.callIconBadge, { backgroundColor: '#FFF' }]}>
-                <Ionicons name={isVideo ? 'videocam' : 'call'} size={20} color={iconColor} />
+                <MaterialCommunityIcons name={iconName} size={20} color={iconColor} />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 14, fontWeight: '600' }}>
