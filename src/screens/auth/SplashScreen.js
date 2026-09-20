@@ -70,25 +70,23 @@ export default function SplashScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Brand Name & Tagline */}
+        {/* Brand Name */}
         <Text style={styles.appName}>PriyoChat</Text>
-        <Text style={styles.tagline}>Connect. Chat. Belong.</Text>
+        <Text style={styles.appSubtitle}>Your personal messenger</Text>
 
-        {/* Feature Pills */}
+        {/* Feature Tiles */}
         <View style={styles.featuresRow}>
-          <View style={styles.featurePill}>
-            <Ionicons name="flash-outline" size={13} color="#00C6FF" style={{ marginRight: 4 }} />
-            <Text style={styles.featurePillText}>Fast</Text>
+          <View style={styles.featureTile}>
+            <Ionicons name="flash" size={20} color="#00C6FF" />
+            <Text style={styles.featureTileText}>Fast</Text>
           </View>
-          <View style={styles.featureDot} />
-          <View style={styles.featurePill}>
-            <Ionicons name="shield-checkmark-outline" size={13} color="#00C6FF" style={{ marginRight: 4 }} />
-            <Text style={styles.featurePillText}>Secure</Text>
+          <View style={styles.featureTile}>
+            <Ionicons name="shield-checkmark" size={20} color="#00C6FF" />
+            <Text style={styles.featureTileText}>Secure</Text>
           </View>
-          <View style={styles.featureDot} />
-          <View style={styles.featurePill}>
-            <Ionicons name="heart-outline" size={13} color="#00C6FF" style={{ marginRight: 4 }} />
-            <Text style={styles.featurePillText}>Personal</Text>
+          <View style={styles.featureTile}>
+            <Ionicons name="heart" size={20} color="#00C6FF" />
+            <Text style={styles.featureTileText}>Personal</Text>
           </View>
         </View>
       </Animated.View>
@@ -202,44 +200,42 @@ const styles = StyleSheet.create({
     borderRadius: 28,
   },
   appName: {
-    fontSize: 38,
+    fontSize: 42,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -0.5,
-    marginBottom: 8,
+    letterSpacing: -1,
+    marginBottom: 6,
   },
-  tagline: {
-    fontSize: 16,
+  appSubtitle: {
+    fontSize: 14,
     fontWeight: '400',
-    color: 'rgba(255, 255, 255, 0.7)',
-    letterSpacing: 0.3,
-    marginBottom: 20,
+    color: 'rgba(255, 255, 255, 0.45)',
+    letterSpacing: 0.5,
+    marginBottom: 28,
+    textTransform: 'uppercase',
   },
   featuresRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    gap: 12,
   },
-  featurePill: {
-    flexDirection: 'row',
+  featureTile: {
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 198, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 198, 255, 0.18)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 6,
   },
-  featurePillText: {
-    color: '#E4E6EB',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  featureDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: 10,
+  featureTileText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 
   // ── Bottom Section Styles ─────────────────────────────────────────────
