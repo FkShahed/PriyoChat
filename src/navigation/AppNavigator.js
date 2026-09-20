@@ -91,21 +91,19 @@ function CallObserver() {
   return null;
 }
 
-// Watches isAuthenticated and resets to Splash on logout
+// Watches isAuthenticated and resets to Login on logout
 function LogoutObserver() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
-  const hasNavigated = React.useRef(false);
 
   React.useEffect(() => {
-    if (!isLoading && !isAuthenticated && !hasNavigated.current) {
-      hasNavigated.current = true;
+    if (!isLoading && !isAuthenticated) {
       if (navigationRef.isReady()) {
-        navigationRef.reset({ index: 0, routes: [{ name: 'Splash' }] });
+        const currentRoute = navigationRef.getCurrentRoute()?.name;
+        if (currentRoute && currentRoute !== 'Login' && currentRoute !== 'Splash' && currentRoute !== 'Signup') {
+          navigationRef.reset({ index: 0, routes: [{ name: 'Login' }] });
+        }
       }
-    }
-    if (isAuthenticated) {
-      hasNavigated.current = false; // reset so next logout works
     }
   }, [isAuthenticated, isLoading]);
 

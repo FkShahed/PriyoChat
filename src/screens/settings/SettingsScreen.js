@@ -16,6 +16,7 @@ import useSocketStore from '../../store/useSocketStore';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
 import { userApi, configApi } from '../../api/services';
 import { getInitials } from '../../utils/helpers';
+import { navigationRef } from '../../navigation/navigationRef';
 
 const THEME_OPTIONS = [
   { key: 'light', label: 'Light', desc: 'Always light', icon: 'sunny-outline' },
@@ -195,9 +196,19 @@ export default function SettingsScreen({ navigation }) {
 
   const handleLogout = async () => {
     const performLogout = async () => {
-      disconnect();
-      await logout();
-      // AppNavigator watches isAuthenticated and navigates to Splash automatically
+      try {
+        disconnect();
+        await logout();
+      } catch (e) {
+        console.warn('Error during logout:', e);
+      } finally {
+        if (navigationRef.isReady()) {
+          navigationRef.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
+        }
+      }
     };
 
     if (Platform.OS === 'web') {
