@@ -142,6 +142,7 @@ export default function ChatScreen({ route, navigation }) {
   const typingTimeout = useRef(null);
   const flatListRef = useRef(null);
   const isKeyboardVisible = useRef(false);
+  const keyboardPadding = useRef(new RNAnimated.Value(0)).current;
   const isTyping = typingUsers[conversationId];
 
   const isOtherOnline = onlineUsers[otherUser?._id] ?? otherUser?.isOnline;
@@ -159,26 +160,41 @@ export default function ChatScreen({ route, navigation }) {
     }
   }, []);
 
-  // Keep last message visible when keyboard opens
+  // Keep last message visible when keyboard opens & animate padding
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-    const showSub = Keyboard.addListener(showEvent, () => {
+    const showSub = Keyboard.addListener(showEvent, (e) => {
       isKeyboardVisible.current = true;
+      const h = e?.endCoordinates?.height || 0;
+      if (Platform.OS === 'android') {
+        RNAnimated.timing(keyboardPadding, {
+          toValue: h,
+          duration: 180,
+          useNativeDriver: false,
+        }).start();
+      }
       scrollToBottom(false);
       setTimeout(() => scrollToBottom(true), 80);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
       isKeyboardVisible.current = false;
+      if (Platform.OS === 'android') {
+        RNAnimated.timing(keyboardPadding, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: false,
+        }).start();
+      }
     });
 
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, [scrollToBottom]);
+  }, [keyboardPadding, scrollToBottom]);
 
   // ── Load messages ───────────────────────────────────────────────────
   const loadMessages = useCallback(async (pageNum = 1, append = false) => {
@@ -364,14 +380,15 @@ export default function ChatScreen({ route, navigation }) {
 
   const bgStyle = [styles.container, { backgroundColor: theme.background }];
 
+  // Platform-aware keyboard handling: on Android, animated padding avoids OxygenOS 36px ghost inset
+  const KeyboardWrapper = Platform.OS === 'ios' ? KeyboardAvoidingView : RNAnimated.View;
+  const wrapperProps = Platform.OS === 'ios'
+    ? { behavior: 'padding', keyboardVerticalOffset: 0, style: { flex: 1 } }
+    : { style: [{ flex: 1 }, { paddingBottom: keyboardPadding }] };
+
   // ── Main content (shared between View and ImageBackground wrappers)
   const content = (
-    // KeyboardAvoidingView wraps ALL content so input stays above keyboard
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior="padding"
-      keyboardVerticalOffset={0}
-    >
+    <KeyboardWrapper {...wrapperProps}>
       <StatusBar barStyle="light-content" />
 
       {/* ── Header ─────────────────────────────────────────────────── */}
@@ -547,7 +564,7 @@ export default function ChatScreen({ route, navigation }) {
         onClose={() => setMenuVisible(false)}
         items={menuItems}
       />
-    </KeyboardAvoidingView>
+    </KeyboardWrapper>
   );
 
   if (theme.bgImage) {
