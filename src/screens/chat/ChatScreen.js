@@ -913,7 +913,7 @@ export default function ChatScreen({ route, navigation }) {
     }
 
     return (
-      <View>
+      <View style={{ width: '100%' }}>
         {datePill}
         <TouchableOpacity
           onPress={handlePress}
@@ -965,9 +965,9 @@ export default function ChatScreen({ route, navigation }) {
                 </Text>
               </View>
             ) : null}
-            {renderStatusFooter(msg, isMine)}
           </View>
         </TouchableOpacity>
+        {renderStatusFooter(msg, isMine)}
       </View>
     );
   };
@@ -1497,10 +1497,12 @@ const styles = StyleSheet.create({
   statusFooterMine: {
     justifyContent: 'flex-end',
     alignSelf: 'flex-end',
+    paddingRight: 4,
   },
   statusFooterTheir: {
     justifyContent: 'flex-start',
     alignSelf: 'flex-start',
+    paddingLeft: 4,
   },
   statusFooterText: {
     fontSize: 10,
