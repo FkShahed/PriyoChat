@@ -140,7 +140,7 @@ export default function CallScreen({ route, navigation }) {
   const handleEndCall = () => {
     if (hasNavigatedBack.current) return;
     hasNavigatedBack.current = true;
-    emit('call_end', { to: otherUser._id });
+    emit('call_end', { to: otherUser._id, callType, duration: callDuration });
     cleanupWebRTC();
     resetCall();
     navigation.goBack();

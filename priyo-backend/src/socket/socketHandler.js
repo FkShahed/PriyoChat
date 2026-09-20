@@ -191,14 +191,36 @@ const setupSocket = (io) => {
       io.to(to).emit('call_ice', { from: userId, candidate });
     });
 
-    socket.on('call_reject', async ({ to, callId }) => {
+    socket.on('call_reject', async ({ to, callId, callType = 'audio' }) => {
       if (callId) {
         await Call.findByIdAndUpdate(callId, { status: 'rejected', endedAt: new Date() });
       }
       io.to(to).emit('call_rejected', { from: userId });
+
+      // ── Create missed call message in conversation ──
+      try {
+        const convo = await Conversation.findOne({
+          participants: { $all: [userId, to] }
+        });
+        if (convo) {
+          const callMsg = await Message.create({
+            conversation: convo._id,
+            sender: to, // the caller gets the missed call record
+            text: '',
+            callData: { callType: callType || 'audio', duration: 0, status: 'rejected' },
+          });
+          await callMsg.populate('sender', 'name avatar');
+          await Conversation.findByIdAndUpdate(convo._id, { lastMessage: callMsg._id });
+          const payload = { ...callMsg.toObject(), conversationId: convo._id.toString() };
+          io.to(userId).emit('new_message', payload);
+          io.to(to).emit('new_message', payload);
+        }
+      } catch (e) {
+        console.error('[socketHandler] reject call message error:', e.message);
+      }
     });
 
-    socket.on('call_end', async ({ to, callId, duration = 0 }) => {
+    socket.on('call_end', async ({ to, callId, duration = 0, callType = 'audio' }) => {
       if (callId) {
         await Call.findByIdAndUpdate(callId, { 
           status: 'completed', 
@@ -207,6 +229,32 @@ const setupSocket = (io) => {
         });
       }
       io.to(to).emit('call_ended', { from: userId });
+
+      // ── Create call message in conversation ──
+      try {
+        const convo = await Conversation.findOne({
+          participants: { $all: [userId, to] }
+        });
+        if (convo) {
+          const callMsg = await Message.create({
+            conversation: convo._id,
+            sender: userId,
+            text: '',
+            callData: {
+              callType: callType || 'audio',
+              duration,
+              status: 'completed',
+            },
+          });
+          await callMsg.populate('sender', 'name avatar');
+          await Conversation.findByIdAndUpdate(convo._id, { lastMessage: callMsg._id });
+          const payload = { ...callMsg.toObject(), conversationId: convo._id.toString() };
+          io.to(userId).emit('new_message', payload);
+          io.to(to).emit('new_message', payload);
+        }
+      } catch (e) {
+        console.error('[socketHandler] call message error:', e.message);
+      }
     });
 
     // ─── Disconnect ────────────────────────────────────────────────
