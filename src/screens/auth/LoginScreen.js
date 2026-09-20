@@ -297,16 +297,16 @@ const styles = StyleSheet.create({
 
   // ── Primary Button ────────────────────────────────────────────────────
   primaryBtnWrap: {
-    borderRadius: 15, overflow: 'hidden',
+    borderRadius: 12, overflow: 'hidden',
     marginTop: 2, elevation: 0,
   },
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 14, paddingHorizontal: 24,
+    paddingVertical: 11, paddingHorizontal: 24,
   },
-  primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700', marginRight: 9 },
+  primaryBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700', marginRight: 9 },
   btnIconCircle: {
-    width: 24, height: 24, borderRadius: 12,
+    width: 22, height: 22, borderRadius: 11,
     backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center',
   },
 
