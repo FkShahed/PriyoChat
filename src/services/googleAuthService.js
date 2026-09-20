@@ -2,7 +2,8 @@ import { Platform, Alert } from 'react-native';
 
 // Google Web Client ID from environment variables (.env)
 export const GOOGLE_WEB_CLIENT_ID =
-  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+  '540696667738-ue25v0i14u4p67srs1ivg3p2ta7kd5i8.apps.googleusercontent.com';
 
 // Fallback placeholder check
 export const isConfiguredClientId = () => {
