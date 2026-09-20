@@ -305,7 +305,26 @@ export default function ChatScreen({ route, navigation }) {
     typingTimeout.current = setTimeout(() => emit('typing_stop', { conversationId }), 1500);
   };
 
-  // ── Images ──────────────────────────────────────────────────────────
+  // ── Camera & Gallery ────────────────────────────────────────────────
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera permission to take photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      setSelectedImages((prev) => [...prev, ...result.assets].slice(0, 5));
+    } catch (err) {
+      console.warn('Camera error:', err);
+      Alert.alert('Camera Error', 'Could not open camera: ' + (err.message || 'Unknown error'));
+    }
+  };
+
   const pickImages = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -603,8 +622,21 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         )}
         <View style={styles.inputRow}>
-          <TouchableOpacity onPress={pickImages} style={styles.attachBtn} disabled={uploading || sending}>
-            <Ionicons name="attach" size={24} color={theme.sentBubble} />
+          <TouchableOpacity
+            onPress={takePhoto}
+            style={styles.iconBtn}
+            disabled={uploading || sending}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="camera" size={24} color={theme.sentBubble} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={pickImages}
+            style={styles.iconBtn}
+            disabled={uploading || sending}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="image" size={24} color={theme.sentBubble} />
           </TouchableOpacity>
           <TextInput
             style={[
@@ -755,13 +787,14 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 7,
   },
-  attachBtn: {
-    padding: 8,
+  iconBtn: {
+    padding: 6,
     justifyContent: 'center',
-    marginBottom: 2,
+    alignItems: 'center',
+    marginBottom: 3,
   },
   imagePreviewContainer: {
     padding: 8,
@@ -783,7 +816,8 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 9,
     fontSize: 15,
-    marginHorizontal: 8,
+    marginLeft: 4,
+    marginRight: 6,
   },
   sendBtn: {
     width: 40,
