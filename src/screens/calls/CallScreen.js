@@ -273,7 +273,7 @@ export default function CallScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   // ── Audio ──
-  container: { flex: 1, justifyContent: 'space-between', paddingVertical: 80, backgroundColor: '#070B19' },
+  container: { flex: 1, justifyContent: 'space-between', paddingTop: 140, paddingBottom: 80, backgroundColor: '#070B19' },
   orbTopRight: {
     position: 'absolute', top: -100, right: -100,
     width: 300, height: 300, borderRadius: 150,
