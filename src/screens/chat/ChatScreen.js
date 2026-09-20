@@ -507,7 +507,15 @@ export default function ChatScreen({ route, navigation }) {
       {/* ── Input bar ──────────────────────────────────────────────── */}
       <View>
         {selectedImages.length > 0 && (
-          <View style={[styles.imagePreviewContainer, { backgroundColor: theme.inputBg }]}>
+          <View
+            style={[
+              styles.imagePreviewContainer,
+              {
+                backgroundColor: theme.inputBg,
+                borderTopColor: theme.isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)',
+              },
+            ]}
+          >
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {selectedImages.map((img, idx) => (
                 <View key={idx} style={styles.previewImageWrapper}>
@@ -520,7 +528,15 @@ export default function ChatScreen({ route, navigation }) {
             </ScrollView>
           </View>
         )}
-        <View style={[styles.inputRow, { backgroundColor: theme.inputBg }]}>
+        <View
+          style={[
+            styles.inputRow,
+            {
+              backgroundColor: theme.inputBg,
+              borderTopColor: theme.isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)',
+            },
+          ]}
+        >
           <TouchableOpacity onPress={pickImages} style={styles.attachBtn} disabled={uploading || sending}>
             <Ionicons name="attach" size={24} color={theme.sentBubble} />
           </TouchableOpacity>
@@ -655,10 +671,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     padding: 8,
     borderTopWidth: 0.5,
-    borderTopColor: '#EEEEEE',
   },
   attachBtn: { padding: 8, justifyContent: 'center' },
-  imagePreviewContainer: { padding: 8, borderTopWidth: 0.5, borderTopColor: '#EEEEEE' },
+  imagePreviewContainer: { padding: 8, borderTopWidth: 0.5 },
   previewImageWrapper: { marginRight: 8, position: 'relative', marginTop: 6 },
   previewImage: { width: 60, height: 60, borderRadius: 8 },
   removeImageBtn: {
