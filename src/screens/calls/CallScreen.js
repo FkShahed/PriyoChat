@@ -106,6 +106,7 @@ export default function CallScreen({ route, navigation }) {
             playsInSilentModeIOS: true,
             staysActiveInBackground: true,
             shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: !speakerOn,
           });
           const { sound } = await Audio.Sound.createAsync(
             require('../../../assets/ringtone.wav'),
@@ -128,7 +129,7 @@ export default function CallScreen({ route, navigation }) {
         soundObject.unloadAsync().catch(() => {});
       }
     };
-  }, [callState, isReceiver]);
+  }, [callState, isReceiver, speakerOn]);
 
   // ── Remote party ended/rejected ──────────────────────────────────
   useEffect(() => {

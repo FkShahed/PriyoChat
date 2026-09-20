@@ -228,8 +228,7 @@ export default function useWebRTCCall({
     // Start InCallManager
     if (InCallManager) {
       try {
-        const ringback = isReceiver ? '' : '_DEFAULT_';
-        InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback });
+        InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
         InCallManager.setForceSpeakerphoneOn(callType === 'video');
         console.log('[InCallManager] Started, speakerphone:', callType === 'video');
       } catch (e) {
@@ -436,12 +435,7 @@ export default function useWebRTCCall({
         console.log('[InCallManager] Speaker:', on);
         
         const state = useCallStore.getState().callState;
-        if (!isReceiver && state === 'connecting') {
-          InCallManager.stopRingback();
-          setTimeout(() => {
-            InCallManager.startRingback('_DEFAULT_');
-          }, 100);
-        }
+        // Don't call startRingback, we're using expo-av instead
       } catch (e) {
         console.warn('[InCallManager] setSpeaker error:', e);
       }
