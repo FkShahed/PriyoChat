@@ -59,14 +59,12 @@ export default function SplashScreen({ navigation }) {
           },
         ]}
       >
-        {/* Glossy Logo Badge Container */}
-        <View style={styles.logoBadge}>
-          <Image
-            source={require('../../../assets/logo.png')}
-            style={styles.logoImage}
-            resizeMode="cover"
-          />
-        </View>
+        {/* Logo */}
+        <Image
+          source={require('../../../assets/logo.png')}
+          style={styles.logoImage}
+          resizeMode="cover"
+        />
 
         {/* Brand Name */}
         <Text style={styles.appName}>PriyoChat</Text>
@@ -169,26 +167,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  logoBadge: {
-    width: 110,
-    height: 110,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    marginBottom: 24,
-    shadowColor: '#0084FF',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    elevation: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
   logoImage: {
-    width: '100%',
-    height: '100%',
+    width: 100,
+    height: 100,
+    borderRadius: 24,
+    marginBottom: 20,
+    shadowColor: '#0084FF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 10,
   },
   appName: {
     fontSize: 42,
