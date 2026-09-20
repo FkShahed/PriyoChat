@@ -972,40 +972,65 @@ export default function ChatScreen({ route, navigation }) {
       const cd = msg.callData;
       const isCompleted = cd.status === 'completed';
       const isRejected = cd.status === 'rejected';
-      const callIcon = cd.callType === 'video' ? 'videocam' : 'call';
+      const isVideo = cd.callType === 'video';
+      const callIcon = isVideo ? 'videocam' : 'call';
+      const arrowIcon = isMine ? 'arrow-up' : 'arrow-down';
+
       const mins = Math.floor((cd.duration || 0) / 60).toString().padStart(2, '0');
       const secs = ((cd.duration || 0) % 60).toString().padStart(2, '0');
-      const durationStr = isCompleted && cd.duration > 0 ? ` • ${mins}:${secs}` : '';
+      const durationStr = isCompleted && cd.duration > 0 ? `${mins}:${secs}` : null;
+
       const statusStr = isRejected
         ? (isMine ? 'Cancelled' : 'Missed call')
         : isCompleted
-        ? (isMine ? 'Outgoing call' : 'Incoming call')
-        : 'Call';
-      const accentColor = isRejected ? '#FF453A' : '#0084FF';
+        ? (isVideo ? (isMine ? 'Outgoing video call' : 'Incoming video call') : (isMine ? 'Outgoing call' : 'Incoming call'))
+        : (isVideo ? 'Video call' : 'Voice call');
+
+      const accentColor = isRejected ? '#FF453A' : isMine ? '#4CAF50' : '#2196F3';
+      const bgColor = isMine ? theme.sentBubble : theme.receivedBubble;
+      const textColor = isMine ? theme.sentText : theme.receivedText;
 
       return (
         <View style={{ width: '100%' }}>
           {datePill}
-          <TouchableOpacity
-            onPress={() => emit('call_offer', { to: isMine ? otherUser._id : msg.sender?._id || otherUser._id, callType: cd.callType })}
-            style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.callBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}>
-              <View style={[styles.callIconCircle, { backgroundColor: accentColor }]}>
-                <Ionicons name={callIcon} size={18} color="#FFF" />
+          <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
+            <TouchableOpacity
+              onPress={() => emit('call_offer', { to: isMine ? otherUser._id : msg.sender?._id || otherUser._id, callType: cd.callType })}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.callBubble, { backgroundColor: bgColor }]}>
+                {/* Left: direction arrow + call icon stacked */}
+                <View style={[styles.callBubbleIconWrap, { backgroundColor: accentColor + '22' }]}>
+                  <Ionicons name={callIcon} size={22} color={accentColor} />
+                  <Ionicons name={arrowIcon} size={11} color={accentColor} style={{ marginTop: 2 }} />
+                </View>
+
+                {/* Middle: status + duration + time */}
+                <View style={styles.callBubbleInfo}>
+                  <Text style={[styles.callBubbleTitle, { color: textColor }]} numberOfLines={1}>
+                    {statusStr}
+                  </Text>
+                  <View style={styles.callBubbleMeta}>
+                    {durationStr && (
+                      <>
+                        <Ionicons name="time-outline" size={11} color={textColor} style={{ opacity: 0.5, marginRight: 3 }} />
+                        <Text style={[styles.callBubbleDuration, { color: textColor }]}>{durationStr}</Text>
+                        <Text style={[styles.callBubbleDuration, { color: textColor }]}>  ·  </Text>
+                      </>
+                    )}
+                    <Text style={[styles.callBubbleDuration, { color: textColor }]}>
+                      {formatMessageTime(msg.createdAt)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Right: tap-to-call icon */}
+                <View style={[styles.callBubbleCallBtn, { backgroundColor: accentColor }]}>
+                  <Ionicons name={callIcon} size={16} color="#FFF" />
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.callBubbleTitle, { color: isMine ? theme.sentText : theme.receivedText }]}>
-                  {statusStr}{durationStr}
-                </Text>
-                <Text style={[styles.callBubbleTime, { color: isMine ? theme.sentText : theme.receivedText, opacity: 0.55 }]}>
-                  {formatMessageTime(msg.createdAt)}
-                </Text>
-              </View>
-              <Ionicons name={callIcon} size={18} color={accentColor} style={{ opacity: 0.7 }} />
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
@@ -1656,25 +1681,35 @@ const styles = StyleSheet.create({
   callBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 16,
-    gap: 10,
-    minWidth: 180,
-  },
-  callIconCircle: {
-    width: 36,
-    height: 36,
     borderRadius: 18,
-    alignItems: 'center',
+    gap: 10,
+    minWidth: 200,
+  },
+  callBubbleIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  callBubbleInfo: {
+    flex: 1,
     justifyContent: 'center',
   },
   callBubbleTitle: {
     fontSize: 14,
     fontWeight: '600',
+    marginBottom: 3,
   },
-  callBubbleTime: {
+  callBubbleMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  callBubbleDuration: {
     fontSize: 11,
-    marginTop: 2,
+    opacity: 0.55,
+  },
+  callBubbleCallBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center',
   },
 });
