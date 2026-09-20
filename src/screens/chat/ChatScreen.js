@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Animated as RNAnimated } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
 import { conversationApi, mediaApi } from '../../api/services';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
@@ -87,6 +88,115 @@ function DropdownMenu({ visible, onClose, items }) {
         </View>
       </View>
     </TouchableWithoutFeedback>
+  );
+}
+
+// ── Voice note audio player ───────────────────────────────────────────
+function VoiceNotePlayer({ url, duration = 0, isMine, theme }) {
+  const [sound, setSound] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [positionSec, setPositionSec] = useState(0);
+
+  const totalSec = Math.max(duration || 0, 1);
+
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync().catch(() => {});
+      }
+    };
+  }, [sound]);
+
+  const onPlaybackStatusUpdate = (status) => {
+    if (status.isLoaded) {
+      setPositionSec(Math.floor((status.positionMillis || 0) / 1000));
+      if (status.didJustFinish) {
+        setIsPlaying(false);
+        setPositionSec(0);
+        sound?.setPositionAsync(0).catch(() => {});
+      }
+    }
+  };
+
+  const togglePlay = async () => {
+    if (!url) return;
+    try {
+      if (sound) {
+        if (isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await sound.playAsync();
+          setIsPlaying(true);
+        }
+      } else {
+        setIsLoading(true);
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        });
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: url },
+          { shouldPlay: true },
+          onPlaybackStatusUpdate
+        );
+        setSound(newSound);
+        setIsPlaying(true);
+        setIsLoading(false);
+      }
+    } catch (err) {
+      console.warn('Voice play error:', err);
+      setIsLoading(false);
+      setIsPlaying(false);
+    }
+  };
+
+  const formatSec = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const progress = totalSec > 0 ? Math.min(positionSec / totalSec, 1) : 0;
+  const textColor = isMine ? theme.sentText : theme.receivedText;
+  const iconColor = isMine ? theme.sentText : theme.sentBubble;
+  const btnBg = isMine ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.06)';
+
+  return (
+    <View style={styles.voiceNoteContainer}>
+      <TouchableOpacity
+        onPress={togglePlay}
+        style={[styles.voicePlayBtn, { backgroundColor: btnBg }]}
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <ActivityIndicator size="small" color={iconColor} />
+        ) : (
+          <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color={iconColor} />
+        )}
+      </TouchableOpacity>
+
+      <View style={styles.voiceWaveArea}>
+        <View style={styles.voiceTrack}>
+          <View
+            style={[
+              styles.voiceProgress,
+              {
+                width: `${Math.max(progress * 100, 4)}%`,
+                backgroundColor: isMine ? theme.sentText : theme.sentBubble,
+              },
+            ]}
+          />
+        </View>
+        <View style={styles.voiceMetaRow}>
+          <Text style={[styles.voiceTimeText, { color: textColor }]}>
+            {isPlaying ? formatSec(positionSec) : formatSec(totalSec)}
+          </Text>
+          <Ionicons name="mic-outline" size={13} color={textColor} style={{ opacity: 0.7 }} />
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -207,6 +317,20 @@ export default function ChatScreen({ route, navigation }) {
   const [searchVisible, setSearchVisible] = useState(false);
   const [imageViewerUri, setImageViewerUri] = useState(null);
   const [menuVisible, setMenuVisible] = useState(false);
+
+  // Voice recording state
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [uploadingVoice, setUploadingVoice] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (recording) {
+        recording.stopAndUnloadAsync().catch(() => {});
+      }
+    };
+  }, [recording]);
 
   const typingTimeout = useRef(null);
   const flatListRef = useRef(null);
@@ -338,6 +462,103 @@ export default function ChatScreen({ route, navigation }) {
 
   const removeImage = (index) => setSelectedImages((prev) => prev.filter((_, i) => i !== index));
 
+  // ── Voice Recording ────────────────────────────────────────────────
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission needed', 'Microphone permission is required to send voice notes.');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      if (recording) {
+        try {
+          await recording.stopAndUnloadAsync();
+        } catch (e) {}
+      }
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        (status) => {
+          if (status.isRecording) {
+            setRecordingDuration(Math.floor((status.durationMillis || 0) / 1000));
+          }
+        },
+        250
+      );
+
+      setRecording(newRecording);
+      setIsRecording(true);
+      setRecordingDuration(0);
+    } catch (err) {
+      console.warn('Failed to start recording:', err);
+      Alert.alert('Recording Error', err.message || 'Could not start recording.');
+    }
+  };
+
+  const cancelRecording = async () => {
+    if (!recording) return;
+    try {
+      setIsRecording(false);
+      setRecordingDuration(0);
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    } catch (e) {
+      console.warn('Error canceling recording:', e);
+    }
+    setRecording(null);
+  };
+
+  const stopAndSendRecording = async () => {
+    if (!recording || uploadingVoice) return;
+    try {
+      setUploadingVoice(true);
+      setIsRecording(false);
+      const finalDuration = recordingDuration;
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (!uri) {
+        setUploadingVoice(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('files', {
+        uri,
+        type: 'audio/m4a',
+        name: `voice_${Date.now()}.m4a`,
+      });
+
+      const { data } = await mediaApi.upload(formData);
+      if (data && data.length > 0) {
+        emit('send_message', {
+          conversationId,
+          text: '',
+          images: [],
+          isVoiceNote: true,
+          voiceNoteUrl: data[0].url,
+          voiceNoteDuration: finalDuration,
+        }, (response) => {
+          if (response?.error) Alert.alert('Error', response.error);
+        });
+      }
+    } catch (err) {
+      console.warn('Error sending voice note:', err);
+      Alert.alert('Upload failed', 'Failed to send voice note: ' + (err.message || 'Network error'));
+    } finally {
+      setUploadingVoice(false);
+      setRecordingDuration(0);
+    }
+  };
+
   // ── Send message ────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (sending || uploading) return;
@@ -434,6 +655,29 @@ export default function ChatScreen({ route, navigation }) {
               ))}
             </View>
           )}
+          {msg.isVoiceNote || msg.voiceNoteUrl ? (
+            <View style={[styles.voiceBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}>
+              <VoiceNotePlayer
+                url={msg.voiceNoteUrl}
+                duration={msg.voiceNoteDuration}
+                isMine={isMine}
+                theme={theme}
+              />
+              <View style={styles.timeRow}>
+                <Text style={[styles.msgTime, { color: isMine ? 'rgba(255,255,255,0.6)' : theme.timestampColor }]}>
+                  {formatMessageTime(msg.createdAt)}
+                </Text>
+                {isMine && (
+                  <Ionicons
+                    name={msg.status === 'seen' || msg.status === 'delivered' ? 'checkmark-done' : 'checkmark'}
+                    size={13}
+                    color={msg.status === 'seen' ? '#34B7F1' : 'rgba(255,255,255,0.55)'}
+                    style={{ marginLeft: 3 }}
+                  />
+                )}
+              </View>
+            </View>
+          ) : null}
           {msg.text ? (
             <View style={[styles.textBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}>
               <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 15, lineHeight: 22 }}>
@@ -621,60 +865,97 @@ export default function ChatScreen({ route, navigation }) {
             </ScrollView>
           </View>
         )}
-        <View style={styles.inputRow}>
-          <TouchableOpacity
-            onPress={takePhoto}
-            style={styles.iconBtn}
-            disabled={uploading || sending}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="camera" size={24} color={theme.sentBubble} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={pickImages}
-            style={styles.iconBtn}
-            disabled={uploading || sending}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="image" size={24} color={theme.sentBubble} />
-          </TouchableOpacity>
-          <TextInput
-            style={[
-              styles.textInput,
-              {
-                color: theme.inputText,
-                backgroundColor: textInputBg,
-                borderColor: textInputBorder,
-                borderWidth: 1,
-              },
-            ]}
-            value={text}
-            onChangeText={handleTyping}
-            onFocus={() => {
-              scrollToBottom(true);
-            }}
-            placeholder="Message..."
-            placeholderTextColor={theme.placeholderText}
-            multiline
-            maxLength={5000}
-          />
-          <TouchableOpacity
-            onPress={sendMessage}
-            style={[
-              styles.sendBtn,
-              {
-                backgroundColor: theme.sentBubble,
-                opacity: (!text.trim() && selectedImages.length === 0) ? 0.45 : 1,
-                shadowColor: theme.sentBubble,
-              },
-            ]}
-            disabled={sending || uploading || (!text.trim() && selectedImages.length === 0)}
-          >
-            {uploading || sending
-              ? <ActivityIndicator color="#FFF" size="small" />
-              : <Ionicons name="send" size={18} color="#FFF" />}
-          </TouchableOpacity>
-        </View>
+        {isRecording ? (
+          <View style={styles.recordingRow}>
+            <View style={styles.recordingInfo}>
+              <View style={styles.redDot} />
+              <Text style={[styles.recordingText, { color: theme.inputText }]}>
+                Recording... {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={cancelRecording}
+              style={styles.cancelRecordBtn}
+              activeOpacity={0.7}
+              disabled={uploadingVoice}
+            >
+              <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={stopAndSendRecording}
+              style={[styles.sendBtn, { backgroundColor: theme.sentBubble, shadowColor: theme.sentBubble }]}
+              activeOpacity={0.8}
+              disabled={uploadingVoice}
+            >
+              {uploadingVoice
+                ? <ActivityIndicator color="#FFF" size="small" />
+                : <Ionicons name="send" size={18} color="#FFF" />}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.inputRow}>
+            <TouchableOpacity
+              onPress={takePhoto}
+              style={styles.iconBtn}
+              disabled={uploading || sending}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="camera" size={23} color={theme.sentBubble} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={pickImages}
+              style={styles.iconBtn}
+              disabled={uploading || sending}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="image" size={23} color={theme.sentBubble} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={startRecording}
+              style={styles.iconBtn}
+              disabled={uploading || sending}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="mic" size={23} color={theme.sentBubble} />
+            </TouchableOpacity>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  color: theme.inputText,
+                  backgroundColor: textInputBg,
+                  borderColor: textInputBorder,
+                  borderWidth: 1,
+                },
+              ]}
+              value={text}
+              onChangeText={handleTyping}
+              onFocus={() => {
+                scrollToBottom(true);
+              }}
+              placeholder="Message..."
+              placeholderTextColor={theme.placeholderText}
+              multiline
+              maxLength={5000}
+            />
+            <TouchableOpacity
+              onPress={sendMessage}
+              style={[
+                styles.sendBtn,
+                {
+                  backgroundColor: theme.sentBubble,
+                  opacity: (!text.trim() && selectedImages.length === 0) ? 0.45 : 1,
+                  shadowColor: theme.sentBubble,
+                },
+              ]}
+              disabled={sending || uploading || (!text.trim() && selectedImages.length === 0)}
+            >
+              {uploading || sending
+                ? <ActivityIndicator color="#FFF" size="small" />
+                : <Ionicons name="send" size={18} color="#FFF" />}
+            </TouchableOpacity>
+          </View>
+        )}
       </LinearGradient>
 
       {/* ── Full-screen image viewer ────────────────────────────────── */}
@@ -849,4 +1130,77 @@ const styles = StyleSheet.create({
     borderRadius: 18, alignSelf: 'flex-start', marginLeft: 12, marginBottom: 8,
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  // Voice recording row
+  recordingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 52,
+  },
+  recordingInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  redDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF3B30',
+    marginRight: 8,
+  },
+  recordingText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  cancelRecordBtn: {
+    padding: 8,
+    marginRight: 8,
+  },
+  // Voice note bubble & player
+  voiceBubble: {
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
+    minWidth: 190,
+  },
+  voiceNoteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  voicePlayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  voiceWaveArea: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  voiceTrack: {
+    height: 4,
+    backgroundColor: 'rgba(128, 128, 128, 0.25)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  voiceProgress: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  voiceMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  voiceTimeText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
 });
