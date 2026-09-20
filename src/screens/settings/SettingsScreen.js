@@ -589,47 +589,59 @@ export default function SettingsScreen({ navigation }) {
 
       {/* ── Account section ─────────────────────────────────────── */}
       <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Account</Text>
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Email</Text>
-          <Text style={[styles.infoValue, { color: C.text }]}>{user?.email}</Text>
+        <Text style={[styles.sectionTitle, { color: C.textSecondary, marginBottom: -4 }]}>Account & App Info</Text>
+        
+        <View style={[styles.permRow, { borderBottomColor: C.border }]}>
+          <View style={styles.permInfo}>
+            <View style={[styles.iconBox, { backgroundColor: 'rgba(0,132,255,0.1)' }]}>
+              <Ionicons name="mail" size={18} color="#0084FF" />
+            </View>
+            <View>
+              <Text style={[styles.permLabel, { color: C.text }]}>Email Address</Text>
+              <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }}>{user?.email}</Text>
+            </View>
+          </View>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoLabel, { color: C.textSecondary }]}>App Version</Text>
-          <Text style={[styles.infoValue, { color: C.text }]}>{currentVersion}</Text>
-        </View>
-        <TouchableOpacity
-          style={[
-            styles.updateBtn,
-            {
-              backgroundColor: updateInfo.isLatest || checkingUpdate
-                ? C.surfaceAlt
-                : 'rgba(0,132,255,0.1)',
-              borderColor: updateInfo.isLatest || checkingUpdate
-                ? 'transparent'
-                : '#0084FF',
-              borderWidth: 1,
-              opacity: updateInfo.isLatest && !checkingUpdate ? 0.5 : 1,
-            }
-          ]}
-          onPress={handleDownloadUpdate}
-          disabled={checkingUpdate || !updateInfo.apkUrl || downloading}
-        >
-          {checkingUpdate || downloading ? (
-            <ActivityIndicator color={C.textSecondary} size="small" />
-          ) : (
-            <>
-              <Ionicons 
-                name={updateInfo.isLatest ? "checkmark-circle-outline" : "cloud-download-outline"} 
-                size={18} 
-                color={updateInfo.isLatest ? "#34C759" : "#0084FF"} 
-              />
-              <Text style={[styles.updateBtnText, { color: updateInfo.isLatest ? C.text : '#0084FF' }]}>
-                {updateInfo.isLatest ? `Download Latest (v${currentVersion})` : `Download v${updateInfo.latestVersion}`}
+
+        <View style={[styles.permRow, { borderBottomWidth: 0 }]}>
+          <View style={styles.permInfo}>
+            <View style={[styles.iconBox, { backgroundColor: updateInfo.isLatest ? 'rgba(52,199,89,0.1)' : 'rgba(255,149,0,0.1)' }]}>
+              <Ionicons name={updateInfo.isLatest ? "checkmark-circle" : "alert-circle"} size={18} color={updateInfo.isLatest ? "#34C759" : "#FF9500"} />
+            </View>
+            <View>
+              <Text style={[styles.permLabel, { color: C.text }]}>App Version</Text>
+              <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }}>
+                PriyoChat v{currentVersion} {updateInfo.isLatest && !checkingUpdate && '(Latest)'}
               </Text>
-            </>
-          )}
-        </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {(!updateInfo.isLatest || checkingUpdate) && (
+          <TouchableOpacity
+            style={[
+              styles.updateBtn,
+              {
+                backgroundColor: checkingUpdate ? C.surfaceAlt : 'rgba(0,132,255,0.1)',
+                borderColor: checkingUpdate ? 'transparent' : '#0084FF',
+                borderWidth: 1,
+              }
+            ]}
+            onPress={handleDownloadUpdate}
+            disabled={checkingUpdate || !updateInfo.apkUrl || downloading}
+          >
+            {checkingUpdate || downloading ? (
+              <ActivityIndicator color={C.textSecondary} size="small" />
+            ) : (
+              <>
+                <Ionicons name="cloud-download-outline" size={18} color="#0084FF" />
+                <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>
+                  Download v{updateInfo.latestVersion}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
 
@@ -735,7 +747,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#FF3B30', backgroundColor: 'rgba(255,59,48,0.1)',
   },
   dangerBtnText: { color: '#FF3B30', fontWeight: '700', fontSize: 15 },
-  // Permissions
+  // Permissions & Lists
+  iconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center'
+  },
   permRow: {
     flexDirection: 'row',
     alignItems: 'center',
