@@ -43,7 +43,11 @@ class NotificationService {
   /** Call on logout. */
   static cleanup() {
     if (this._responseListener) {
-      Notifications.removeNotificationSubscription(this._responseListener);
+      if (typeof this._responseListener.remove === 'function') {
+        this._responseListener.remove();
+      } else if (typeof Notifications.removeNotificationSubscription === 'function') {
+        Notifications.removeNotificationSubscription(this._responseListener);
+      }
       this._responseListener = null;
     }
     this._initialized = false;

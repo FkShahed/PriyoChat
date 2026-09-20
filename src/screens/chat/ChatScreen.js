@@ -369,8 +369,8 @@ export default function ChatScreen({ route, navigation }) {
     // KeyboardAvoidingView wraps ALL content so input stays above keyboard
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      behavior="padding"
+      keyboardVerticalOffset={0}
     >
       <StatusBar barStyle="light-content" />
 
