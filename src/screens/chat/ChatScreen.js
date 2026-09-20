@@ -988,7 +988,7 @@ export default function ChatScreen({ route, navigation }) {
 
       const accentColor = isRejected ? '#FF453A' : '#0084FF';
       const bgColor = isMine ? theme.sentBubble : theme.receivedBubble;
-      const textColor = isMine ? theme.sentText : theme.receivedText;
+      const textColor = '#FFFFFF';
 
       return (
         <View style={{ width: '100%' }}>
@@ -1009,9 +1009,9 @@ export default function ChatScreen({ route, navigation }) {
                 }]}
               >
                 {/* Left: icon wrap */}
-                <View style={[styles.callBubbleIconWrap, { backgroundColor: accentColor + '28' }]}>
-                  <Ionicons name={callIcon} size={22} color={accentColor} />
-                  <Ionicons name={arrowIcon} size={11} color={accentColor} style={{ marginTop: 2 }} />
+                <View style={[styles.callBubbleIconWrap, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                  <Ionicons name={callIcon} size={22} color="#FFF" />
+                  <Ionicons name={arrowIcon} size={11} color="rgba(255,255,255,0.8)" style={{ marginTop: 2 }} />
                 </View>
 
                 {/* Middle: status + duration + time */}
