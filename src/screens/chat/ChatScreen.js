@@ -903,8 +903,8 @@ export default function ChatScreen({ route, navigation }) {
           {datePill}
           <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
             <View style={[styles.deletedBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble, opacity: 0.5 }]}>
-              <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontStyle: 'italic', fontSize: 13, paddingRight: 4 }}>
-                Message deleted 
+              <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontStyle: 'italic', fontSize: 13, paddingRight: 6 }}>
+                {"Message deleted  "}
               </Text>
             </View>
           </View>

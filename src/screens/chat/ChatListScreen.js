@@ -87,7 +87,7 @@ export default function ChatListScreen({ navigation }) {
     const isUnread = unreadCount > 0;
 
     const preview = isDeleted
-      ? 'Message deleted'
+      ? 'Message deleted   '
       : lastMsg?.images?.length
       ? `📷 Photo${lastMsg.images.length > 1 ? 's' : ''}`
       : lastMsg?.voiceNoteUrl || lastMsg?.isVoiceNote
