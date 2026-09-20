@@ -992,8 +992,8 @@ export default function ChatScreen({ route, navigation }) {
               activeOpacity={0.7}
               style={[styles.callBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}
             >
-              <View style={[styles.callIconBadge, { backgroundColor: iconColor }]}>
-                <Ionicons name={isVideo ? 'videocam' : 'call'} size={18} color="#FFF" />
+              <View style={[styles.callIconBadge, { backgroundColor: iconColor + '20' }]}>
+                <Ionicons name={isVideo ? 'videocam' : 'call'} size={20} color={iconColor} />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 14, fontWeight: '600' }}>
@@ -1661,7 +1661,7 @@ const styles = StyleSheet.create({
     minWidth: 190,
   },
   callIconBadge: {
-    width: 38, height: 38, borderRadius: 19,
+    width: 42, height: 42, borderRadius: 21,
     alignItems: 'center', justifyContent: 'center',
   },
 });
