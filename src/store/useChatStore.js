@@ -55,16 +55,46 @@ const useChatStore = create((set, get) => ({
   addMessage: (conversationId, message) => {
     const { messages } = get();
     const existing = messages[conversationId] || [];
-    if (existing.find((m) => m._id === message._id)) return;
-    const updated = [...existing, message].sort(
-      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+    if (existing.find((m) => m._id?.toString() === message._id?.toString())) return;
+
+    // Replace optimistic temporary message if one exists matching this new message
+    const tempIndex = existing.findIndex(
+      (m) =>
+        m._id?.toString().startsWith('temp_') &&
+        m.status === 'sending' &&
+        (m.text === message.text ||
+          (m.images?.length > 0 && message.images?.length > 0) ||
+          (m.isVoiceNote && message.isVoiceNote))
     );
+
+    let updated;
+    if (tempIndex > -1) {
+      updated = [...existing];
+      updated[tempIndex] = message;
+    } else {
+      updated = [...existing, message];
+    }
+
+    updated.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     set({
       messages: {
         ...messages,
         [conversationId]: updated,
       },
     });
+  },
+
+  replaceOptimisticMessage: (conversationId, tempId, realMessage) => {
+    const { messages } = get();
+    const existing = messages[conversationId] || [];
+    const alreadyHasReal = existing.some((m) => m._id?.toString() === realMessage._id?.toString());
+    if (alreadyHasReal) {
+      const filtered = existing.filter((m) => m._id !== tempId);
+      set({ messages: { ...messages, [conversationId]: filtered } });
+      return;
+    }
+    const updated = existing.map((m) => (m._id === tempId ? realMessage : m));
+    set({ messages: { ...messages, [conversationId]: updated } });
   },
 
   updateMessageStatus: (conversationId, messageId, status) => {
@@ -86,8 +116,13 @@ const useChatStore = create((set, get) => ({
   deleteMessage: (conversationId, messageId) => {
     const { messages } = get();
     const convoMsgs = messages[conversationId] || [];
+    if (messageId?.toString().startsWith('temp_')) {
+      const filtered = convoMsgs.filter((m) => m._id !== messageId);
+      set({ messages: { ...messages, [conversationId]: filtered } });
+      return;
+    }
     const updated = convoMsgs.map((m) =>
-      m._id === messageId ? { ...m, isDeleted: true, text: '' } : m
+      m._id === messageId ? { ...m, isDeleted: true, text: '', images: [], voiceNoteUrl: '' } : m
     );
     set({ messages: { ...messages, [conversationId]: updated } });
   },

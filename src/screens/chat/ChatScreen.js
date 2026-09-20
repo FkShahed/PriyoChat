@@ -53,15 +53,23 @@ function TypingIndicator({ theme }) {
 }
 
 // ── Full-screen image viewer ──────────────────────────────────────────
-function ImageViewer({ uri, visible, onClose }) {
+function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
+  if (!data) return null;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.imageViewerBg}>
-          <TouchableOpacity style={styles.imageViewerClose} onPress={onClose}>
-            <Ionicons name="close" size={20} color="#FFF" />
-          </TouchableOpacity>
-          <Image source={{ uri }} style={styles.imageViewerImg} resizeMode="contain" />
+          <View style={styles.imageViewerHeader}>
+            <TouchableOpacity style={styles.imageViewerHeaderBtn} onPress={onClose}>
+              <Ionicons name="close" size={24} color="#FFF" />
+            </TouchableOpacity>
+            {canDelete && onDelete ? (
+              <TouchableOpacity style={styles.imageViewerHeaderBtn} onPress={onDelete}>
+                <Ionicons name="trash-outline" size={22} color="#FF453A" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <Image source={{ uri: data.uri }} style={styles.imageViewerImg} resizeMode="contain" />
         </View>
       </TouchableWithoutFeedback>
     </Modal>
@@ -315,7 +323,7 @@ export default function ChatScreen({ route, navigation }) {
   const [uploading, setUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchVisible, setSearchVisible] = useState(false);
-  const [imageViewerUri, setImageViewerUri] = useState(null);
+  const [imageViewerData, setImageViewerData] = useState(null);
   const [menuVisible, setMenuVisible] = useState(false);
 
   // Voice recording state
@@ -515,95 +523,164 @@ export default function ChatScreen({ route, navigation }) {
   };
 
   const stopAndSendRecording = async () => {
-    if (!recording || uploadingVoice) return;
+    if (!recording) return;
     try {
-      setUploadingVoice(true);
       setIsRecording(false);
       const finalDuration = recordingDuration;
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
       const uri = recording.getURI();
       setRecording(null);
-
-      if (!uri) {
-        setUploadingVoice(false);
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('files', {
-        uri,
-        type: 'audio/m4a',
-        name: `voice_${Date.now()}.m4a`,
-      });
-
-      const { data } = await mediaApi.upload(formData);
-      if (data && data.length > 0) {
-        emit('send_message', {
-          conversationId,
-          text: '',
-          images: [],
-          isVoiceNote: true,
-          voiceNoteUrl: data[0].url,
-          voiceNoteDuration: finalDuration,
-        }, (response) => {
-          if (response?.error) Alert.alert('Error', response.error);
-        });
-      }
-    } catch (err) {
-      console.warn('Error sending voice note:', err);
-      Alert.alert('Upload failed', 'Failed to send voice note: ' + (err.message || 'Network error'));
-    } finally {
-      setUploadingVoice(false);
       setRecordingDuration(0);
-    }
-  };
 
-  // ── Send message ────────────────────────────────────────────────────
-  const sendMessage = async () => {
-    if (sending || uploading) return;
-    const messageText = text.trim();
-    if (!messageText && selectedImages.length === 0) return;
+      if (!uri) return;
 
-    let uploadedData = [];
-    if (selectedImages.length > 0) {
-      setUploading(true);
-      try {
-        const formData = new FormData();
-        for (const img of selectedImages) {
-          if (Platform.OS === 'web') {
-            const response = await fetch(img.uri);
-            const blob = await response.blob();
-            formData.append('files', blob, img.fileName || 'img.jpg');
-          } else {
-            formData.append('files', { uri: img.uri, type: img.mimeType || 'image/jpeg', name: img.fileName || 'img.jpg' });
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const optimisticMsg = {
+        _id: tempId,
+        conversation: conversationId,
+        sender: currentUser,
+        text: '',
+        images: [],
+        isVoiceNote: true,
+        voiceNoteUrl: uri,
+        voiceNoteDuration: finalDuration,
+        status: 'sending',
+        createdAt: new Date().toISOString(),
+      };
+      useChatStore.getState().addMessage(conversationId, optimisticMsg);
+      scrollToBottom(true);
+
+      (async () => {
+        try {
+          const formData = new FormData();
+          formData.append('files', {
+            uri,
+            type: 'audio/m4a',
+            name: `voice_${Date.now()}.m4a`,
+          });
+          const { data } = await mediaApi.upload(formData);
+          if (data && data.length > 0) {
+            emit(
+              'send_message',
+              {
+                conversationId,
+                text: '',
+                images: [],
+                isVoiceNote: true,
+                voiceNoteUrl: data[0].url,
+                voiceNoteDuration: finalDuration,
+              },
+              (response) => {
+                if (response?.error) {
+                  useChatStore.getState().updateMessageStatus(conversationId, tempId, 'failed');
+                } else if (response?.message) {
+                  useChatStore.getState().replaceOptimisticMessage(conversationId, tempId, response.message);
+                }
+              }
+            );
           }
+        } catch (err) {
+          console.warn('Voice upload error:', err);
+          useChatStore.getState().updateMessageStatus(conversationId, tempId, 'failed');
         }
-        const { data } = await mediaApi.upload(formData);
-        uploadedData = data;
-      } catch (err) {
-        Alert.alert('Upload failed', err.message);
-        setUploading(false);
-        return;
-      }
-      setUploading(false);
+      })();
+    } catch (err) {
+      console.warn('Error stopping recording:', err);
     }
-
-    setSending(true);
-    emit('send_message', { conversationId, text: messageText, images: uploadedData }, (response) => {
-      if (response?.error) Alert.alert('Error', response.error);
-      else { setText(''); setSelectedImages([]); emit('typing_stop', { conversationId }); }
-      setSending(false);
-    });
-    setText('');
-    emit('typing_stop', { conversationId });
   };
 
-  // ── Delete ──────────────────────────────────────────────────────────
+  // ── Send message (Optimistic & Non-blocking) ────────────────────────
+  const sendMessage = async () => {
+    const messageText = text.trim();
+    const imagesToUpload = [...selectedImages];
+    if (!messageText && imagesToUpload.length === 0) return;
+
+    // Immediately clear input fields so the user can continue typing and sending!
+    setText('');
+    setSelectedImages([]);
+    emit('typing_stop', { conversationId });
+
+    // Generate optimistic message
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const optimisticMsg = {
+      _id: tempId,
+      conversation: conversationId,
+      sender: currentUser,
+      text: messageText,
+      images: imagesToUpload.map((img) => ({ url: img.uri, isLocal: true })),
+      status: 'sending',
+      createdAt: new Date().toISOString(),
+    };
+
+    useChatStore.getState().addMessage(conversationId, optimisticMsg);
+    scrollToBottom(true);
+
+    (async () => {
+      try {
+        let uploadedData = [];
+        if (imagesToUpload.length > 0) {
+          const formData = new FormData();
+          for (const img of imagesToUpload) {
+            if (Platform.OS === 'web') {
+              const response = await fetch(img.uri);
+              const blob = await response.blob();
+              formData.append('files', blob, img.fileName || 'img.jpg');
+            } else {
+              formData.append('files', {
+                uri: img.uri,
+                type: img.mimeType || 'image/jpeg',
+                name: img.fileName || 'img.jpg',
+              });
+            }
+          }
+          const { data } = await mediaApi.upload(formData);
+          uploadedData = data;
+        }
+
+        emit(
+          'send_message',
+          { conversationId, text: messageText, images: uploadedData },
+          (response) => {
+            if (response?.error) {
+              console.warn('Send message error:', response.error);
+              useChatStore.getState().updateMessageStatus(conversationId, tempId, 'failed');
+            } else if (response?.message) {
+              useChatStore.getState().replaceOptimisticMessage(conversationId, tempId, response.message);
+            }
+          }
+        );
+      } catch (err) {
+        console.warn('Background send error:', err);
+        useChatStore.getState().updateMessageStatus(conversationId, tempId, 'failed');
+      }
+    })();
+  };
+
+  // ── Delete message (Supports images, voice notes, and text) ──────────
   const onLongPressMessage = (msg) => {
-    if (msg.sender?._id !== currentUser?._id || msg.isDeleted) return;
-    Alert.alert('Message', undefined, [
-      { text: 'Delete', style: 'destructive', onPress: () => conversationApi.deleteMessage(msg._id).catch(() => {}) },
+    const isMine =
+      msg.sender?._id?.toString() === currentUser?._id?.toString() ||
+      msg.sender?.toString() === currentUser?._id?.toString();
+    if (!isMine || msg.isDeleted) return;
+
+    const isImage = msg.images?.length > 0;
+    const itemType = isImage ? 'image' : msg.isVoiceNote ? 'voice note' : 'message';
+
+    Alert.alert(`Delete ${itemType}`, `Are you sure you want to delete this ${itemType}?`, [
+      {
+        text: 'Delete for everyone',
+        style: 'destructive',
+        onPress: () => {
+          if (msg._id?.toString().startsWith('temp_')) {
+            useChatStore.getState().deleteMessage(conversationId, msg._id);
+            return;
+          }
+          conversationApi.deleteMessage(msg._id).catch((err) => {
+            console.warn('Delete error:', err);
+          });
+        },
+      },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
@@ -614,6 +691,67 @@ export default function ChatScreen({ route, navigation }) {
       : convoMessages;
     return [...list].reverse();
   }, [convoMessages, searchQuery]);
+
+  // Find the last message sent by currentUser (Messenger shows text status on the last sent message)
+  const lastMyMessage = useMemo(() => {
+    return displayedMessages.find((m) => {
+      const isMine =
+        m.sender?._id?.toString() === currentUser?._id?.toString() ||
+        m.sender?.toString() === currentUser?._id?.toString();
+      return isMine && !m.isDeleted;
+    });
+  }, [displayedMessages, currentUser]);
+
+  const renderStatusFooter = (msg, isMine) => {
+    if (!isMine) {
+      return (
+        <View style={styles.timeRow}>
+          <Text style={[styles.msgTime, { color: theme.timestampColor }]}>
+            {formatMessageTime(msg.createdAt)}
+          </Text>
+        </View>
+      );
+    }
+
+    const isLastMyMsg = lastMyMessage?._id?.toString() === msg._id?.toString();
+    const isSending = msg.status === 'sending';
+    const isFailed = msg.status === 'failed';
+    const timeColor = 'rgba(255, 255, 255, 0.7)';
+
+    return (
+      <View style={styles.timeRow}>
+        <Text style={[styles.msgTime, { color: timeColor }]}>
+          {formatMessageTime(msg.createdAt)}
+        </Text>
+        <View style={styles.statusIndicatorWrapper}>
+          {isSending ? (
+            <Text style={styles.sendingBadge}>Sending...</Text>
+          ) : isFailed ? (
+            <Text style={styles.failedBadge}>Failed</Text>
+          ) : isLastMyMsg ? (
+            <Text style={styles.messengerStatusText}>
+              {msg.status === 'seen'
+                ? 'Seen'
+                : msg.status === 'delivered'
+                ? 'Delivered'
+                : 'Sent'}
+            </Text>
+          ) : (
+            <Ionicons
+              name={
+                msg.status === 'seen' || msg.status === 'delivered'
+                  ? 'checkmark-done'
+                  : 'checkmark'
+              }
+              size={13}
+              color={msg.status === 'seen' ? '#34B7F1' : 'rgba(255, 255, 255, 0.6)'}
+              style={{ marginLeft: 3 }}
+            />
+          )}
+        </View>
+      </View>
+    );
+  };
 
   // ── Render message ──────────────────────────────────────────────────
   const renderMessage = ({ item: msg }) => {
@@ -647,12 +785,30 @@ export default function ChatScreen({ route, navigation }) {
         )}
         <View style={styles.bubbleContent}>
           {msg.images?.length > 0 && (
-            <View style={styles.imageGrid}>
-              {msg.images.map((img, i) => (
-                <TouchableOpacity key={i} onPress={() => setImageViewerUri(img.url)} activeOpacity={0.9}>
-                  <Image source={{ uri: img.url }} style={styles.messageImage} />
-                </TouchableOpacity>
-              ))}
+            <View style={[styles.imageBubbleContainer, !msg.text && styles.imageOnlyWrapper]}>
+              <View style={styles.imageGrid}>
+                {msg.images.map((img, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setImageViewerData({ uri: img.url, msg })}
+                    onLongPress={() => onLongPressMessage(msg)}
+                    delayLongPress={260}
+                    activeOpacity={0.9}
+                  >
+                    <Image source={{ uri: img.url }} style={styles.messageImage} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {!msg.text && (
+                <View
+                  style={[
+                    styles.imageMetaBadge,
+                    { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble },
+                  ]}
+                >
+                  {renderStatusFooter(msg, isMine)}
+                </View>
+              )}
             </View>
           )}
           {msg.isVoiceNote || msg.voiceNoteUrl ? (
@@ -663,19 +819,7 @@ export default function ChatScreen({ route, navigation }) {
                 isMine={isMine}
                 theme={theme}
               />
-              <View style={styles.timeRow}>
-                <Text style={[styles.msgTime, { color: isMine ? 'rgba(255,255,255,0.6)' : theme.timestampColor }]}>
-                  {formatMessageTime(msg.createdAt)}
-                </Text>
-                {isMine && (
-                  <Ionicons
-                    name={msg.status === 'seen' || msg.status === 'delivered' ? 'checkmark-done' : 'checkmark'}
-                    size={13}
-                    color={msg.status === 'seen' ? '#34B7F1' : 'rgba(255,255,255,0.55)'}
-                    style={{ marginLeft: 3 }}
-                  />
-                )}
-              </View>
+              {renderStatusFooter(msg, isMine)}
             </View>
           ) : null}
           {msg.text ? (
@@ -683,19 +827,7 @@ export default function ChatScreen({ route, navigation }) {
               <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 15, lineHeight: 22 }}>
                 {msg.text}
               </Text>
-              <View style={styles.timeRow}>
-                <Text style={[styles.msgTime, { color: isMine ? 'rgba(255,255,255,0.6)' : theme.timestampColor }]}>
-                  {formatMessageTime(msg.createdAt)}
-                </Text>
-                {isMine && (
-                  <Ionicons
-                    name={msg.status === 'seen' || msg.status === 'delivered' ? 'checkmark-done' : 'checkmark'}
-                    size={13}
-                    color={msg.status === 'seen' ? '#34B7F1' : 'rgba(255,255,255,0.55)'}
-                    style={{ marginLeft: 3 }}
-                  />
-                )}
-              </View>
+              {renderStatusFooter(msg, isMine)}
             </View>
           ) : null}
         </View>
@@ -885,11 +1017,8 @@ export default function ChatScreen({ route, navigation }) {
               onPress={stopAndSendRecording}
               style={[styles.sendBtn, { backgroundColor: theme.sentBubble, shadowColor: theme.sentBubble }]}
               activeOpacity={0.8}
-              disabled={uploadingVoice}
             >
-              {uploadingVoice
-                ? <ActivityIndicator color="#FFF" size="small" />
-                : <Ionicons name="send" size={18} color="#FFF" />}
+              <Ionicons name="send" size={18} color="#FFF" />
             </TouchableOpacity>
           </View>
         ) : (
@@ -897,7 +1026,6 @@ export default function ChatScreen({ route, navigation }) {
             <TouchableOpacity
               onPress={takePhoto}
               style={styles.iconBtn}
-              disabled={uploading || sending}
               activeOpacity={0.7}
             >
               <Ionicons name="camera" size={23} color={theme.sentBubble} />
@@ -905,7 +1033,6 @@ export default function ChatScreen({ route, navigation }) {
             <TouchableOpacity
               onPress={pickImages}
               style={styles.iconBtn}
-              disabled={uploading || sending}
               activeOpacity={0.7}
             >
               <Ionicons name="image" size={23} color={theme.sentBubble} />
@@ -913,7 +1040,6 @@ export default function ChatScreen({ route, navigation }) {
             <TouchableOpacity
               onPress={startRecording}
               style={styles.iconBtn}
-              disabled={uploading || sending}
               activeOpacity={0.7}
             >
               <Ionicons name="mic" size={23} color={theme.sentBubble} />
@@ -948,11 +1074,9 @@ export default function ChatScreen({ route, navigation }) {
                   shadowColor: theme.sentBubble,
                 },
               ]}
-              disabled={sending || uploading || (!text.trim() && selectedImages.length === 0)}
+              disabled={!text.trim() && selectedImages.length === 0}
             >
-              {uploading || sending
-                ? <ActivityIndicator color="#FFF" size="small" />
-                : <Ionicons name="send" size={18} color="#FFF" />}
+              <Ionicons name="send" size={18} color="#FFF" />
             </TouchableOpacity>
           </View>
         )}
@@ -960,9 +1084,19 @@ export default function ChatScreen({ route, navigation }) {
 
       {/* ── Full-screen image viewer ────────────────────────────────── */}
       <ImageViewer
-        uri={imageViewerUri}
-        visible={!!imageViewerUri}
-        onClose={() => setImageViewerUri(null)}
+        data={imageViewerData}
+        visible={!!imageViewerData}
+        onClose={() => setImageViewerData(null)}
+        canDelete={
+          imageViewerData?.msg?.sender?._id?.toString() === currentUser?._id?.toString() ||
+          imageViewerData?.msg?.sender?.toString() === currentUser?._id?.toString()
+        }
+        onDelete={() => {
+          if (!imageViewerData?.msg) return;
+          const targetMsg = imageViewerData.msg;
+          setImageViewerData(null);
+          setTimeout(() => onLongPressMessage(targetMsg), 150);
+        }}
       />
 
       {/* ── 3-dot dropdown ─────────────────────────────────────────── */}
@@ -1043,17 +1177,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  imageViewerClose: {
+  imageViewerHeader: {
     position: 'absolute',
     top: 52,
+    left: 20,
     right: 20,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 20,
+  },
+  imageViewerHeaderBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
   imageViewerImg: { width: SCREEN_W, height: SCREEN_H * 0.8 },
   // Input
@@ -1202,5 +1342,40 @@ const styles = StyleSheet.create({
   voiceTimeText: {
     fontSize: 11,
     fontWeight: '500',
+  },
+  imageBubbleContainer: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  imageOnlyWrapper: {
+    paddingBottom: 2,
+  },
+  imageMetaBadge: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    maxWidth: '100%',
+  },
+  statusIndicatorWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  sendingBadge: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  messengerStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  failedBadge: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FF453A',
   },
 });
