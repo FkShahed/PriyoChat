@@ -151,7 +151,7 @@ export default function ChatListScreen({ navigation }) {
                   styles.previewText,
                   { color: isUnread ? (isDark ? '#FFFFFF' : '#1C1E21') : (isDark ? 'rgba(255,255,255,0.55)' : '#65676B') },
                   isUnread && styles.unreadText,
-                  isDeleted && { fontStyle: 'italic' }
+                  isDeleted && { fontStyle: 'italic', paddingRight: 4 }
                 ]}
                 numberOfLines={1}
               >
