@@ -769,6 +769,29 @@ export default function ChatScreen({ route, navigation }) {
     });
   }, [displayedMessages, currentUser]);
 
+  // Reliably get recipient avatar+name from: otherUser route param → convo.participants → message senders
+  const recipientAvatarData = useMemo(() => {
+    // 1. Route param (most reliable)
+    if (otherUser?.avatar || otherUser?.name) {
+      return { avatar: otherUser.avatar || null, name: otherUser.name || 'U' };
+    }
+    // 2. Populated participant object
+    if (convo?.participants?.length) {
+      const p = convo.participants.find(
+        (x) => x?._id && x._id.toString() !== currentUser?._id?.toString()
+      );
+      if (p?._id) return { avatar: p.avatar || null, name: p.name || 'U' };
+    }
+    // 3. Scan messages for a sender that isn't me (always populated by backend populate())
+    for (const m of convoMessages) {
+      const isTheirs =
+        m.sender?._id &&
+        m.sender._id.toString() !== currentUser?._id?.toString();
+      if (isTheirs) return { avatar: m.sender.avatar || null, name: m.sender.name || 'U' };
+    }
+    return { avatar: null, name: 'U' };
+  }, [otherUser, convo?.participants, convoMessages, currentUser]);
+
   const renderStatusFooter = (msg, isMine) => {
     const isTapped = tappedMsgId === msg._id?.toString();
 
@@ -797,15 +820,15 @@ export default function ChatScreen({ route, navigation }) {
               {`Seen ${seenTime}`}
             </Text>
           )}
-          {recipientUser?.avatar ? (
+          {recipientAvatarData.avatar ? (
             <Image
-              source={{ uri: recipientUser.avatar }}
+              source={{ uri: recipientAvatarData.avatar }}
               style={styles.seenMiniAvatar}
             />
           ) : (
             <View style={[styles.seenMiniAvatar, styles.seenMiniAvatarFallback]}>
               <Text style={styles.seenMiniAvatarText}>
-                {getInitials(recipientUser?.name || 'U')}
+                {getInitials(recipientAvatarData.name)}
               </Text>
             </View>
           )}
@@ -1489,8 +1512,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 10,
-    // FlatList is inverted so the separator must not flip visually
-    transform: [{ scaleY: -1 }],
   },
   dateSeparatorPill: {
     paddingHorizontal: 14,
