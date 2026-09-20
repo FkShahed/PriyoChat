@@ -970,25 +970,18 @@ export default function ChatScreen({ route, navigation }) {
     // ── Call message bubble ──────────────────────────────────────────
     if (msg.callData?.callType) {
       const cd = msg.callData;
-      const isCompleted = cd.status === 'completed';
       const isRejected = cd.status === 'rejected';
       const isVideo = cd.callType === 'video';
-      const callIcon = isVideo ? 'videocam' : 'call';
-      const arrowIcon = isMine ? 'arrow-up' : 'arrow-down';
-
+      const callIcon = isVideo ? 'videocam' : 'call-outline';
       const mins = Math.floor((cd.duration || 0) / 60).toString().padStart(2, '0');
       const secs = ((cd.duration || 0) % 60).toString().padStart(2, '0');
-      const durationStr = isCompleted && cd.duration > 0 ? `${mins}:${secs}` : null;
-
-      const statusStr = isRejected
+      const durationStr = cd.status === 'completed' && cd.duration > 0 ? ` • ${mins}:${secs}` : '';
+      const label = isRejected
         ? (isMine ? 'Cancelled' : 'Missed call')
-        : isCompleted
-        ? (isVideo ? (isMine ? 'Outgoing video call' : 'Incoming video call') : (isMine ? 'Outgoing call' : 'Incoming call'))
-        : (isVideo ? 'Video call' : 'Voice call');
-
-      const accentColor = isRejected ? '#FF453A' : '#0084FF';
-      const bgColor = isMine ? theme.sentBubble : theme.receivedBubble;
-      const textColor = '#FFFFFF';
+        : isVideo
+        ? (isMine ? 'Outgoing video call' : 'Incoming video call')
+        : (isMine ? 'Outgoing call' : 'Incoming call');
+      const iconColor = isRejected ? '#FF3B30' : '#0084FF';
 
       return (
         <View style={{ width: '100%' }}>
@@ -996,52 +989,19 @@ export default function ChatScreen({ route, navigation }) {
           <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
             <TouchableOpacity
               onPress={() => emit('call_offer', { to: isMine ? otherUser._id : msg.sender?._id || otherUser._id, callType: cd.callType })}
-              activeOpacity={0.75}
+              activeOpacity={0.7}
+              style={[styles.callBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}
             >
-              <LinearGradient
-                colors={isRejected
-                  ? ['rgba(255,69,58,0.18)', 'rgba(255,69,58,0.08)']
-                  : ['rgba(0,132,255,0.22)', 'rgba(0,80,200,0.10)']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={[styles.callBubble, {
-                  borderWidth: 1,
-                  borderColor: isRejected ? 'rgba(255,69,58,0.25)' : 'rgba(0,132,255,0.25)',
-                }]}
-              >
-                {/* Left: icon wrap */}
-                <View style={[styles.callBubbleIconWrap, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                  <Ionicons name={callIcon} size={22} color="#FFF" />
-                  <Ionicons name={arrowIcon} size={11} color="rgba(255,255,255,0.8)" style={{ marginTop: 2 }} />
-                </View>
-
-                {/* Middle: status + duration + time */}
-                <View style={styles.callBubbleInfo}>
-                  <Text style={[styles.callBubbleTitle, { color: textColor }]} numberOfLines={1}>
-                    {statusStr}
-                  </Text>
-                  <View style={styles.callBubbleMeta}>
-                    {durationStr && (
-                      <>
-                        <Ionicons name="time-outline" size={11} color={textColor} style={{ opacity: 0.5, marginRight: 3 }} />
-                        <Text style={[styles.callBubbleDuration, { color: textColor }]}>{durationStr}</Text>
-                        <Text style={[styles.callBubbleDuration, { color: textColor }]}>  ·  </Text>
-                      </>
-                    )}
-                    <Text style={[styles.callBubbleDuration, { color: textColor }]}>
-                      {formatMessageTime(msg.createdAt)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Right: call button */}
-                <LinearGradient
-                  colors={isRejected ? ['#FF453A', '#C0392B'] : ['#0084FF', '#005FCC']}
-                  style={styles.callBubbleCallBtn}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                >
-                  <Ionicons name={callIcon} size={16} color="#FFF" />
-                </LinearGradient>
-              </LinearGradient>
+              <Ionicons name={callIcon} size={20} color={iconColor} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 14, fontWeight: '600' }}>
+                  {label}{durationStr}
+                </Text>
+                <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 11, opacity: 0.55, marginTop: 2 }}>
+                  {formatMessageTime(msg.createdAt)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={isMine ? theme.sentText : theme.receivedText} style={{ opacity: 0.4 }} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1694,35 +1654,9 @@ const styles = StyleSheet.create({
   callBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 18,
-    gap: 10,
-    minWidth: 200,
-  },
-  callBubbleIconWrap: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  callBubbleInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  callBubbleTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 3,
-  },
-  callBubbleMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  callBubbleDuration: {
-    fontSize: 11,
-    opacity: 0.55,
-  },
-  callBubbleCallBtn: {
-    width: 34, height: 34, borderRadius: 17,
-    alignItems: 'center', justifyContent: 'center',
+    borderRadius: 16,
+    minWidth: 190,
   },
 });
