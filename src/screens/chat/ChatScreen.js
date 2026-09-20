@@ -255,6 +255,17 @@ export default function ChatScreen({ route, navigation }) {
 
   const [conversationId] = useState(initialConvo._id);
   const convo = conversations.find(c => c._id === conversationId) || initialConvo;
+  const recipientUser = useMemo(() => {
+    if (otherUser) return otherUser;
+    if (convo?.participants?.length) {
+      return convo.participants.find(
+        (p) =>
+          p._id?.toString() !== currentUser?._id?.toString() &&
+          p.toString() !== currentUser?._id?.toString()
+      );
+    }
+    return null;
+  }, [otherUser, convo?.participants, currentUser]);
   const { resolvedTheme } = useThemeStore();
 
   // Local theme key — loaded from AsyncStorage (supports painted themes the backend can't store)
@@ -327,6 +338,7 @@ export default function ChatScreen({ route, navigation }) {
   const [searchVisible, setSearchVisible] = useState(false);
   const [imageViewerData, setImageViewerData] = useState(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [showSeenTime, setShowSeenTime] = useState(false);
 
   // Voice recording state
   const [recording, setRecording] = useState(null);
@@ -731,16 +743,42 @@ export default function ChatScreen({ route, navigation }) {
     const isSending = msg.status === 'sending';
     const isFailed = msg.status === 'failed';
 
+    if (isLastMyMsg && msg.status === 'seen') {
+      const seenTime = formatMessageTime(msg.seenAt || msg.updatedAt || msg.createdAt);
+      return (
+        <TouchableOpacity
+          onPress={() => setShowSeenTime((prev) => !prev)}
+          activeOpacity={0.7}
+          style={[styles.statusFooterRow, styles.statusFooterMine, { alignItems: 'center' }]}
+        >
+          {showSeenTime && (
+            <Text style={[styles.statusFooterText, { color: statusColor, marginRight: 5 }]}>
+              {`Seen ${seenTime}`}
+            </Text>
+          )}
+          {recipientUser?.avatar ? (
+            <Image
+              source={{ uri: recipientUser.avatar }}
+              style={styles.seenMiniAvatar}
+            />
+          ) : (
+            <View style={[styles.seenMiniAvatar, styles.seenMiniAvatarFallback]}>
+              <Text style={styles.seenMiniAvatarText}>
+                {getInitials(recipientUser?.name || 'U')}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
     let statusText = '';
     if (isSending) {
       statusText = 'Sending...';
     } else if (isFailed) {
       statusText = 'Failed';
     } else if (isLastMyMsg) {
-      if (msg.status === 'seen') {
-        const seenTime = formatMessageTime(msg.seenAt || msg.updatedAt || msg.createdAt);
-        statusText = `Seen ${seenTime}`;
-      } else if (msg.status === 'delivered') {
+      if (msg.status === 'delivered') {
         statusText = 'Delivered';
       } else {
         statusText = `Sent • ${formatMessageTime(msg.createdAt)}`;
@@ -761,6 +799,7 @@ export default function ChatScreen({ route, navigation }) {
   // ── Render message ──────────────────────────────────────────────────
   const renderMessage = ({ item: msg }) => {
     const isMine = msg.sender?._id?.toString() === currentUser?._id?.toString() || msg.sender?.toString() === currentUser?._id?.toString();
+    const isLastMyMsg = lastMyMessage?._id?.toString() === msg._id?.toString();
     if (msg.isDeleted) {
       return (
         <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
@@ -775,6 +814,11 @@ export default function ChatScreen({ route, navigation }) {
 
     return (
       <TouchableOpacity
+        onPress={() => {
+          if (isLastMyMsg && msg.status === 'seen') {
+            setShowSeenTime((prev) => !prev);
+          }
+        }}
         onLongPress={() => onLongPressMessage(msg)}
         style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}
         activeOpacity={0.85}
@@ -1362,5 +1406,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '400',
     backgroundColor: 'transparent',
+  },
+  seenMiniAvatar: {
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  seenMiniAvatarFallback: {
+    backgroundColor: '#0084FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seenMiniAvatarText: {
+    color: '#FFF',
+    fontSize: 7.5,
+    fontWeight: '700',
   },
 });
