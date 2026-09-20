@@ -339,7 +339,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const [text, setText] = useState('');
   const [selectedImages, setSelectedImages] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(convoMessages.length === 0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [sending, setSending] = useState(false);
