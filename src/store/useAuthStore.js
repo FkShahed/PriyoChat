@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi, userApi, configApi } from '../api/services';
+import { signOutFromGoogle } from '../services/googleAuthService';
 
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -75,6 +76,14 @@ const useAuthStore = create((set, get) => ({
     return data;
   },
 
+  loginWithGoogle: async (idToken) => {
+    const { data } = await authApi.googleLogin(idToken);
+    await AsyncStorage.setItem('auth_token', data.token);
+    await AsyncStorage.setItem('auth_user', JSON.stringify(data.user));
+    set({ user: data.user, token: data.token, isAuthenticated: true });
+    return data;
+  },
+
   updateUser: async (updatedUser) => {
     await AsyncStorage.setItem('auth_user', JSON.stringify(updatedUser));
     set({ user: updatedUser });
@@ -82,6 +91,7 @@ const useAuthStore = create((set, get) => ({
 
   logout: async () => {
     await AsyncStorage.multiRemove(['auth_token', 'auth_user']);
+    signOutFromGoogle().catch(() => {});
     set({ user: null, token: null, isAuthenticated: false });
   },
 }));

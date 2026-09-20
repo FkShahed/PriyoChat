@@ -28,9 +28,12 @@
           "icon": "./assets/icon.png",
           "color": "#0084FF",
           "defaultChannel": "messages",
-          "sounds": ["./assets/ringtone.wav"]
+          "sounds": [
+            "./assets/ringtone.wav"
+          ]
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "ios": {
       "supportsTablet": true,
@@ -41,6 +44,7 @@
     },
     "android": {
       "package": "com.shahed.priyochat",
+      "googleServicesFile": "./google-services.json",
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

@@ -6,6 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
+import GoogleSignInButton from '../../components/common/GoogleSignInButton';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -120,6 +121,14 @@ export default function LoginScreen({ navigation }) {
                 </LinearGradient>
               </TouchableOpacity>
 
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <GoogleSignInButton navigation={navigation} title="Continue with Google" />
+
               <TouchableOpacity onPress={() => navigation.navigate('Signup')} style={styles.signupLink}>
                 <Text style={styles.signupText}>
                   Don't have an account? <Text style={styles.signupBold}>Sign up</Text>
@@ -162,4 +171,20 @@ const styles = StyleSheet.create({
   signupLink: { alignItems: 'center', paddingVertical: 8 },
   signupText: { color: '#8E8E93', fontSize: 14 },
   signupBold: { color: '#0084FF', fontWeight: '700' },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E5EA',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: '#8E8E93',
+    fontSize: 12,
+    fontWeight: '600',
+  },
 });

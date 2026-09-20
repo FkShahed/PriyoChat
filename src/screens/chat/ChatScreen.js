@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   Image, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
   ImageBackground, ScrollView, Modal, TouchableWithoutFeedback,
-  StatusBar, Dimensions,
+  StatusBar, Dimensions, Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -141,12 +141,40 @@ export default function ChatScreen({ route, navigation }) {
 
   const typingTimeout = useRef(null);
   const flatListRef = useRef(null);
+  const isKeyboardVisible = useRef(false);
   const isTyping = typingUsers[conversationId];
 
   const isOtherOnline = onlineUsers[otherUser?._id] ?? otherUser?.isOnline;
   const lastSeenText = isOtherOnline
     ? 'Online'
     : formatLastSeen(otherUser?.lastSeen || otherUser?.updatedAt);
+
+  const scrollToBottom = useCallback((animated = true) => {
+    if (flatListRef.current && convoMessages.length > 0) {
+      flatListRef.current.scrollToEnd({ animated });
+    }
+  }, [convoMessages.length]);
+
+  // Keep last message visible when keyboard opens
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      isKeyboardVisible.current = true;
+      setTimeout(() => scrollToBottom(true), 50);
+      setTimeout(() => scrollToBottom(true), 150);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      isKeyboardVisible.current = false;
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [scrollToBottom]);
 
   // ── Load messages ───────────────────────────────────────────────────
   const loadMessages = useCallback(async (pageNum = 1, append = false) => {
@@ -176,9 +204,9 @@ export default function ChatScreen({ route, navigation }) {
 
   useEffect(() => {
     if (convoMessages.length > 0 && !searchVisible) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(() => scrollToBottom(true), 100);
     }
-  }, [convoMessages.length]);
+  }, [convoMessages.length, searchVisible, scrollToBottom]);
 
   // ── Typing ──────────────────────────────────────────────────────────
   const handleTyping = (val) => {
@@ -334,8 +362,8 @@ export default function ChatScreen({ route, navigation }) {
     // KeyboardAvoidingView wraps ALL content so input stays above keyboard
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <StatusBar barStyle="light-content" />
 
@@ -435,6 +463,16 @@ export default function ChatScreen({ route, navigation }) {
           contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 8 }}
           onEndReached={() => hasMore && !searchVisible && loadMessages(page + 1, true)}
           onEndReachedThreshold={0.3}
+          onLayout={() => {
+            if (convoMessages.length > 0 && !searchVisible) {
+              scrollToBottom(false);
+            }
+          }}
+          onContentSizeChange={() => {
+            if (convoMessages.length > 0 && !searchVisible && isKeyboardVisible.current) {
+              scrollToBottom(true);
+            }
+          }}
           ListFooterComponent={isTyping ? <TypingIndicator theme={theme} /> : null}
           ListEmptyComponent={
             searchQuery ? (
@@ -472,6 +510,10 @@ export default function ChatScreen({ route, navigation }) {
             style={[styles.textInput, { color: theme.inputText, backgroundColor: theme.background }]}
             value={text}
             onChangeText={handleTyping}
+            onFocus={() => {
+              setTimeout(() => scrollToBottom(true), 100);
+              setTimeout(() => scrollToBottom(true), 250);
+            }}
             placeholder="Message..."
             placeholderTextColor={theme.placeholderText}
             multiline

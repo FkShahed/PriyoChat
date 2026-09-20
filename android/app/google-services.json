@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "540696667738",
+    "project_id": "piyochatbd",
+    "storage_bucket": "piyochatbd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:540696667738:android:908084ed392059d6a2da63",
+        "android_client_info": {
+          "package_name": "com.shahed.priyochat"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "540696667738-432lvhvqanbl5b6p0u6h7bvbpkn8jnlp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shahed.priyochat",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "540696667738-ue25v0i14u4p67srs1ivg3p2ta7kd5i8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgZ46XNInttPWdK2UnE38z6Z_BmTOPYr8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "540696667738-ue25v0i14u4p67srs1ivg3p2ta7kd5i8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

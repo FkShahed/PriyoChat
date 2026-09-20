@@ -9,7 +9,7 @@ import { Platform, NativeModules } from 'react-native';
 const IS_LOCAL = false; // Set to true for local development, false for production
 
 export const BASE_URL = IS_LOCAL
-  ? 'http://192.168.1.104:4444'
+  ? 'http://192.168.1.102:4444'
   : 'https://priyochat.onrender.com';
 
 export const API_BASE_URL = `${BASE_URL}/api`;
