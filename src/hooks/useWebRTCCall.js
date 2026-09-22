@@ -2,14 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { Platform, PermissionsAndroid, Alert } from 'react-native';
 import useCallStore from '../store/useCallStore';
 import useSocketStore from '../store/useSocketStore';
-
-// InCallManager — controls audio routing (earpiece vs speaker), proximity sensor
-let InCallManager = null;
-try {
-  InCallManager = require('react-native-incall-manager').default;
-} catch (e) {
-  console.warn('[InCallManager] Not available:', e.message);
-}
+import { InCallManager, webrtc } from '../utils/nativeModules';
 
 // Conditionally load WebRTC based on platform
 let RTCPeerConnection, RTCIceCandidate, RTCSessionDescription, mediaDevices;
@@ -23,7 +16,6 @@ try {
     mediaDevices = navigator.mediaDevices;
     webrtcAvailable = !!RTCPeerConnection;
   } else {
-    const webrtc = require('react-native-webrtc');
     RTCPeerConnection = webrtc.RTCPeerConnection;
     RTCIceCandidate = webrtc.RTCIceCandidate;
     RTCSessionDescription = webrtc.RTCSessionDescription;

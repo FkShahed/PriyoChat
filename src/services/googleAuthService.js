@@ -1,4 +1,5 @@
 import { Platform, Alert } from 'react-native';
+import { GoogleSignin, statusCodes } from '../utils/nativeModules';
 
 // Google Web Client ID from environment variables (.env)
 export const GOOGLE_WEB_CLIENT_ID =
@@ -14,20 +15,8 @@ export const isConfiguredClientId = () => {
   );
 };
 
-let GoogleSigninModule = null;
-let statusCodes = {};
+let GoogleSigninModule = GoogleSignin;
 let isConfigured = false;
-
-// Dynamically load native Google Sign-in on mobile
-if (Platform.OS !== 'web') {
-  try {
-    const RNGoogleSignin = require('@react-native-google-signin/google-signin');
-    GoogleSigninModule = RNGoogleSignin.GoogleSignin;
-    statusCodes = RNGoogleSignin.statusCodes || {};
-  } catch (err) {
-    console.warn('[GoogleSignIn] Could not import @react-native-google-signin/google-signin:', err?.message);
-  }
-}
 
 export const initGoogleSignIn = (customClientId) => {
   if (Platform.OS === 'web') return;

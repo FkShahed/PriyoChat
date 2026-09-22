@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { io } from 'socket.io-client';
+import io from 'socket.io-client/dist/socket.io.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, AppState } from 'react-native';
 import useChatStore from './useChatStore';

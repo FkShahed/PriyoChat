@@ -12,17 +12,12 @@ import useSocketStore from '../../store/useSocketStore';
 import useWebRTCCall from '../../hooks/useWebRTCCall';
 import { getInitials } from '../../utils/helpers';
 
+import { webrtc } from '../../utils/nativeModules';
+
 // RTCView: use native component if available, fall back to View (Expo Go / web)
 let RTCView = View;
-if (Platform.OS !== 'web') {
-  try {
-    const webrtc = require('react-native-webrtc');
-    if (webrtc && webrtc.RTCView) {
-      RTCView = webrtc.RTCView;
-    }
-  } catch (e) {
-    console.warn('[CallScreen] react-native-webrtc not available, video will not render');
-  }
+if (Platform.OS !== 'web' && webrtc && webrtc.RTCView) {
+  RTCView = webrtc.RTCView;
 }
 
 function formatDuration(secs) {
