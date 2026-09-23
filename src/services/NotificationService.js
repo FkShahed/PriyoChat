@@ -57,12 +57,21 @@ class NotificationService {
    * Show a local notification for an incoming chat message.
    * Only fires when the user is NOT inside the active chat.
    */
-  static async showMessageNotification({ senderName, senderId, text, conversationId, avatarUrl }) {
+  static async showMessageNotification({ senderName, senderId, text, callData, conversationId, avatarUrl }) {
     try {
+      let bodyText = text;
+      if (!bodyText) {
+        if (callData) {
+          bodyText = `📞 ${callData.status === 'rejected' ? 'Missed Call' : 'Call Ended'}`;
+        } else {
+          bodyText = '📷 Sent an image';
+        }
+      }
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: senderName,
-          body: text || '📷 Sent an image',
+          body: bodyText,
           sound: 'default',
           data: { type: 'message', conversationId, senderId, senderName, avatarUrl },
           ...(Platform.OS === 'android' && { channelId: 'messages' }),

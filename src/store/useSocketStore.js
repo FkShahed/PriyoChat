@@ -68,6 +68,7 @@ const useSocketStore = create((set, get) => ({
           senderName: message.sender?.name || 'New Message',
           senderId: message.sender?._id,
           text: message.text,
+          callData: message.callData,
           conversationId: message.conversation,
           avatarUrl: message.sender?.avatar,
         });

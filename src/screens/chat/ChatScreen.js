@@ -441,10 +441,10 @@ export default function ChatScreen({ route, navigation }) {
   const keyboardPadding = useRef(new RNAnimated.Value(0)).current;
   const isTyping = typingUsers[conversationId];
 
-  const isOtherOnline = onlineUsers[otherUser?._id] ?? otherUser?.isOnline;
+  const isOtherOnline = onlineUsers[recipientUser?._id] ?? recipientUser?.isOnline;
   const lastSeenText = isOtherOnline
     ? 'Online'
-    : formatLastSeen(otherUser?.lastSeen || otherUser?.updatedAt);
+    : formatLastSeen(recipientUser?.lastSeen || recipientUser?.updatedAt);
 
   const scrollToBottom = useCallback((animated = true) => {
     if (flatListRef.current) {
@@ -1122,13 +1122,13 @@ export default function ChatScreen({ route, navigation }) {
 
         <TouchableOpacity
           onPress={() => navigation.navigate('UserProfile', {
-            user: otherUser,
+            user: recipientUser,
             isOnline: isOtherOnline,
-            lastSeen: otherUser?.lastSeen || otherUser?.updatedAt,
+            lastSeen: recipientUser?.lastSeen || recipientUser?.updatedAt,
           })}
         >
-          {otherUser?.avatar ? (
-            <Image source={{ uri: otherUser.avatar }} style={styles.headerAvatar} />
+          {recipientUser?.avatar ? (
+            <Image source={{ uri: recipientUser.avatar }} style={styles.headerAvatar} />
           ) : (
             <View style={[
               styles.headerAvatar,
@@ -1139,7 +1139,7 @@ export default function ChatScreen({ route, navigation }) {
                 justifyContent: 'center',
               }
             ]}>
-              <Text style={{ color: headerNameColor, fontWeight: '700', fontSize: 16 }}>{getInitials(otherUser?.name)}</Text>
+              <Text style={{ color: headerNameColor, fontWeight: '700', fontSize: 16 }}>{getInitials(recipientUser?.name)}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -1147,39 +1147,43 @@ export default function ChatScreen({ route, navigation }) {
         <TouchableOpacity
           style={{ flex: 1, marginLeft: 10 }}
           onPress={() => navigation.navigate('UserProfile', {
-            user: otherUser,
+            user: recipientUser,
             isOnline: isOtherOnline,
-            lastSeen: otherUser?.lastSeen || otherUser?.updatedAt,
+            lastSeen: recipientUser?.lastSeen || recipientUser?.updatedAt,
           })}
         >
-          <Text style={[styles.headerName, { color: headerNameColor }]} numberOfLines={1}>{otherUser?.name}</Text>
+          <Text style={[styles.headerName, { color: headerNameColor }]} numberOfLines={1}>{recipientUser?.name}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             {isOtherOnline && <View style={styles.onlinePip} />}
             <Text style={[styles.headerStatus, { color: headerStatusColor }]}>{lastSeenText}</Text>
           </View>
         </TouchableOpacity>
 
-        {/* Audio call */}
-        <TouchableOpacity
-          style={styles.headerBtn}
-          onPress={() => {
-            useCallStore.getState().startCall(otherUser, 'audio');
-            navigation.navigate('Call', { otherUser, callType: 'audio' });
-          }}
-        >
-          <Ionicons name="call-outline" size={21} color={headerIconColor} />
-        </TouchableOpacity>
+        {recipientUser?._id !== currentUser?._id && (
+          <>
+            {/* Audio call */}
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => {
+                useCallStore.getState().startCall(recipientUser, 'audio');
+                navigation.navigate('Call', { otherUser: recipientUser, callType: 'audio' });
+              }}
+            >
+              <Ionicons name="call-outline" size={21} color={headerIconColor} />
+            </TouchableOpacity>
 
-        {/* Video call */}
-        <TouchableOpacity
-          style={styles.headerBtn}
-          onPress={() => {
-            useCallStore.getState().startCall(otherUser, 'video');
-            navigation.navigate('Call', { otherUser, callType: 'video' });
-          }}
-        >
-          <Ionicons name="videocam-outline" size={22} color={headerIconColor} />
-        </TouchableOpacity>
+            {/* Video call */}
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => {
+                useCallStore.getState().startCall(recipientUser, 'video');
+                navigation.navigate('Call', { otherUser: recipientUser, callType: 'video' });
+              }}
+            >
+              <Ionicons name="videocam-outline" size={22} color={headerIconColor} />
+            </TouchableOpacity>
+          </>
+        )}
 
         {/* 3-dot menu */}
         <TouchableOpacity style={styles.headerBtn} onPress={() => setMenuVisible(true)}>

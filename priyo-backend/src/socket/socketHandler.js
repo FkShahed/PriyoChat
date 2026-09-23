@@ -3,7 +3,7 @@ const User = require('../models/User');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const Call = require('../models/Call');
-const { sendPushNotification } = require('../config/firebase');
+const { sendPushNotification, sendExpoPushBatch } = require('../config/firebase');
 
 // Map userId -> socketId for online tracking
 const onlineUsers = new Map();
@@ -174,6 +174,22 @@ const setupSocket = (io) => {
         offer,
         callType,
       });
+
+      // ── Send Push Notification to wake up the device if app is backgrounded/killed ──
+      try {
+        const receiver = await User.findById(to).select('fcmToken');
+        if (receiver && receiver.fcmToken) {
+          const t = receiver.fcmToken;
+          if (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken')) {
+            const title = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call';
+            const body = `${socket.user.name} is calling you...`;
+            await sendExpoPushBatch([t], title, body, { type: 'call' });
+            console.log(`[socketHandler] Sent Call Push Notification to ${to}`);
+          }
+        }
+      } catch (e) {
+        console.error('[socketHandler] Error sending call push notification:', e.message);
+      }
     });
 
     socket.on('call_ringing', ({ to }) => {
