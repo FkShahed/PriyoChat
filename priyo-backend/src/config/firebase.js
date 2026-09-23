@@ -67,12 +67,20 @@ const sendExpoNotification = (to, title, body, data = {}) => {
 };
 
 // Bulk send via Expo Push API (up to 100 tokens per batch)
-const sendExpoPushBatch = async (tokens, title, body, data = {}) => {
+const sendExpoPushBatch = async (tokens, title, body, data = {}, options = {}) => {
   const BATCH_SIZE = 100;
   let sent = 0;
   for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
     const batch = tokens.slice(i, i + BATCH_SIZE);
-    const messages = batch.map((to) => ({ to, title, body, data, sound: 'default', priority: 'high' }));
+    const messages = batch.map((to) => ({ 
+      to, 
+      title, 
+      body, 
+      data, 
+      sound: 'default', 
+      priority: 'high',
+      channelId: options.channelId || undefined 
+    }));
     await new Promise((resolve) => {
       const payload = JSON.stringify(messages);
       const req = https.request({

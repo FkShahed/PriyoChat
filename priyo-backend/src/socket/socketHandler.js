@@ -183,7 +183,7 @@ const setupSocket = (io) => {
           if (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken')) {
             const title = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call';
             const body = `${socket.user.name} is calling you...`;
-            await sendExpoPushBatch([t], title, body, { type: 'call' });
+            await sendExpoPushBatch([t], title, body, { type: 'call' }, { channelId: 'incoming_calls_v3' });
             console.log(`[socketHandler] Sent Call Push Notification to ${to}`);
           }
         }
