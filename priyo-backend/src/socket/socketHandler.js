@@ -182,8 +182,14 @@ const setupSocket = (io) => {
           const t = receiver.fcmToken;
           const title = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call';
           const body = `${socket.user.name} is calling you...`;
-          await sendPushNotification(t, title, body, { type: 'call' });
-          console.log(`[socketHandler] Sent Call Push Notification to ${to}`);
+          await sendPushNotification(t, title, body, {
+            type: 'call',
+            callId,
+            caller: { _id: userId, name: socket.user.name, avatar: socket.user.avatar },
+            offer,
+            callType,
+          });
+          console.log(`[socketHandler] Sent Call Push Notification with payload to ${to}`);
         }
       } catch (e) {
         console.error('[socketHandler] Error sending call push notification:', e.message);

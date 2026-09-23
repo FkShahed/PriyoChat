@@ -189,6 +189,27 @@ class NotificationService {
 
   /** Handle user tapping a notification → navigate to the right screen. */
   static _setupTapListener() {
+    this._receivedListener = Notifications.addNotificationReceivedListener(notification => {
+      const data = notification.request.content.data;
+      if (data?.type === 'call' && data?.caller && data?.offer) {
+        try {
+          const useCallStore = require('../store/useCallStore').default;
+          useCallStore.getState().setIncomingCall({
+            from: data.caller._id || data.caller.id,
+            callId: data.callId,
+            caller: data.caller,
+            offer: data.offer,
+            callType: data.callType || 'audio',
+          });
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('IncomingCall');
+          }
+        } catch (e) {
+          console.warn('[Push] Error handling incoming call notification arrival:', e.message);
+        }
+      }
+    });
+
     this._responseListener = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
       if (!navigationRef.isReady()) return;
@@ -204,6 +225,18 @@ class NotificationService {
           },
         });
       } else if (data?.type === 'call') {
+        if (data?.caller && data?.offer) {
+          try {
+            const useCallStore = require('../store/useCallStore').default;
+            useCallStore.getState().setIncomingCall({
+              from: data.caller._id || data.caller.id,
+              callId: data.callId,
+              caller: data.caller,
+              offer: data.offer,
+              callType: data.callType || 'audio',
+            });
+          } catch (e) {}
+        }
         // Navigate to incoming call screen if still active
         navigationRef.navigate('IncomingCall');
       }
