@@ -35,7 +35,7 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
     await admin.messaging().send({
       token: fcmToken,
       notification: { title, body },
-      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
+      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])),
       android: { priority: 'high' },
       apns: { payload: { aps: { sound: 'default', badge: 1 } } },
     });

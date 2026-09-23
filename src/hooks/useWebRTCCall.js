@@ -49,6 +49,8 @@ const ICE_SERVERS = [
   }
 ];
 
+const CONNECTION_TIMEOUT_MS = 45000; // 45 seconds ring timeout
+
 // High-quality audio constraints
 const AUDIO_CONSTRAINTS = {
   echoCancellation: true,
@@ -66,7 +68,51 @@ const VIDEO_CONSTRAINTS = {
   frameRate: { ideal: 30, min: 15 },
 };
 
-const CONNECTION_TIMEOUT_MS = 30000; // 30s timeout for WebRTC to connect
+/**
+ * Safely parse and extract valid { type, sdp } from any offer/answer structure.
+ * Handles native react-native-webrtc _sdp / _type fields and nested JSON structures.
+ */
+function extractSdpAndType(raw, defaultType = 'offer') {
+  if (!raw) return { type: defaultType, sdp: '' };
+
+  let obj = raw;
+  if (typeof obj === 'string') {
+    try { obj = JSON.parse(obj); } catch (e) {}
+  }
+  if (typeof obj === 'string') {
+    try { obj = JSON.parse(obj); } catch (e) {}
+  }
+
+  // Handle nested wrappers like { offer: ... }, { answer: ... }, { sessionDescription: ... }
+  if (obj && typeof obj === 'object') {
+    if (obj.offer) obj = obj.offer;
+    else if (obj.answer) obj = obj.answer;
+    else if (obj.sessionDescription) obj = obj.sessionDescription;
+
+    if (typeof obj === 'string') {
+      try { obj = JSON.parse(obj); } catch (e) {}
+    }
+  }
+
+  if (typeof obj === 'string') {
+    return { type: defaultType, sdp: obj };
+  }
+
+  const type = (obj?.type || obj?._type || defaultType).toLowerCase();
+
+  let sdp = '';
+  if (typeof obj?.sdp === 'string') {
+    sdp = obj.sdp;
+  } else if (typeof obj?._sdp === 'string') {
+    sdp = obj._sdp;
+  } else if (typeof obj?.sdp === 'object' && obj.sdp) {
+    sdp = typeof obj.sdp.sdp === 'string' ? obj.sdp.sdp : (obj.sdp._sdp || '');
+  } else if (typeof obj?._sdp === 'object' && obj._sdp) {
+    sdp = typeof obj._sdp._sdp === 'string' ? obj._sdp._sdp : (obj._sdp.sdp || '');
+  }
+
+  return { type, sdp };
+}
 
 /**
  * Request camera/microphone permissions on Android at runtime.
@@ -131,7 +177,7 @@ export default function useWebRTCCall({
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate) {
+      if (candidate && remoteUserId) {
         console.log('[WebRTC] Sending ICE candidate');
         emit('call_ice', { to: remoteUserId, candidate });
       }
@@ -157,7 +203,7 @@ export default function useWebRTCCall({
         }
       } else if (state === 'failed') {
         console.warn('[WebRTC] Connection failed');
-        emit('call_end', { to: remoteUserId });
+        if (remoteUserId) emit('call_end', { to: remoteUserId });
         useCallStore.getState().endCall('ended');
       }
     };
@@ -270,9 +316,15 @@ export default function useWebRTCCall({
       await pc.setLocalDescription(sessionOffer);
       console.log('[WebRTC] Offer created and set as local description');
 
+      const localDesc = pc.localDescription || sessionOffer;
+      const offerPayload = {
+        type: localDesc?.type || localDesc?._type || 'offer',
+        sdp: localDesc?.sdp || localDesc?._sdp || sessionOffer.sdp,
+      };
+
       emit('call_offer', {
         to: remoteUserId,
-        offer: pc.localDescription,
+        offer: offerPayload,
         callType,
       });
       console.log('[WebRTC] Offer sent to:', remoteUserId);
@@ -313,7 +365,11 @@ export default function useWebRTCCall({
       });
 
       console.log('[WebRTC] Setting remote description (offer)...');
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const { type: offerType, sdp: offerSdp } = extractSdpAndType(offer, 'offer');
+      if (!offerSdp) {
+        throw new Error('Invalid or missing SDP offer session description');
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription({ type: offerType, sdp: offerSdp }));
       remoteDescReady.current = true;
       console.log('[WebRTC] Remote description set successfully');
 
@@ -324,9 +380,15 @@ export default function useWebRTCCall({
       await pc.setLocalDescription(sessionAnswer);
       console.log('[WebRTC] Answer created and set as local description');
 
+      const localAns = pc.localDescription || sessionAnswer;
+      const answerPayload = {
+        type: localAns?.type || localAns?._type || 'answer',
+        sdp: localAns?.sdp || localAns?._sdp || sessionAnswer.sdp,
+      };
+
       emit('call_answer', {
         to: remoteUserId,
-        answer: pc.localDescription,
+        answer: answerPayload,
       });
       console.log('[WebRTC] Answer sent to:', remoteUserId);
 
@@ -380,7 +442,12 @@ export default function useWebRTCCall({
     (async () => {
       try {
         console.log('[WebRTC] Applying remote answer...');
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        const { type: answerType, sdp: answerSdp } = extractSdpAndType(answer, 'answer');
+        if (!answerSdp) {
+          console.warn('[WebRTC] Skipping invalid or empty remote answer SDP');
+          return;
+        }
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: answerType, sdp: answerSdp }));
         console.log('[WebRTC] Remote answer applied successfully');
         remoteDescReady.current = true;
         flushCandidates(pc);

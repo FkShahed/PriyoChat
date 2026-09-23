@@ -70,21 +70,59 @@ const useCallStore = create(
         set((state) => (state.callState === 'calling' ? { callState: 'ringing' } : {}));
       },
 
-      // Incoming call from socket — this user is the receiver
+      // Incoming call from socket or push — this user is the receiver
       setIncomingCall: (data) => {
+        const { callState, callId: existingCallId } = get();
+        if (callState === 'active' || callState === 'connecting') {
+          // If it's the exact same call (duplicate notification/socket event), treat as accepted so we don't auto-reject
+          if (existingCallId && String(existingCallId) === String(data.callId)) {
+            console.log('[useCallStore] Duplicate incoming call event received for active callId:', data.callId);
+            return true;
+          }
+          console.warn('[useCallStore] Device busy (state:', callState, '), ignoring incoming call');
+          return false;
+        }
         console.log('[useCallStore] setIncomingCall, callId:', data.callId, 'from:', data.from);
+
+        let callerObj = data.caller;
+        if (typeof callerObj === 'string') {
+          try { callerObj = JSON.parse(callerObj); } catch (e) {}
+        }
+        if (!callerObj || typeof callerObj !== 'object') {
+          callerObj = {};
+        }
+
+        let offerObj = data.offer;
+        if (typeof offerObj === 'string') {
+          try { offerObj = JSON.parse(offerObj); } catch (e) {}
+        }
+
+        const callerId = callerObj._id || callerObj.id || data.from;
+        const callerName = callerObj.name || data.callerName || data.name || 'PriyoChat User';
+        const callerAvatar = callerObj.avatar || data.avatar || null;
+
+        const resolvedRemoteUser = {
+          _id: callerId,
+          avatar: callerAvatar,
+          ...callerObj,
+          name: callerName,
+        };
+
+        console.log('[useCallStore] setIncomingCall resolved remoteUser name:', resolvedRemoteUser.name, 'id:', callerId);
+
         set({
           callState: 'incoming',
-          callType: data.callType,
+          callType: data.callType || 'audio',
           callId: data.callId,
-          remoteUser: { _id: data.from, ...data.caller },
-          offer: data.offer,
-          remoteUserId: data.from,
+          remoteUser: resolvedRemoteUser,
+          offer: offerObj || data.offer,
+          remoteUserId: callerId,
           iceCandidates: [],
           endReason: null,
           isReceiver: true,
           answer: null,
         });
+        return true;
       },
 
       // Receiver accepted — transitional state while WebRTC connects
@@ -118,6 +156,17 @@ const useCallStore = create(
       endCall: (reason = 'ended') => {
         const state = get();
         console.log('[useCallStore] endCall, state:', state.callState, 'remoteUser:', state.remoteUser?.name, 'isReceiver:', state.isReceiver);
+
+        // Immediately dismiss all system notifications & stop native CallKeep ringing
+        try {
+          const NotificationService = require('../services/NotificationService').default;
+          NotificationService.dismissCallNotification();
+        } catch (e) {}
+        try {
+          const CallKeepService = require('../services/CallKeepService').default;
+          CallKeepService.endCall();
+        } catch (e) {}
+
         if (state.remoteUser && state.callState !== 'idle' && state.callState !== 'ended') {
           const isMissed = (state.callState === 'calling' || state.callState === 'incoming' || state.callState === 'connecting') && reason !== 'rejected';
           const status = reason === 'rejected' ? 'rejected' : (isMissed ? 'missed' : 'completed');
@@ -140,15 +189,15 @@ const useCallStore = create(
         }
 
         set({
-          callState: 'ended',
+          callState: 'idle',
           endReason: reason,
           offer: null,
           answer: null,
+          remoteUser: null,
+          callType: null,
+          iceCandidates: [],
+          isReceiver: false,
         });
-        // Reset to idle after short delay
-        setTimeout(() => {
-          set({ callState: 'idle', remoteUser: null, callType: null, iceCandidates: [], endReason: null, isReceiver: false });
-        }, 1500);
       },
 
       resetCall: () => {

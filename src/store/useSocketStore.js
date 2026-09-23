@@ -116,13 +116,39 @@ const useSocketStore = create((set, get) => ({
 
     // ── Call events ──────────────────────────────────────────────────
     newSocket.on('incoming_call', (data) => {
-      useCallStore.getState().setIncomingCall(data);
+      let callerObj = data.caller;
+      if (typeof callerObj === 'string') {
+        try { callerObj = JSON.parse(callerObj); } catch (e) {}
+      }
+      const callerName = callerObj?.name || data.callerName || 'PriyoChat User';
+
+      const accepted = useCallStore.getState().setIncomingCall({
+        ...data,
+        caller: callerObj || { name: callerName },
+        callerName,
+      });
+
+      if (!accepted) {
+        console.warn('[Socket] Device busy — sending call_reject busy to caller:', data.from);
+        newSocket.emit('call_reject', { to: data.from, reason: 'busy' });
+        return;
+      }
       newSocket.emit('call_ringing', { to: data.from });
-      // Show a heads-up notification ONLY if app is backgrounded
+
+      // When app is in background, show ONE single call notification with Answer/Decline buttons
       if (AppState.currentState !== 'active') {
+        try {
+          const CallKeepService = require('../services/CallKeepService').default;
+          const callUuid = data.callId || ('call-' + Date.now());
+          CallKeepService.displayIncomingCall(callUuid, callerName, 'PriyoChat', data.callType);
+        } catch (e) {}
+
         NotificationService.showCallNotification({
-          callerName: data.caller?.name || 'Someone',
+          callerName,
           callType: data.callType,
+          callId: data.callId,
+          caller: callerObj || { name: callerName },
+          offer: data.offer,
         });
       }
     });

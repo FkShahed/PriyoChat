@@ -96,7 +96,10 @@ export default function IncomingCallScreen({ navigation }) {
     if (soundRef.current) {
       soundRef.current.stopAsync().catch(() => {});
     }
-    emit('call_reject', { to: remoteUser._id });
+    const targetId = remoteUser?._id || remoteUser?.id;
+    if (targetId) {
+      emit('call_reject', { to: targetId });
+    }
     resetCall(); // instant reset to idle
     navigation.goBack();
   };

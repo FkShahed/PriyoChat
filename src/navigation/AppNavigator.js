@@ -127,6 +127,8 @@ function LogoutObserver() {
   return null;
 }
 
+import IncomingCallBanner from '../components/IncomingCallBanner';
+
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, user } = useAuthStore();
   const { init: initTheme, resolvedTheme } = useThemeStore();
@@ -175,6 +177,7 @@ export default function AppNavigator() {
       <NotificationObserver />
       <CallObserver />
       <LogoutObserver />
+      <IncomingCallBanner />
       <NavigationContainer ref={navigationRef}>
         <Stack.Navigator 
           screenOptions={{ headerShown: false }} 

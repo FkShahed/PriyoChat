@@ -27,8 +27,11 @@ function formatDuration(secs) {
 }
 
 export default function CallScreen({ route, navigation }) {
-  const { otherUser, callType } = route.params;
-  const { callState, isReceiver, offer, resetCall } = useCallStore();
+  const { otherUser: paramOtherUser, callType: paramCallType } = route?.params || {};
+  const { remoteUser: storeRemoteUser, callType: storeCallType, callState, isReceiver, offer, resetCall } = useCallStore();
+
+  const otherUser = paramOtherUser || storeRemoteUser || { name: 'PriyoChat User', avatar: null };
+  const callType = paramCallType || storeCallType || 'audio';
   console.log('[CallScreen] otherUser:', otherUser?._id, otherUser?.name, 'isReceiver:', isReceiver);
   const { emit } = useSocketStore();
 
@@ -47,9 +50,11 @@ export default function CallScreen({ route, navigation }) {
   const timerRef = useRef(null);
   const hasNavigatedBack = useRef(false);
 
+  const targetUserId = otherUser?._id || otherUser?.id;
+
   // ── WebRTC ────────────────────────────────────────────────────────
   const { cleanup: cleanupWebRTC, setSpeaker } = useWebRTCCall({
-    remoteUserId: otherUser._id,
+    remoteUserId: targetUserId,
     callType,
     isReceiver,
     offer,
@@ -151,7 +156,9 @@ export default function CallScreen({ route, navigation }) {
   const handleEndCall = () => {
     if (hasNavigatedBack.current) return;
     hasNavigatedBack.current = true;
-    emit('call_end', { to: otherUser._id, callType, duration: callDuration });
+    if (targetUserId) {
+      emit('call_end', { to: targetUserId, callType, duration: callDuration });
+    }
     cleanupWebRTC();
     resetCall();
     navigation.goBack();
@@ -214,10 +221,10 @@ export default function CallScreen({ route, navigation }) {
                 <Image source={{ uri: otherUser.avatar }} style={styles.waitingAvatar} />
               ) : (
                 <LinearGradient colors={['#0084FF', '#0060CC']} style={styles.waitingAvatarFallback}>
-                  <Text style={styles.waitingInitials}>{getInitials(otherUser.name)}</Text>
+                  <Text style={styles.waitingInitials}>{getInitials(otherUser?.name || 'User')}</Text>
                 </LinearGradient>
               )}
-              <Text style={styles.waitingName}>{otherUser.name}</Text>
+              <Text style={styles.waitingName}>{otherUser?.name || 'PriyoChat User'}</Text>
               <Text style={styles.waitingText}>{statusLabel}</Text>
             </View>
           </LinearGradient>
@@ -241,7 +248,7 @@ export default function CallScreen({ route, navigation }) {
           colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'transparent']}
           style={styles.videoTopBar}
         >
-          <Text style={styles.videoName}>{otherUser.name}</Text>
+          <Text style={styles.videoName}>{otherUser?.name || 'PriyoChat User'}</Text>
           <Text style={styles.videoStatus}>{statusLabel}</Text>
         </LinearGradient>
 
@@ -290,16 +297,16 @@ export default function CallScreen({ route, navigation }) {
         <RNAnimated.View style={[styles.rippleRing, r3Style]} />
 
         <View style={styles.avatarContainer}>
-          {otherUser.avatar ? (
+          {otherUser?.avatar ? (
             <Image source={{ uri: otherUser.avatar }} style={styles.avatar} />
           ) : (
             <LinearGradient colors={['#1D6FEB', '#00C6FF']} style={styles.avatarFallback}>
-              <Text style={styles.initials}>{getInitials(otherUser.name)}</Text>
+              <Text style={styles.initials}>{getInitials(otherUser?.name || 'User')}</Text>
             </LinearGradient>
           )}
         </View>
 
-        <Text style={styles.name}>{otherUser.name}</Text>
+        <Text style={styles.name}>{otherUser?.name || 'PriyoChat User'}</Text>
 
         <View style={styles.statusRow}>
           {callState === 'active' && <View style={styles.activeDot} />}
