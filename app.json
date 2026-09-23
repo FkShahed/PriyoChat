@@ -55,7 +55,10 @@
         "CAMERA",
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
-        "INTERNET"
+        "INTERNET",
+        "USE_FULL_SCREEN_INTENT",
+        "FOREGROUND_SERVICE",
+        "POST_NOTIFICATIONS"
       ]
     },
     "extra": {

@@ -91,6 +91,23 @@ function CallObserver() {
   return null;
 }
 
+import NotificationService from '../services/NotificationService';
+import useSocketStore from '../store/useSocketStore';
+
+// Watches isAuthenticated and initializes notifications & socket when logged in
+function NotificationObserver() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      useSocketStore.getState().connect();
+      NotificationService.initialize();
+    }
+  }, [isAuthenticated]);
+
+  return null;
+}
+
 // Watches isAuthenticated and resets to Login on logout
 function LogoutObserver() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -155,6 +172,7 @@ export default function AppNavigator() {
 
   return (
     <>
+      <NotificationObserver />
       <CallObserver />
       <LogoutObserver />
       <NavigationContainer ref={navigationRef}>

@@ -29,6 +29,12 @@ const useAuthStore = create((set, get) => ({
       if (token && userStr) {
         const user = JSON.parse(userStr);
         set({ user, token, isAuthenticated: true, isLoading: false });
+        try {
+          require('./useSocketStore').default.getState().connect();
+          require('../services/NotificationService').default.initialize();
+        } catch (e) {
+          console.warn('[useAuthStore] restoreSession auto-connect error:', e);
+        }
         // Refresh user data
         const { data } = await userApi.getMe();
         set({ user: data });

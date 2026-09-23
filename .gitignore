@@ -78,3 +78,6 @@ yarn-error.log
 .env
 .env*.local
 scratch/
+*.apk
+*.zip
+dist/

@@ -4,7 +4,7 @@ import { userApi } from '../api/services';
 import { navigationRef } from '../navigation/navigationRef';
 
 // Your Expo project ID from app.json
-const PROJECT_ID = 'ab48d8dd-0cb6-4a1d-82b0-84f55577a6d1';
+const PROJECT_ID = 'ad727065-625e-4696-95f9-467baf61dd1a';
 
 // Configure foreground notification behavior
 // Since we only trigger local notifications when NOT in the active chat,
@@ -158,8 +158,19 @@ class NotificationService {
         return null;
       }
 
+      // Try getting raw FCM Device Token first (for Android standalone builds)
+      try {
+        const deviceTokenData = await Notifications.getDevicePushTokenAsync();
+        if (deviceTokenData && deviceTokenData.data) {
+          console.log('[Push] Raw FCM Device token obtained:', deviceTokenData.data);
+          return deviceTokenData.data;
+        }
+      } catch (e) {
+        console.warn('[Push] Could not get device token, falling back to Expo token:', e.message);
+      }
+
       const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: PROJECT_ID });
-      console.log('[Push] Expo push token obtained:', tokenData.data.slice(0, 30) + '…');
+      console.log('[Push] Expo push token obtained FULL:', tokenData.data);
       return tokenData.data;
     } catch (err) {
       console.error('[Push] Failed to get push token:', err.message);
