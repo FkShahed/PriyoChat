@@ -47,7 +47,8 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
 // Send via Expo Push API (single notification)
 const sendExpoNotification = (to, title, body, data = {}) => {
   return new Promise((resolve) => {
-    const payload = JSON.stringify({ to, title, body, data, sound: 'default', priority: 'high' });
+    const channelId = data.type === 'call' ? 'incoming_calls_v3' : 'messages';
+    const payload = JSON.stringify({ to, title, body, data, sound: 'default', priority: 'high', channelId });
     const req = https.request({
       hostname: 'exp.host',
       path: '/--/api/v2/push/send',

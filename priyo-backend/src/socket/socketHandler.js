@@ -180,12 +180,10 @@ const setupSocket = (io) => {
         const receiver = await User.findById(to).select('fcmToken');
         if (receiver && receiver.fcmToken) {
           const t = receiver.fcmToken;
-          if (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken')) {
-            const title = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call';
-            const body = `${socket.user.name} is calling you...`;
-            await sendExpoPushBatch([t], title, body, { type: 'call' }, { channelId: 'incoming_calls_v3' });
-            console.log(`[socketHandler] Sent Call Push Notification to ${to}`);
-          }
+          const title = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call';
+          const body = `${socket.user.name} is calling you...`;
+          await sendPushNotification(t, title, body, { type: 'call' });
+          console.log(`[socketHandler] Sent Call Push Notification to ${to}`);
         }
       } catch (e) {
         console.error('[socketHandler] Error sending call push notification:', e.message);
