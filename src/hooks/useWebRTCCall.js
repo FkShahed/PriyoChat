@@ -228,6 +228,7 @@ export default function useWebRTCCall({
 
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
+  const remoteMediaStreamRef = useRef(null);
   const iceCandidatesProcessed = useRef(0);
   const initialized = useRef(false);
   const remoteDescReady = useRef(false);
@@ -276,12 +277,28 @@ export default function useWebRTCCall({
       console.log('[WebRTC] ontrack event, track kind:', event.track?.kind, 'id:', event.track?.id, 'streams:', event.streams?.length);
 
       useCallStore.getState().setCallConnected();
+      setErrorMessage('');
 
       if (event.track) {
         try { event.track.enabled = true; } catch (e) {}
       }
 
       let stream = event.streams?.[0];
+      if (!stream) {
+        if (!remoteMediaStreamRef.current) {
+          const MediaStreamConstructor = webrtc?.MediaStream || (typeof MediaStream !== 'undefined' ? MediaStream : null);
+          if (MediaStreamConstructor) {
+            remoteMediaStreamRef.current = new MediaStreamConstructor();
+          }
+        }
+        if (remoteMediaStreamRef.current && event.track) {
+          try { remoteMediaStreamRef.current.addTrack(event.track); } catch (e) {}
+        }
+        stream = remoteMediaStreamRef.current;
+      } else {
+        remoteMediaStreamRef.current = stream;
+      }
+
       if (stream) {
         try {
           stream.getTracks().forEach((t) => { t.enabled = true; });
@@ -303,6 +320,7 @@ export default function useWebRTCCall({
 
       if (state === 'connected') {
         useCallStore.getState().setCallConnected();
+        setErrorMessage('');
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
@@ -435,9 +453,17 @@ export default function useWebRTCCall({
     try {
       stream = await mediaDevices.getUserMedia(constraints);
     } catch (err) {
-      console.warn('[WebRTC] getUserMedia initial error (hardware release pending?), retrying in 400ms:', err.message);
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      stream = await mediaDevices.getUserMedia(constraints);
+      console.warn('[WebRTC] getUserMedia initial error, retrying with simple constraints:', err.message);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      try {
+        stream = await mediaDevices.getUserMedia({
+          audio: true,
+          video: currentCallType === 'video' ? true : false,
+        });
+      } catch (err2) {
+        console.error('[WebRTC] getUserMedia fallback error:', err2.message);
+        throw err2;
+      }
     }
     console.log('[WebRTC] Got local stream, tracks:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
     localStreamRef.current = stream;
@@ -611,7 +637,10 @@ export default function useWebRTCCall({
       // Flush any ICE candidates that arrived before remote desc was set
       flushCandidates(pc);
 
-      const sessionAnswer = await pc.createAnswer();
+      const sessionAnswer = await pc.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: callTypeRef.current === 'video',
+      });
       if (!pcRef.current || pc.signalingState === 'closed') {
         console.warn('[WebRTC] PC closed before setting local answer');
         return;
@@ -669,9 +698,6 @@ export default function useWebRTCCall({
           try { track.enabled = false; } catch (e) {}
           try { track.stop(); } catch (e) {}
         });
-        if (typeof stream.release === 'function') {
-          stream.release();
-        }
       } catch (e) {
         console.warn('[WebRTC] localStream cleanup error:', e);
       }
@@ -694,6 +720,7 @@ export default function useWebRTCCall({
       }
     }
 
+    remoteMediaStreamRef.current = null;
     initialized.current = false;
     remoteDescReady.current = false;
     answerAppliedRef.current = false;

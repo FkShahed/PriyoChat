@@ -157,11 +157,13 @@ const useSocketStore = create((set, get) => ({
       useCallStore.getState().setCallRinging();
     });
 
-    newSocket.on('call_answered', ({ answer }) => {
+    newSocket.on('call_answered', (data) => {
+      const answer = data?.answer || data;
       useCallStore.getState().setCallAnswered(answer);
     });
 
-    newSocket.on('call_ice', ({ candidate }) => {
+    newSocket.on('call_ice', (data) => {
+      const candidate = (data?.candidate && typeof data.candidate === 'object') ? data.candidate : (data?.candidate || data);
       useCallStore.getState().addIceCandidate(candidate);
     });
 

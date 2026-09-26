@@ -14,7 +14,7 @@ import { getInitials } from '../../utils/helpers';
 import { webrtc } from '../../utils/nativeModules';
 
 // Universal VideoStreamView for Web (HTML5 video) and Mobile (RTCView)
-function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, style }) {
+function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, style, revision = 0 }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch((e) => console.warn('[WebVideo] play error:', e));
     }
-  }, [stream]);
+  }, [stream, revision]);
 
   const shouldMirror = isLocal && Boolean(mirror);
 
@@ -63,6 +63,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
 
     return (
       <RTCViewComp
+        key={streamURL + '_' + (isLocal ? 'loc' : 'rem') + '_' + (revision || 0)}
         streamURL={streamURL}
         style={style}
         objectFit="cover"
@@ -120,19 +121,19 @@ export default function CallScreen({ route, navigation }) {
       console.log('[CallScreen] Local stream received');
       setLocalStream(s);
     }, []),
-    onRemoteStream: useCallback((s) => {
+    onRemoteStream: useCallback((s, timestamp) => {
       console.log('[CallScreen] Remote stream received, tracks:', s?.getTracks?.().length);
       setRemoteStream(s);
-      setRemoteTrackVersion((v) => v + 1);
+      setRemoteTrackVersion(timestamp || Date.now());
 
       if (s && typeof s.addEventListener === 'function') {
         s.addEventListener('addtrack', () => {
           console.log('[CallScreen] Remote stream addtrack event');
-          setRemoteTrackVersion((v) => v + 1);
+          setRemoteTrackVersion(Date.now());
         });
         s.addEventListener('removetrack', () => {
           console.log('[CallScreen] Remote stream removetrack event');
-          setRemoteTrackVersion((v) => v + 1);
+          setRemoteTrackVersion(Date.now());
         });
       }
     }, []),
@@ -308,6 +309,7 @@ export default function CallScreen({ route, navigation }) {
             mirror={false}
             zOrder={0}
             style={styles.remoteVideo}
+            revision={remoteTrackVersion}
           />
         ) : (
           <LinearGradient colors={['#070B19', '#0D1A3A', '#060A17']} style={StyleSheet.absoluteFill}>
@@ -499,6 +501,15 @@ export default function CallScreen({ route, navigation }) {
           {callState === 'active' && <View style={styles.activeDot} />}
           <Text style={styles.callStatus}>{statusLabel}</Text>
         </View>
+
+        {errorMessage ? (
+          <View style={styles.diagNoticePill}>
+            <Ionicons name="information-circle-outline" size={15} color="#FFCC00" />
+            <Text style={styles.diagNoticeText} numberOfLines={3}>
+              {errorMessage}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {/* ── BOTTOM SECTION: controls ── */}
@@ -726,12 +737,12 @@ const styles = StyleSheet.create({
   },
   diagNoticePill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 10, alignSelf: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.65)', paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255, 204, 0, 0.4)',
+    marginTop: 10, alignSelf: 'center', maxWidth: '88%',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)', paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255, 204, 0, 0.5)',
   },
   diagNoticeText: {
-    color: '#FFCC00', fontSize: 12, fontWeight: '600',
+    color: '#FFCC00', fontSize: 12, fontWeight: '600', flexShrink: 1, textAlign: 'center',
   },
 });
 
