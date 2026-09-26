@@ -564,12 +564,18 @@ export default function useWebRTCCall({
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
       if (pcRef.current) {
         if (pcRef.current.signalingState !== 'closed') {
           try { pcRef.current.close(); } catch (e) {}
         }
         pcRef.current = null;
       }
+      initialized.current = false;
+      remoteDescReady.current = false;
+      answerAppliedRef.current = false;
+      iceCandidatesProcessed.current = 0;
+      pendingCandidates.current = [];
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -649,8 +655,10 @@ export default function useWebRTCCall({
       }
       pcRef.current = null;
     }
+    initialized.current = false;
     remoteDescReady.current = false;
     answerAppliedRef.current = false;
+    iceCandidatesProcessed.current = 0;
     pendingCandidates.current = [];
     if (InCallManager) {
       try {
