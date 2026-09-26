@@ -82,6 +82,8 @@ export default function CallScreen({ route, navigation }) {
   const [callDuration, setCallDuration] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(callType === 'video');
+  const [videoOn, setVideoOn] = useState(true);
+  const [showControls, setShowControls] = useState(true);
   const [cameraFront, setCameraFront] = useState(true);
 
   const ringAnim = useRef(new RNAnimated.Value(0)).current;
@@ -211,6 +213,11 @@ export default function CallScreen({ route, navigation }) {
     setMuted((m) => !m);
   };
 
+  const toggleVideo = () => {
+    localStream?.getVideoTracks().forEach((t) => { t.enabled = !videoOn; });
+    setVideoOn((v) => !v);
+  };
+
   const toggleCamera = () => {
     if (!localStream) return;
     const videoTrack = localStream.getVideoTracks()?.[0];
@@ -218,6 +225,10 @@ export default function CallScreen({ route, navigation }) {
       videoTrack._switchCamera();
       setCameraFront((f) => !f);
     }
+  };
+
+  const toggleControls = () => {
+    setShowControls((c) => !c);
   };
 
   const makeRippleStyle = (anim) => ({
@@ -232,21 +243,24 @@ export default function CallScreen({ route, navigation }) {
   const r3Style = makeRippleStyle(ripple3);
 
   const getStatusLabel = () => {
-    if (callState === 'active') return `🔴  ${formatDuration(callDuration)}`;
-    if (callState === 'connecting') return `${callType === 'video' ? '📹' : '📞'} Connecting...`;
-    if (callState === 'ringing') return `${callType === 'video' ? '📹' : '📞'} Ringing...`;
-    if (isReceiver) return `${callType === 'video' ? '📹' : '📞'} Connecting...`;
-    return `${callType === 'video' ? '📹' : '📞'} Calling...`;
+    if (callState === 'active') return formatDuration(callDuration);
+    if (callState === 'connecting') return 'Connecting...';
+    if (callState === 'ringing') return 'Ringing...';
+    if (isReceiver) return 'Connecting...';
+    return 'Calling...';
   };
   const statusLabel = getStatusLabel();
 
   // ── VIDEO CALL layout ─────────────────────────────────────────────
   if (callType === 'video') {
     const hasRemoteVideo = Boolean(remoteStream);
-    const hasLocalVideo = Boolean(localStream);
 
     return (
-      <View style={styles.videoContainer}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={toggleControls}
+        style={styles.videoContainer}
+      >
         {/* Remote video (full screen) */}
         {hasRemoteVideo ? (
           <VideoStreamView
@@ -257,63 +271,130 @@ export default function CallScreen({ route, navigation }) {
             style={styles.remoteVideo}
           />
         ) : (
-          <LinearGradient colors={['#0D1117', '#1A2332']} style={StyleSheet.absoluteFill}>
+          <LinearGradient colors={['#070B19', '#0D1A3A', '#060A17']} style={StyleSheet.absoluteFill}>
             <View style={styles.waitingOverlay}>
-              {otherUser?.avatar ? (
-                <Image source={{ uri: otherUser.avatar }} style={styles.waitingAvatar} />
-              ) : (
-                <LinearGradient colors={['#0084FF', '#0060CC']} style={styles.waitingAvatarFallback}>
-                  <Text style={styles.waitingInitials}>{getInitials(otherUser?.name || 'User')}</Text>
-                </LinearGradient>
-              )}
+              <View style={styles.waitingAvatarContainer}>
+                {otherUser?.avatar ? (
+                  <Image source={{ uri: otherUser.avatar }} style={styles.waitingAvatar} />
+                ) : (
+                  <LinearGradient colors={['#1D6FEB', '#00C6FF']} style={styles.waitingAvatarFallback}>
+                    <Text style={styles.waitingInitials}>{getInitials(otherUser?.name || 'User')}</Text>
+                  </LinearGradient>
+                )}
+              </View>
               <Text style={styles.waitingName}>{otherUser?.name || 'PriyoChat User'}</Text>
-              <Text style={styles.waitingText}>{statusLabel}</Text>
+              <View style={styles.videoBadge}>
+                <View style={callState === 'active' ? styles.activeDotSmall : styles.connectingDot} />
+                <Text style={styles.waitingText}>{statusLabel}</Text>
+              </View>
             </View>
           </LinearGradient>
         )}
 
-        {/* Local video (picture-in-picture) */}
-        {hasLocalVideo && (
-          <View style={styles.localVideoWrapper}>
-            <VideoStreamView
-              stream={localStream}
-              isLocal={true}
-              mirror={cameraFront}
-              zOrder={1}
-              style={styles.localVideo}
-            />
-          </View>
+        {/* Local video (Picture-in-Picture) */}
+        {localStream && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={toggleCamera}
+            style={styles.localVideoWrapper}
+          >
+            {videoOn ? (
+              <VideoStreamView
+                stream={localStream}
+                isLocal={true}
+                mirror={cameraFront}
+                zOrder={1}
+                style={styles.localVideo}
+              />
+            ) : (
+              <View style={styles.cameraOffPlaceholder}>
+                <Ionicons name="videocam-off-outline" size={26} color="rgba(255,255,255,0.6)" />
+                <Text style={styles.cameraOffText}>Camera Off</Text>
+              </View>
+            )}
+            <View style={styles.flipOverlayBtn}>
+              <Ionicons name="camera-reverse-outline" size={14} color="#FFF" />
+            </View>
+          </TouchableOpacity>
         )}
 
-        {/* Top bar */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'transparent']}
-          style={styles.videoTopBar}
-        >
-          <Text style={styles.videoName}>{otherUser?.name || 'PriyoChat User'}</Text>
-          <Text style={styles.videoStatus}>{statusLabel}</Text>
-        </LinearGradient>
+        {/* Top Floating Glass Header */}
+        {showControls && (
+          <LinearGradient
+            colors={['rgba(0,0,0,0.75)', 'rgba(0,0,0,0.35)', 'transparent']}
+            style={styles.videoTopBar}
+          >
+            <View style={styles.topHeaderContent}>
+              <View style={styles.userInfoPill}>
+                {otherUser?.avatar ? (
+                  <Image source={{ uri: otherUser.avatar }} style={styles.headerAvatar} />
+                ) : (
+                  <View style={styles.headerAvatarFallback}>
+                    <Text style={styles.headerInitials}>{getInitials(otherUser?.name || 'User')}</Text>
+                  </View>
+                )}
+                <View>
+                  <Text style={styles.videoName}>{otherUser?.name || 'PriyoChat User'}</Text>
+                  <View style={styles.statusBadgeRow}>
+                    {callState === 'active' && <View style={styles.activeDotSmall} />}
+                    <Text style={styles.videoStatus}>{statusLabel}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        )}
 
-        {/* Bottom controls */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.7)']}
-          style={styles.videoControlsBg}
-        >
-          <View style={styles.videoControls}>
-            <TouchableOpacity style={[styles.ctrlBtn, muted && styles.ctrlBtnActive]} onPress={toggleMute}>
-              <Text style={styles.ctrlEmoji}>{muted ? '🔇' : '🎙️'}</Text>
-              <Text style={styles.ctrlLabel}>{muted ? 'Unmute' : 'Mute'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.endBtnVideo} onPress={handleEndCall}>
-              <Text style={{ fontSize: 28 }}>📵</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.ctrlBtn} onPress={toggleCamera}>
-              <Text style={styles.ctrlEmoji}>🔄</Text>
-              <Text style={styles.ctrlLabel}>Flip</Text>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </View>
+        {/* Bottom Floating Glass Action Bar */}
+        {showControls && (
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.85)']}
+            style={styles.videoControlsBg}
+          >
+            <View style={styles.videoControlsBar}>
+              {/* Mute Button */}
+              <TouchableOpacity
+                style={[styles.videoCtrlCircle, muted && styles.videoCtrlCircleActive]}
+                onPress={toggleMute}
+              >
+                <Ionicons name={muted ? 'mic-off' : 'mic-outline'} size={24} color="#FFF" />
+                <Text style={styles.ctrlLabelText}>{muted ? 'Unmute' : 'Mute'}</Text>
+              </TouchableOpacity>
+
+              {/* Camera Toggle Button */}
+              <TouchableOpacity
+                style={[styles.videoCtrlCircle, !videoOn && styles.videoCtrlCircleActive]}
+                onPress={toggleVideo}
+              >
+                <Ionicons name={videoOn ? 'videocam-outline' : 'videocam-off-outline'} size={24} color="#FFF" />
+                <Text style={styles.ctrlLabelText}>{videoOn ? 'Cam Off' : 'Cam On'}</Text>
+              </TouchableOpacity>
+
+              {/* End Call Button */}
+              <TouchableOpacity onPress={handleEndCall} activeOpacity={0.85} style={styles.endBtnVideoWrapper}>
+                <LinearGradient colors={['#FF3B30', '#C0392B']} style={styles.endBtnVideo}>
+                  <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Speaker Toggle Button */}
+              <TouchableOpacity
+                style={[styles.videoCtrlCircle, speakerOn && styles.videoCtrlCircleActive]}
+                onPress={() => { setSpeakerOn((s) => { const next = !s; setSpeaker?.(next); return next; }); }}
+              >
+                <Ionicons name={speakerOn ? 'volume-high' : 'volume-medium-outline'} size={24} color="#FFF" />
+                <Text style={styles.ctrlLabelText}>Speaker</Text>
+              </TouchableOpacity>
+
+              {/* Flip Camera Button */}
+              <TouchableOpacity style={styles.videoCtrlCircle} onPress={toggleCamera}>
+                <Ionicons name="camera-reverse-outline" size={24} color="#FFF" />
+                <Text style={styles.ctrlLabelText}>Flip</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        )}
+      </TouchableOpacity>
     );
   }
 
@@ -503,26 +584,72 @@ const styles = StyleSheet.create({
   remoteVideo: { flex: 1, backgroundColor: '#000' },
   localVideoWrapper: {
     position: 'absolute', top: 60, right: 16,
-    width: 110, height: 150, borderRadius: 14,
+    width: 110, height: 160, borderRadius: 16,
     overflow: 'hidden', borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    zIndex: 10, elevation: 10, backgroundColor: '#222',
+    borderColor: 'rgba(255,255,255,0.35)',
+    zIndex: 10, elevation: 12, backgroundColor: '#161B22',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 10,
   },
   localVideo: { flex: 1, backgroundColor: '#000' },
-  waitingOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  waitingAvatar: { width: 100, height: 100, borderRadius: 50, marginBottom: 16, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
-  waitingAvatarFallback: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
-  waitingInitials: { fontSize: 36, color: '#FFF', fontWeight: '700' },
-  waitingName: { color: '#FFF', fontSize: 22, fontWeight: '700', marginBottom: 8 },
-  waitingText: { color: 'rgba(255,255,255,0.7)', fontSize: 16 },
-  videoTopBar: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 56, paddingHorizontal: 20, paddingBottom: 24, zIndex: 5 },
-  videoName: { color: '#FFF', fontWeight: '700', fontSize: 22 },
-  videoStatus: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 },
-  videoControlsBg: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingTop: 24, paddingBottom: 48, zIndex: 5 },
-  videoControls: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 32 },
-  ctrlBtn: { alignItems: 'center', padding: 12, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.15)' },
-  ctrlBtnActive: { backgroundColor: 'rgba(255,255,255,0.35)' },
-  ctrlEmoji: { fontSize: 26 },
-  endBtnVideo: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  cameraOffPlaceholder: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1A2332', gap: 6,
+  },
+  cameraOffText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '500' },
+  flipOverlayBtn: {
+    position: 'absolute', bottom: 6, right: 6,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+  },
+  waitingOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  waitingAvatarContainer: { width: 110, height: 110, borderRadius: 55, overflow: 'hidden', marginBottom: 16 },
+  waitingAvatar: { width: '100%', height: '100%', borderRadius: 55, borderWidth: 3, borderColor: '#00C6FF' },
+  waitingAvatarFallback: { width: '100%', height: '100%', borderRadius: 55, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#00C6FF' },
+  waitingInitials: { fontSize: 40, color: '#FFF', fontWeight: '800' },
+  waitingName: { color: '#FFF', fontSize: 24, fontWeight: '700', marginBottom: 10 },
+  videoBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  connectingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFCC00' },
+  waitingText: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600' },
+  videoTopBar: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 52, paddingHorizontal: 20, paddingBottom: 28, zIndex: 8 },
+  topHeaderContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  userInfoPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  headerAvatar: { width: 36, height: 36, borderRadius: 18 },
+  headerAvatarFallback: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1D6FEB', alignItems: 'center', justifyContent: 'center' },
+  headerInitials: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  videoName: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  statusBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 },
+  activeDotSmall: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' },
+  videoStatus: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500' },
+  videoControlsBg: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingTop: 30, paddingBottom: 44, zIndex: 8 },
+  videoControlsBar: {
+    flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  videoCtrlCircle: {
+    alignItems: 'center', justifyContent: 'center', gap: 4,
+    width: 58, height: 58, borderRadius: 29,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  videoCtrlCircleActive: {
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  ctrlLabelText: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '600' },
+  endBtnVideoWrapper: { alignItems: 'center' },
+  endBtnVideo: {
+    width: 68, height: 68, borderRadius: 34,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.7, shadowRadius: 12, elevation: 10,
+  },
 });
 
