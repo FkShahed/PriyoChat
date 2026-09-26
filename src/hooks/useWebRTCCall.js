@@ -259,11 +259,12 @@ export default function useWebRTCCall({
 
     pc.onicecandidate = (event) => {
       const cand = event?.candidate;
-      if (!cand || !remoteUserIdRef.current) return;
+      const targetId = remoteUserIdRef.current || remoteUserId || useCallStore.getState().remoteUserId || useCallStore.getState().remoteUser?._id;
+      if (!cand || !targetId) return;
       const parsed = extractIceCandidate(cand);
       if (parsed && parsed.candidate) {
-        console.log('[WebRTC] Sending clean ICE candidate to:', remoteUserIdRef.current, parsed.candidate.substring(0, 45));
-        emitRef.current('call_ice', { to: remoteUserIdRef.current, candidate: parsed });
+        console.log('[WebRTC] Sending clean ICE candidate to:', targetId, parsed.candidate.substring(0, 45));
+        emitRef.current('call_ice', { to: targetId, candidate: parsed });
       }
     };
 
@@ -552,17 +553,18 @@ export default function useWebRTCCall({
         return;
       }
 
+      const targetId = remoteUserIdRef.current || remoteUserId || useCallStore.getState().remoteUserId || useCallStore.getState().remoteUser?._id;
       emitRef.current('call_offer', {
-        to: remoteUserIdRef.current,
+        to: targetId,
         offer: offerPayload,
         callType: callTypeRef.current,
       });
-      console.log('[WebRTC] Offer sent to:', remoteUserIdRef.current);
+      console.log('[WebRTC] Offer sent to:', targetId);
 
       // Connection timeout
       timeoutRef.current = setTimeout(() => {
         console.warn('[WebRTC] Connection timeout — ending call');
-        if (remoteUserIdRef.current) emitRef.current('call_end', { to: remoteUserIdRef.current });
+        if (targetId) emitRef.current('call_end', { to: targetId });
         useCallStore.getState().endCall('ended');
       }, CONNECTION_TIMEOUT_MS);
     } catch (err) {
@@ -733,6 +735,8 @@ export default function useWebRTCCall({
         console.warn('[InCallManager] stop error:', e);
       }
     }
+
+    useCallStore.getState().resetCall();
   }, []);
 
   // ─── Initialize (once per mount) ──────────────────────────────────
