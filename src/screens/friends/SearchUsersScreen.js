@@ -108,17 +108,24 @@ export default function SearchUsersScreen({ navigation }) {
         }
         renderItem={({ item }) => (
           <View style={[styles.userItem, { borderBottomColor: C.border }]}>
-            {item.avatar ? (
-              <Image source={{ uri: item.avatar }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.initials}>{getInitials(item.name)}</Text>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+              onPress={() => navigation.navigate('UserProfile', { user: item, isOnline: item.isOnline, lastSeen: item.lastSeen })}
+              activeOpacity={0.75}
+            >
+              {item.avatar ? (
+                <Image source={{ uri: item.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.initials}>{getInitials(item.name)}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.name, { color: C.text }]}>{item.name}</Text>
+                <Text style={[styles.status, { color: C.textSecondary }]} numberOfLines={1}>{item.status}</Text>
               </View>
-            )}
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.name, { color: C.text }]}>{item.name}</Text>
-              <Text style={[styles.status, { color: C.textSecondary }]} numberOfLines={1}>{item.status}</Text>
-            </View>
+            </TouchableOpacity>
+
             {item._id?.toString() !== user?._id?.toString() && (
               <TouchableOpacity
                 style={[styles.addBtn, sentIds[item._id] && styles.sentBtn]}
