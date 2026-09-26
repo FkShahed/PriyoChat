@@ -170,11 +170,7 @@ const useCallStore = create(
       },
 
       addIceCandidate: (candidate) => {
-        const { callState } = get();
-        if (callState === 'idle' || callState === 'ended') {
-          console.log('[useCallStore] Ignoring stale ICE candidate in idle/ended state');
-          return;
-        }
+        if (!candidate) return;
         set((state) => ({ iceCandidates: [...state.iceCandidates, candidate] }));
       },
 
