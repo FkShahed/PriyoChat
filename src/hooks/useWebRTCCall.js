@@ -15,13 +15,16 @@ try {
     RTCSessionDescription = window.RTCSessionDescription;
     mediaDevices = navigator.mediaDevices;
     webrtcAvailable = !!RTCPeerConnection;
-  } else {
+  } else if (webrtc && webrtc.RTCPeerConnection) {
     RTCPeerConnection = webrtc.RTCPeerConnection;
     RTCIceCandidate = webrtc.RTCIceCandidate;
     RTCSessionDescription = webrtc.RTCSessionDescription;
     mediaDevices = webrtc.mediaDevices;
     webrtcAvailable = true;
     console.log('[WebRTC] Native module loaded successfully');
+  } else {
+    webrtcAvailable = false;
+    console.warn('[WebRTC] Native module is null or not loaded');
   }
 } catch (err) {
   console.error('[WebRTC] Failed to load native module:', err.message);

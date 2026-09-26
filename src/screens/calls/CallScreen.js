@@ -43,7 +43,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
     );
   }
 
-  if (webrtc && webrtc.RTCView && stream) {
+  if (webrtc && webrtc.RTCView && stream && typeof stream.toURL === 'function') {
     const RTCViewComp = webrtc.RTCView;
     return (
       <RTCViewComp
