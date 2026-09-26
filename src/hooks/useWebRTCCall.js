@@ -41,40 +41,22 @@ function getIceServers() {
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:global.stun.twilio.com:3478' },
     { urls: 'stun:stun.services.mozilla.com' },
+    { urls: 'stun:openrelay.metered.ca:80' },
     {
       urls: [
-        'turn:a.relay.metered.ca:80',
-        'turn:a.relay.metered.ca:443',
-        'turn:a.relay.metered.ca:443?transport=tcp',
-        'turn:a.relay.metered.ca:80?transport=tcp',
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turn:openrelay.metered.ca:80?transport=tcp',
       ],
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
     {
       urls: [
-        'turns:a.relay.metered.ca:443?transport=tcp',
-        'turns:a.relay.metered.ca:5349',
-        'turns:a.relay.metered.ca:5349?transport=tcp',
-      ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: [
-        'turn:b.relay.metered.ca:80',
-        'turn:b.relay.metered.ca:443',
-        'turn:b.relay.metered.ca:443?transport=tcp',
-        'turn:b.relay.metered.ca:80?transport=tcp',
-      ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: [
-        'turns:b.relay.metered.ca:443?transport=tcp',
-        'turns:b.relay.metered.ca:5349',
-        'turns:b.relay.metered.ca:5349?transport=tcp',
+        'turns:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:5349',
+        'turns:openrelay.metered.ca:5349?transport=tcp',
       ],
       username: 'openrelayproject',
       credential: 'openrelayproject',
