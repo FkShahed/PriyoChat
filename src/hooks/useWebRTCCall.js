@@ -186,6 +186,8 @@ export default function useWebRTCCall({
     pc.ontrack = (event) => {
       console.log('[WebRTC] ontrack event, streams:', event.streams?.length);
       if (event.streams?.[0]) {
+        if (InCallManager) InCallManager.stopRingback();
+        useCallStore.getState().setCallConnected();
         onRemoteStream?.(event.streams[0]);
       }
     };

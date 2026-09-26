@@ -12,12 +12,51 @@ import useSocketStore from '../../store/useSocketStore';
 import useWebRTCCall from '../../hooks/useWebRTCCall';
 import { getInitials } from '../../utils/helpers';
 
-import { webrtc } from '../../utils/nativeModules';
+// Universal VideoStreamView for Web (HTML5 video) and Mobile (RTCView)
+function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, style }) {
+  const videoRef = useRef(null);
 
-// RTCView: use native component if available, fall back to View (Expo Go / web)
-let RTCView = View;
-if (Platform.OS !== 'web' && webrtc && webrtc.RTCView) {
-  RTCView = webrtc.RTCView;
+  useEffect(() => {
+    if (Platform.OS === 'web' && videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch((e) => console.warn('[WebVideo] play error:', e));
+    }
+  }, [stream]);
+
+  if (Platform.OS === 'web') {
+    if (!stream) return null;
+    return (
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          transform: mirror ? 'scaleX(-1)' : 'none',
+          backgroundColor: '#000',
+          ...style,
+        }}
+      />
+    );
+  }
+
+  if (webrtc && webrtc.RTCView && stream) {
+    const RTCViewComp = webrtc.RTCView;
+    return (
+      <RTCViewComp
+        streamURL={stream.toURL()}
+        style={style}
+        objectFit="cover"
+        mirror={mirror}
+        zOrder={zOrder}
+      />
+    );
+  }
+
+  return null;
 }
 
 function formatDuration(secs) {
@@ -199,20 +238,20 @@ export default function CallScreen({ route, navigation }) {
   const statusLabel = getStatusLabel();
 
   // ── VIDEO CALL layout ─────────────────────────────────────────────
-  // Check if RTCView is the real native component (not the View fallback)
-  const hasNativeRTCView = RTCView !== View;
-
   if (callType === 'video') {
+    const hasRemoteVideo = Boolean(remoteStream);
+    const hasLocalVideo = Boolean(localStream);
+
     return (
       <View style={styles.videoContainer}>
         {/* Remote video (full screen) */}
-        {remoteStream && hasNativeRTCView ? (
-          <RTCView
-            streamURL={remoteStream.toURL()}
-            style={styles.remoteVideo}
-            objectFit="cover"
+        {hasRemoteVideo ? (
+          <VideoStreamView
+            stream={remoteStream}
+            isLocal={false}
             mirror={false}
             zOrder={0}
+            style={styles.remoteVideo}
           />
         ) : (
           <LinearGradient colors={['#0D1117', '#1A2332']} style={StyleSheet.absoluteFill}>
@@ -231,14 +270,14 @@ export default function CallScreen({ route, navigation }) {
         )}
 
         {/* Local video (picture-in-picture) */}
-        {localStream && hasNativeRTCView && (
+        {hasLocalVideo && (
           <View style={styles.localVideoWrapper}>
-            <RTCView
-              streamURL={localStream.toURL()}
-              style={styles.localVideo}
-              objectFit="cover"
+            <VideoStreamView
+              stream={localStream}
+              isLocal={true}
               mirror={cameraFront}
               zOrder={1}
+              style={styles.localVideo}
             />
           </View>
         )}
