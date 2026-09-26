@@ -111,6 +111,24 @@ function extractSdpAndType(raw, defaultType = 'offer') {
 }
 
 /**
+ * Safely parse and normalize raw ICE candidate objects.
+ */
+function extractIceCandidate(raw) {
+  if (!raw) return null;
+  let obj = raw;
+  if (typeof obj === 'string') {
+    try { obj = JSON.parse(obj); } catch (e) {}
+  }
+  if (obj && typeof obj === 'object') {
+    if (obj.candidate && typeof obj.candidate === 'object') {
+      obj = obj.candidate;
+    }
+  }
+  if (!obj) return null;
+  return obj;
+}
+
+/**
  * Request camera/microphone permissions on Android at runtime.
  */
 async function requestMediaPermissions(callType) {
@@ -205,6 +223,7 @@ export default function useWebRTCCall({
       }
 
       if (stream) {
+        try { stream.getTracks().forEach((t) => { t.enabled = true; }); } catch (e) {}
         onRemoteStream?.(stream);
       }
     };
@@ -221,9 +240,14 @@ export default function useWebRTCCall({
           timeoutRef.current = null;
         }
       } else if (state === 'failed') {
-        console.warn('[WebRTC] Connection failed');
-        if (remoteUserId) emit('call_end', { to: remoteUserId });
-        useCallStore.getState().endCall('ended');
+        console.warn('[WebRTC] Connection failed, checking for recovery...');
+        setTimeout(() => {
+          if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') {
+            console.warn('[WebRTC] Connection failed after grace period, ending call');
+            if (remoteUserId) emit('call_end', { to: remoteUserId });
+            useCallStore.getState().endCall('ended');
+          }
+        }, 5000);
       }
     };
 
@@ -256,8 +280,9 @@ export default function useWebRTCCall({
     pendingCandidates.current = [];
     console.log('[WebRTC] Flushing', buffered.length, 'buffered ICE candidates');
     buffered.forEach((candidate) => {
-      if (pc.signalingState !== 'closed') {
-        pc.addIceCandidate(new RTCIceCandidate(candidate))
+      const validCandidate = extractIceCandidate(candidate);
+      if (validCandidate && pc.signalingState !== 'closed') {
+        pc.addIceCandidate(new RTCIceCandidate(validCandidate))
           .catch((e) => console.warn('[WebRTC] addIceCandidate error (buffered):', e));
       }
     });
@@ -268,7 +293,8 @@ export default function useWebRTCCall({
       console.log('[WebRTC] Flushing', newCandidates.length, 'store ICE candidates');
     }
     newCandidates.forEach((candidate) => {
-      if (pc.signalingState !== 'closed') {
+      const validCandidate = extractIceCandidate(candidate);
+      if (validCandidate && pc.signalingState !== 'closed') {
         pc.addIceCandidate(new RTCIceCandidate(candidate))
           .catch((e) => console.warn('[WebRTC] addIceCandidate error (store):', e));
       }
@@ -596,8 +622,9 @@ export default function useWebRTCCall({
     // Remote desc is ready — add directly
     console.log('[WebRTC] Adding', newCandidates.length, 'ICE candidates directly');
     newCandidates.forEach((candidate) => {
-      if (pc.signalingState !== 'closed') {
-        pc.addIceCandidate(new RTCIceCandidate(candidate))
+      const validCandidate = extractIceCandidate(candidate);
+      if (validCandidate && pc.signalingState !== 'closed') {
+        pc.addIceCandidate(new RTCIceCandidate(validCandidate))
           .catch((e) => console.warn('[WebRTC] addIceCandidate error:', e));
       }
     });
