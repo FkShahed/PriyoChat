@@ -106,6 +106,15 @@ function extractSdpAndType(raw, defaultType = 'offer') {
     return { type: defaultType, sdp: obj };
   }
 
+  if (typeof obj?.toJSON === 'function') {
+    try {
+      const json = obj.toJSON();
+      if (json && typeof json === 'object') {
+        obj = { ...obj, ...json };
+      }
+    } catch (e) {}
+  }
+
   const type = (obj?.type || obj?._type || defaultType).toLowerCase();
 
   let sdp = '';
@@ -123,8 +132,8 @@ function extractSdpAndType(raw, defaultType = 'offer') {
 }
 
 /**
- * Safely parse and normalize raw ICE candidate objects.
- * Eliminates explicit null fields so Android native JNI binding won't crash or fail type checks.
+ * Safely parse and normalize raw ICE candidate objects across React Native and Web.
+ * Handles _candidate, _sdpMid, _sdpMLineIndex internal fields and eliminates explicit nulls.
  */
 function extractIceCandidate(raw) {
   if (!raw) return null;
@@ -138,18 +147,36 @@ function extractIceCandidate(raw) {
     }
   }
   if (!obj || typeof obj !== 'object') return null;
-  const candStr = typeof obj.candidate === 'string' ? obj.candidate.trim() : '';
+
+  if (typeof obj.toJSON === 'function') {
+    try {
+      const json = obj.toJSON();
+      if (json && typeof json === 'object') {
+        obj = { ...obj, ...json };
+      }
+    } catch (e) {}
+  }
+
+  const candStr = (
+    (typeof obj.candidate === 'string' ? obj.candidate : '') ||
+    (typeof obj._candidate === 'string' ? obj._candidate : '') ||
+    (typeof obj.sdp === 'string' ? obj.sdp : '')
+  ).trim();
+
   if (!candStr) return null;
+
+  const rawMLine = obj.sdpMLineIndex != null ? obj.sdpMLineIndex : obj._sdpMLineIndex;
+  const rawMid = obj.sdpMid != null ? obj.sdpMid : obj._sdpMid;
 
   const res = {
     candidate: candStr,
   };
 
-  if (obj.sdpMLineIndex !== null && obj.sdpMLineIndex !== undefined) {
-    res.sdpMLineIndex = Number(obj.sdpMLineIndex);
+  if (rawMLine !== null && rawMLine !== undefined) {
+    res.sdpMLineIndex = Number(rawMLine);
   }
-  if (obj.sdpMid !== null && obj.sdpMid !== undefined) {
-    res.sdpMid = String(obj.sdpMid);
+  if (rawMid !== null && rawMid !== undefined) {
+    res.sdpMid = String(rawMid);
   }
 
   if (res.sdpMLineIndex === undefined && res.sdpMid === undefined) {
@@ -237,13 +264,19 @@ export default function useWebRTCCall({
       return null;
     }
 
-    console.log('[WebRTC] Building peer connection...');
-    const pc = new RTCPeerConnection({ iceServers: getIceServers() });
+    console.log('[WebRTC] Building peer connection with unified-plan and STUN/TURN...');
+    const pc = new RTCPeerConnection({
+      iceServers: getIceServers(),
+      sdpSemantics: 'unified-plan',
+    });
 
-    pc.onicecandidate = ({ candidate }) => {
-      if (candidate && candidate.candidate && remoteUserIdRef.current) {
-        console.log('[WebRTC] Sending ICE candidate to:', remoteUserIdRef.current);
-        emitRef.current('call_ice', { to: remoteUserIdRef.current, candidate });
+    pc.onicecandidate = (event) => {
+      const cand = event?.candidate;
+      if (!cand || !remoteUserIdRef.current) return;
+      const parsed = extractIceCandidate(cand);
+      if (parsed && parsed.candidate) {
+        console.log('[WebRTC] Sending clean ICE candidate to:', remoteUserIdRef.current, parsed.candidate.substring(0, 45));
+        emitRef.current('call_ice', { to: remoteUserIdRef.current, candidate: parsed });
       }
     };
 
@@ -342,12 +375,23 @@ export default function useWebRTCCall({
 
     const buffered = pendingCandidates.current;
     pendingCandidates.current = [];
-    console.log('[WebRTC] Flushing', buffered.length, 'buffered ICE candidates');
+    if (buffered.length > 0) {
+      console.log('[WebRTC] Flushing', buffered.length, 'buffered ICE candidates');
+    }
     buffered.forEach((candidate) => {
       const validCandidate = extractIceCandidate(candidate);
       if (validCandidate && pc.signalingState !== 'closed') {
-        pc.addIceCandidate(new RTCIceCandidate(validCandidate))
-          .catch((e) => console.warn('[WebRTC] addIceCandidate error (buffered):', e));
+        try {
+          const iceObj = (RTCIceCandidate && typeof RTCIceCandidate === 'function')
+            ? new RTCIceCandidate(validCandidate)
+            : validCandidate;
+          pc.addIceCandidate(iceObj).catch((e) => {
+            console.warn('[WebRTC] addIceCandidate error (buffered):', e.message);
+            try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
+          });
+        } catch (e) {
+          try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
+        }
       }
     });
 
@@ -359,8 +403,17 @@ export default function useWebRTCCall({
     newCandidates.forEach((candidate) => {
       const validCandidate = extractIceCandidate(candidate);
       if (validCandidate && pc.signalingState !== 'closed') {
-        pc.addIceCandidate(new RTCIceCandidate(validCandidate))
-          .catch((e) => console.warn('[WebRTC] addIceCandidate error (store):', e));
+        try {
+          const iceObj = (RTCIceCandidate && typeof RTCIceCandidate === 'function')
+            ? new RTCIceCandidate(validCandidate)
+            : validCandidate;
+          pc.addIceCandidate(iceObj).catch((e) => {
+            console.warn('[WebRTC] addIceCandidate error (store):', e.message);
+            try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
+          });
+        } catch (e) {
+          try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
+        }
       }
     });
     iceCandidatesProcessed.current = storeCandidates.length;
@@ -746,8 +799,17 @@ export default function useWebRTCCall({
     newCandidates.forEach((candidate) => {
       const validCandidate = extractIceCandidate(candidate);
       if (validCandidate && pc.signalingState !== 'closed') {
-        pc.addIceCandidate(new RTCIceCandidate(validCandidate))
-          .catch((e) => console.warn('[WebRTC] addIceCandidate error:', e));
+        try {
+          const iceObj = (RTCIceCandidate && typeof RTCIceCandidate === 'function')
+            ? new RTCIceCandidate(validCandidate)
+            : validCandidate;
+          pc.addIceCandidate(iceObj).catch((e) => {
+            console.warn('[WebRTC] addIceCandidate error (direct):', e.message);
+            try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
+          });
+        } catch (e) {
+          try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
+        }
       }
     });
     iceCandidatesProcessed.current = iceCandidates.length;
