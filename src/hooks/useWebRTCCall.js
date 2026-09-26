@@ -55,21 +55,14 @@ const ICE_SERVERS = [
 const CONNECTION_TIMEOUT_MS = 45000; // 45 seconds ring timeout
 
 // High-quality audio constraints
-const AUDIO_CONSTRAINTS = {
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
-  sampleRate: 48000,
-  channelCount: 1,
-};
+const AUDIO_CONSTRAINTS = Platform.OS === 'web'
+  ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+  : true;
 
 // High-quality video constraints
-const VIDEO_CONSTRAINTS = {
-  facingMode: 'user',
-  width: { ideal: 1280, min: 640 },
-  height: { ideal: 720, min: 480 },
-  frameRate: { ideal: 30, min: 15 },
-};
+const VIDEO_CONSTRAINTS = Platform.OS === 'web'
+  ? { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+  : { facingMode: 'user' };
 
 /**
  * Safely parse and extract valid { type, sdp } from any offer/answer structure.
