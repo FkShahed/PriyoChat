@@ -48,8 +48,17 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
 
   if (webrtc && webrtc.RTCView && stream) {
     const RTCViewComp = webrtc.RTCView;
-    const streamURL = typeof stream.toURL === 'function' ? stream.toURL() : '';
-    if (!streamURL) return null;
+    let streamURL = '';
+    if (typeof stream.toURL === 'function') {
+      try { streamURL = stream.toURL(); } catch (e) {}
+    }
+    if (!streamURL && stream.streamURL) {
+      streamURL = stream.streamURL;
+    }
+    if (!streamURL && typeof stream === 'string') {
+      streamURL = stream;
+    }
+
     return (
       <RTCViewComp
         streamURL={streamURL}

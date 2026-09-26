@@ -198,6 +198,7 @@ export default function useWebRTCCall({
       }
     };
 
+    let remoteTracks = [];
     let remoteStreamObj = null;
 
     pc.ontrack = (event) => {
@@ -210,20 +211,26 @@ export default function useWebRTCCall({
 
       let stream = event.streams?.[0];
       if (!stream && event.track) {
-        if (!remoteStreamObj) {
-          const StreamCtor = (webrtc && webrtc.MediaStream) || window.MediaStream;
-          if (StreamCtor) {
-            try { remoteStreamObj = new StreamCtor(); } catch (e) {}
+        if (!remoteTracks.some((t) => t.id === event.track.id)) {
+          remoteTracks.push(event.track);
+        }
+        const StreamCtor = (webrtc && webrtc.MediaStream) || window.MediaStream;
+        if (StreamCtor) {
+          try {
+            remoteStreamObj = new StreamCtor(remoteTracks);
+          } catch (e) {
+            try {
+              remoteStreamObj = new StreamCtor();
+              remoteTracks.forEach((t) => remoteStreamObj.addTrack(t));
+            } catch (err) {}
           }
         }
-        if (remoteStreamObj && typeof remoteStreamObj.addTrack === 'function') {
-          try { remoteStreamObj.addTrack(event.track); } catch (e) {}
-          stream = remoteStreamObj;
-        }
+        stream = remoteStreamObj;
       }
 
       if (stream) {
         try { stream.getTracks().forEach((t) => { t.enabled = true; }); } catch (e) {}
+        console.log('[WebRTC] Emitting remote stream to UI');
         onRemoteStream?.(stream);
       }
     };
