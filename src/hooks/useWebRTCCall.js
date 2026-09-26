@@ -604,7 +604,10 @@ export default function useWebRTCCall({
       if (!offerSdp) {
         throw new Error('Invalid or missing SDP offer session description');
       }
-      await pc.setRemoteDescription(new RTCSessionDescription({ type: offerType, sdp: offerSdp }));
+      const desc = (RTCSessionDescription && typeof RTCSessionDescription === 'function')
+        ? new RTCSessionDescription({ type: offerType, sdp: offerSdp })
+        : { type: offerType, sdp: offerSdp };
+      await pc.setRemoteDescription(desc);
       remoteDescReady.current = true;
       console.log('[WebRTC] Remote description set successfully');
 
@@ -715,7 +718,7 @@ export default function useWebRTCCall({
     }
   }, []);
 
-  // ─── Initialize (once) ───────────────────────────────────────────
+  // ─── Initialize (once per mount) ──────────────────────────────────
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
@@ -739,7 +742,7 @@ export default function useWebRTCCall({
     return () => {
       cleanup();
     };
-  }, [startAsCallerAsync, startAsReceiverAsync, cleanup]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Caller: apply answer when received ──────────────────────────
   useEffect(() => {
@@ -767,7 +770,10 @@ export default function useWebRTCCall({
           answerAppliedRef.current = false;
           return;
         }
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: answerType, sdp: answerSdp }));
+        const desc = (RTCSessionDescription && typeof RTCSessionDescription === 'function')
+          ? new RTCSessionDescription({ type: answerType, sdp: answerSdp })
+          : { type: answerType, sdp: answerSdp };
+        await pc.setRemoteDescription(desc);
         console.log('[WebRTC] Remote answer applied successfully');
         remoteDescReady.current = true;
         flushCandidates(pc);
