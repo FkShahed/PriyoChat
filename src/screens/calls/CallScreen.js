@@ -108,8 +108,7 @@ export default function CallScreen({ route, navigation }) {
   const loopRef = useRef(null);
   const timerRef = useRef(null);
   const hasNavigatedBack = useRef(false);
-
-  const targetUserId = otherUser?._id || otherUser?.id;
+  const targetUserId = otherUser?._id || otherUser?.id || storeRemoteUser?._id || storeRemoteUser?.id || useCallStore.getState().remoteUserId;
 
   // ── WebRTC ────────────────────────────────────────────────────────
   const { cleanup: cleanupWebRTC, setSpeaker, connectionState, iceConnectionState, errorMessage } = useWebRTCCall({

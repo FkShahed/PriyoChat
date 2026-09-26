@@ -63,7 +63,19 @@ const useCallStore = create(
 
       // Outgoing call — initiated by this user
       startCall: (remoteUser, callType) => {
-        set({ callState: 'calling', remoteUser, callType, iceCandidates: [], endReason: null, isReceiver: false, offer: null, answer: null, callId: null });
+        const remoteUserId = remoteUser?._id || remoteUser?.id || null;
+        set({
+          callState: 'calling',
+          remoteUser,
+          remoteUserId,
+          callType,
+          iceCandidates: [],
+          endReason: null,
+          isReceiver: false,
+          offer: null,
+          answer: null,
+          callId: null,
+        });
       },
 
       setCallRinging: () => {
@@ -97,15 +109,16 @@ const useCallStore = create(
           try { offerObj = JSON.parse(offerObj); } catch (e) {}
         }
 
-        const callerId = callerObj._id || callerObj.id || data.from;
+        const callerId = callerObj._id || callerObj.id || data.from || data.callerId;
         const callerName = callerObj.name || data.callerName || data.name || 'PriyoChat User';
         const callerAvatar = callerObj.avatar || data.avatar || null;
 
         const resolvedRemoteUser = {
-          _id: callerId,
-          avatar: callerAvatar,
           ...callerObj,
+          _id: callerId,
+          id: callerId,
           name: callerName,
+          avatar: callerAvatar,
         };
 
         console.log('[useCallStore] setIncomingCall resolved remoteUser name:', resolvedRemoteUser.name, 'id:', callerId);
