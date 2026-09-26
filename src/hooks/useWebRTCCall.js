@@ -180,12 +180,32 @@ export default function useWebRTCCall({
       }
     };
 
+    let remoteStreamObj = null;
+
     pc.ontrack = (event) => {
-      console.log('[WebRTC] ontrack event, streams:', event.streams?.length);
-      if (event.streams?.[0]) {
-        if (InCallManager) InCallManager.stopRingback();
-        useCallStore.getState().setCallConnected();
-        onRemoteStream?.(event.streams[0]);
+      console.log('[WebRTC] ontrack event, track:', event.track?.kind, 'streams:', event.streams?.length);
+      
+      if (InCallManager) {
+        try { InCallManager.stopRingback(); } catch (e) {}
+      }
+      useCallStore.getState().setCallConnected();
+
+      let stream = event.streams?.[0];
+      if (!stream && event.track) {
+        if (!remoteStreamObj) {
+          const StreamCtor = (webrtc && webrtc.MediaStream) || window.MediaStream;
+          if (StreamCtor) {
+            try { remoteStreamObj = new StreamCtor(); } catch (e) {}
+          }
+        }
+        if (remoteStreamObj && typeof remoteStreamObj.addTrack === 'function') {
+          try { remoteStreamObj.addTrack(event.track); } catch (e) {}
+          stream = remoteStreamObj;
+        }
+      }
+
+      if (stream) {
+        onRemoteStream?.(stream);
       }
     };
 

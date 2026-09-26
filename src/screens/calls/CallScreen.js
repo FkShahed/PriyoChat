@@ -33,9 +33,6 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
         playsInline
         muted={isLocal}
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
           width: '100%',
           height: '100%',
           objectFit: 'cover',
@@ -54,7 +51,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
     return (
       <RTCViewComp
         streamURL={streamURL}
-        style={[StyleSheet.absoluteFillObject, style]}
+        style={[{ width: '100%', height: '100%' }, style]}
         objectFit="cover"
         mirror={mirror}
         zOrder={zOrder}
@@ -360,7 +357,7 @@ export default function CallScreen({ route, navigation }) {
                 style={[styles.videoCtrlCircle, muted && styles.videoCtrlCircleActive]}
                 onPress={toggleMute}
               >
-                <Ionicons name={muted ? 'mic-off' : 'mic'} size={24} color={muted ? '#FF453A' : '#FFF'} />
+                <Ionicons name={muted ? 'mic-off' : 'mic-outline'} size={24} color="#FFF" />
               </TouchableOpacity>
 
               {/* Camera Toggle Button */}
@@ -368,7 +365,7 @@ export default function CallScreen({ route, navigation }) {
                 style={[styles.videoCtrlCircle, !videoOn && styles.videoCtrlCircleActive]}
                 onPress={toggleVideo}
               >
-                <Ionicons name={videoOn ? 'videocam' : 'videocam-off'} size={24} color={!videoOn ? '#FF453A' : '#FFF'} />
+                <Ionicons name={videoOn ? 'videocam-outline' : 'videocam-off-outline'} size={24} color="#FFF" />
               </TouchableOpacity>
 
               {/* End Call Button */}
@@ -380,15 +377,15 @@ export default function CallScreen({ route, navigation }) {
 
               {/* Speaker Toggle Button */}
               <TouchableOpacity
-                style={[styles.videoCtrlCircle, speakerOn && styles.videoCtrlCircleActiveSpeaker]}
+                style={[styles.videoCtrlCircle, speakerOn && styles.videoCtrlCircleActive]}
                 onPress={() => { setSpeakerOn((s) => { const next = !s; setSpeaker?.(next); return next; }); }}
               >
-                <Ionicons name={speakerOn ? 'volume-high' : 'volume-mute'} size={24} color={speakerOn ? '#00C6FF' : '#FFF'} />
+                <Ionicons name={speakerOn ? 'volume-high' : 'volume-medium-outline'} size={24} color="#FFF" />
               </TouchableOpacity>
 
               {/* Flip Camera Button */}
               <TouchableOpacity style={styles.videoCtrlCircle} onPress={toggleCamera}>
-                <Ionicons name="camera-reverse" size={24} color="#FFF" />
+                <Ionicons name="camera-reverse-outline" size={24} color="#FFF" />
               </TouchableOpacity>
             </View>
           </LinearGradient>
@@ -634,22 +631,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   videoCtrlCircle: {
-    alignItems: 'center', justifyContent: 'center',
-    width: 54, height: 54, borderRadius: 27,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center', justifyContent: 'center', gap: 4,
+    width: 58, height: 58, borderRadius: 29,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
   },
   videoCtrlCircleActive: {
-    backgroundColor: 'rgba(255, 69, 58, 0.25)',
-    borderColor: 'rgba(255, 69, 58, 0.6)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderColor: 'rgba(255,255,255,0.5)',
   },
-  videoCtrlCircleActiveSpeaker: {
-    backgroundColor: 'rgba(0, 198, 255, 0.25)',
-    borderColor: 'rgba(0, 198, 255, 0.6)',
-  },
+  ctrlLabelText: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '600' },
   endBtnVideoWrapper: { alignItems: 'center' },
   endBtnVideo: {
-    width: 66, height: 66, borderRadius: 33,
+    width: 68, height: 68, borderRadius: 34,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.7, shadowRadius: 12, elevation: 10,
   },
