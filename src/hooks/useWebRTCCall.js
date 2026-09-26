@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { Platform, PermissionsAndroid, Alert } from 'react-native';
 import useCallStore from '../store/useCallStore';
 import useSocketStore from '../store/useSocketStore';
@@ -190,6 +190,10 @@ export default function useWebRTCCall({
   const { emit } = useSocketStore();
   const { iceCandidates, answer } = useCallStore();
 
+  const [connectionState, setConnectionState] = useState('new');
+  const [iceConnectionState, setIceConnectionState] = useState('new');
+  const [errorMessage, setErrorMessage] = useState('');
+
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const iceCandidatesProcessed = useRef(0);
@@ -256,6 +260,7 @@ export default function useWebRTCCall({
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
       console.log('[WebRTC] connectionState:', state);
+      setConnectionState(state);
 
       if (state === 'connected') {
         useCallStore.getState().setCallConnected();
@@ -265,6 +270,7 @@ export default function useWebRTCCall({
         }
       } else if (state === 'failed') {
         console.warn('[WebRTC] Connection failed, checking for recovery...');
+        setErrorMessage('Direct connection failed • Checking relay...');
         if (pc.restartIce) {
           try { pc.restartIce(); } catch (e) {}
         }
@@ -277,6 +283,7 @@ export default function useWebRTCCall({
         }, 15000);
       } else if (state === 'disconnected') {
         console.warn('[WebRTC] Connection disconnected, waiting for reconnect...');
+        setErrorMessage('Connection temporarily lost • Reconnecting...');
         setTimeout(() => {
           if (pcRef.current && pcRef.current.connectionState === 'disconnected' && pcRef.current.iceConnectionState === 'disconnected') {
             console.warn('[WebRTC] Disconnected timeout — ending call');
@@ -290,15 +297,18 @@ export default function useWebRTCCall({
     pc.oniceconnectionstatechange = () => {
       const iceState = pc.iceConnectionState;
       console.log('[WebRTC] iceConnectionState:', iceState);
+      setIceConnectionState(iceState);
 
       if (iceState === 'connected' || iceState === 'completed') {
         useCallStore.getState().setCallConnected();
+        setErrorMessage('');
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
       } else if (iceState === 'failed') {
         console.warn('[WebRTC] ICE state failed, attempting ICE restart...');
+        setErrorMessage('Network path blocked • Retrying relay...');
         if (pc.restartIce) {
           try { pc.restartIce(); } catch (e) {}
         }
@@ -763,5 +773,5 @@ export default function useWebRTCCall({
     }
   }, []);
 
-  return { cleanup, setSpeaker };
+  return { cleanup, setSpeaker, connectionState, iceConnectionState, errorMessage };
 }

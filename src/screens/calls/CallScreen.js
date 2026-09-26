@@ -92,6 +92,7 @@ export default function CallScreen({ route, navigation }) {
 
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
+  const [remoteTrackVersion, setRemoteTrackVersion] = useState(0);
   const [callDuration, setCallDuration] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(callType === 'video');
@@ -110,7 +111,7 @@ export default function CallScreen({ route, navigation }) {
   const targetUserId = otherUser?._id || otherUser?.id;
 
   // ── WebRTC ────────────────────────────────────────────────────────
-  const { cleanup: cleanupWebRTC, setSpeaker } = useWebRTCCall({
+  const { cleanup: cleanupWebRTC, setSpeaker, connectionState, iceConnectionState, errorMessage } = useWebRTCCall({
     remoteUserId: targetUserId,
     callType,
     isReceiver,
@@ -120,8 +121,20 @@ export default function CallScreen({ route, navigation }) {
       setLocalStream(s);
     }, []),
     onRemoteStream: useCallback((s) => {
-      console.log('[CallScreen] Remote stream received');
+      console.log('[CallScreen] Remote stream received, tracks:', s?.getTracks?.().length);
       setRemoteStream(s);
+      setRemoteTrackVersion((v) => v + 1);
+
+      if (s && typeof s.addEventListener === 'function') {
+        s.addEventListener('addtrack', () => {
+          console.log('[CallScreen] Remote stream addtrack event');
+          setRemoteTrackVersion((v) => v + 1);
+        });
+        s.addEventListener('removetrack', () => {
+          console.log('[CallScreen] Remote stream removetrack event');
+          setRemoteTrackVersion((v) => v + 1);
+        });
+      }
     }, []),
   });
 
@@ -255,9 +268,24 @@ export default function CallScreen({ route, navigation }) {
   const r2Style = makeRippleStyle(ripple2);
   const r3Style = makeRippleStyle(ripple3);
 
+  const remoteVideoTracks = remoteStream && typeof remoteStream.getVideoTracks === 'function'
+    ? remoteStream.getVideoTracks()
+    : [];
+  const hasRemoteVideo = remoteVideoTracks.length > 0 && remoteVideoTracks.some((t) => t.enabled !== false && t.readyState !== 'ended');
+
   const getStatusLabel = () => {
-    if (callState === 'active') return formatDuration(callDuration);
-    if (callState === 'connecting') return 'Connecting...';
+    if (iceConnectionState === 'failed' || connectionState === 'failed') {
+      return 'Connection Failed • Retrying...';
+    }
+    if (callState === 'active') {
+      if (callType === 'video' && !hasRemoteVideo) {
+        return `Voice Connected • ${formatDuration(callDuration)}`;
+      }
+      return formatDuration(callDuration);
+    }
+    if (callState === 'connecting' || connectionState === 'connecting' || iceConnectionState === 'checking') {
+      return 'Connecting...';
+    }
     if (callState === 'ringing') return 'Ringing...';
     if (isReceiver) return 'Connecting...';
     return 'Calling...';
@@ -266,8 +294,6 @@ export default function CallScreen({ route, navigation }) {
 
   // ── VIDEO CALL layout ─────────────────────────────────────────────
   if (callType === 'video') {
-    const hasRemoteVideo = Boolean(remoteStream);
-
     return (
       <View style={styles.videoContainer}>
         {/* Remote video (full screen) */}
@@ -296,6 +322,16 @@ export default function CallScreen({ route, navigation }) {
                 <View style={callState === 'active' ? styles.activeDotSmall : styles.connectingDot} />
                 <Text style={styles.waitingText}>{statusLabel}</Text>
               </View>
+
+              {/* Informative diagnosis when audio is connected but video is still pending */}
+              {callState === 'active' && !hasRemoteVideo && (
+                <View style={styles.videoWaitingSubBadge}>
+                  <Ionicons name="videocam-outline" size={14} color="#00C6FF" />
+                  <Text style={styles.videoWaitingSubText}>
+                    {errorMessage || "Waiting for friend's camera video feed..."}
+                  </Text>
+                </View>
+              )}
             </View>
           </LinearGradient>
         )}
@@ -359,6 +395,16 @@ export default function CallScreen({ route, navigation }) {
                 </View>
               </View>
             </View>
+
+            {/* Error / Diagnostic Notice Pill */}
+            {(errorMessage || (callState === 'active' && !hasRemoteVideo)) ? (
+              <View style={styles.diagNoticePill}>
+                <Ionicons name="information-circle-outline" size={15} color="#FFCC00" />
+                <Text style={styles.diagNoticeText} numberOfLines={1}>
+                  {errorMessage || "Opposite person's video is connecting..."}
+                </Text>
+              </View>
+            ) : null}
           </LinearGradient>
         )}
 
@@ -664,6 +710,24 @@ const styles = StyleSheet.create({
     width: 68, height: 68, borderRadius: 34,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.7, shadowRadius: 12, elevation: 10,
+  },
+  videoWaitingSubBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 12, paddingHorizontal: 14, paddingVertical: 6,
+    backgroundColor: 'rgba(0, 198, 255, 0.12)', borderRadius: 16,
+    borderWidth: 1, borderColor: 'rgba(0, 198, 255, 0.25)',
+  },
+  videoWaitingSubText: {
+    color: '#00C6FF', fontSize: 12, fontWeight: '600',
+  },
+  diagNoticePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 10, alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)', paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255, 204, 0, 0.4)',
+  },
+  diagNoticeText: {
+    color: '#FFCC00', fontSize: 12, fontWeight: '600',
   },
 });
 
