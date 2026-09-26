@@ -218,6 +218,8 @@ export default function CallScreen({ route, navigation }) {
     if ((callState === 'ended' || callState === 'idle') && !hasNavigatedBack.current) {
       hasNavigatedBack.current = true;
       Vibration.cancel();
+      setLocalStream(null);
+      setRemoteStream(null);
       cleanupWebRTC();
       navigation.goBack();
     }
@@ -229,6 +231,8 @@ export default function CallScreen({ route, navigation }) {
     if (targetUserId) {
       emit('call_end', { to: targetUserId, callType, duration: callDuration });
     }
+    setLocalStream(null);
+    setRemoteStream(null);
     cleanupWebRTC();
     resetCall();
     navigation.goBack();

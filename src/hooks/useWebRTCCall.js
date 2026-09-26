@@ -40,6 +40,7 @@ function getIceServers() {
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:stun.services.mozilla.com' },
     {
       urls: [
         'turn:a.relay.metered.ca:80',
@@ -55,6 +56,25 @@ function getIceServers() {
         'turns:a.relay.metered.ca:443?transport=tcp',
         'turns:a.relay.metered.ca:5349',
         'turns:a.relay.metered.ca:5349?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: [
+        'turn:b.relay.metered.ca:80',
+        'turn:b.relay.metered.ca:443',
+        'turn:b.relay.metered.ca:443?transport=tcp',
+        'turn:b.relay.metered.ca:80?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: [
+        'turns:b.relay.metered.ca:443?transport=tcp',
+        'turns:b.relay.metered.ca:5349',
+        'turns:b.relay.metered.ca:5349?transport=tcp',
       ],
       username: 'openrelayproject',
       credential: 'openrelayproject',
@@ -122,6 +142,7 @@ function extractSdpAndType(raw, defaultType = 'offer') {
 
 /**
  * Safely parse and normalize raw ICE candidate objects.
+ * Eliminates explicit null fields so Android native JNI binding won't crash or fail type checks.
  */
 function extractIceCandidate(raw) {
   if (!raw) return null;
@@ -140,11 +161,16 @@ function extractIceCandidate(raw) {
 
   const res = {
     candidate: candStr,
-    sdpMLineIndex: obj.sdpMLineIndex != null ? Number(obj.sdpMLineIndex) : null,
-    sdpMid: obj.sdpMid != null ? String(obj.sdpMid) : null,
   };
 
-  if (res.sdpMLineIndex === null && res.sdpMid === null) {
+  if (obj.sdpMLineIndex !== null && obj.sdpMLineIndex !== undefined) {
+    res.sdpMLineIndex = Number(obj.sdpMLineIndex);
+  }
+  if (obj.sdpMid !== null && obj.sdpMid !== undefined) {
+    res.sdpMid = String(obj.sdpMid);
+  }
+
+  if (res.sdpMLineIndex === undefined && res.sdpMid === undefined) {
     res.sdpMLineIndex = 0;
   }
 
@@ -244,21 +270,22 @@ export default function useWebRTCCall({
 
       useCallStore.getState().setCallConnected();
 
-      let stream = event.streams?.[0];
-
       if (event.track) {
         try { event.track.enabled = true; } catch (e) {}
       }
 
+      let stream = event.streams?.[0];
       if (stream) {
-        try { stream.getTracks().forEach((t) => { t.enabled = true; }); } catch (e) {}
+        try {
+          stream.getTracks().forEach((t) => { t.enabled = true; });
+        } catch (e) {}
 
         let url = '';
         try { url = typeof stream.toURL === 'function' ? stream.toURL() : (stream.streamURL || ''); } catch(e) {}
-        console.log('[WebRTC] Remote stream URL:', url, 'tracks:', stream.getTracks?.()?.length);
+        console.log('[WebRTC] Remote stream URL:', url, 'tracks:', stream.getTracks?.().map(t => `${t.kind}:${t.enabled}:${t.readyState}`));
 
         console.log('[WebRTC] Emitting remote stream to UI');
-        onRemoteStreamRef.current?.(stream);
+        onRemoteStreamRef.current?.(stream, Date.now());
       }
     };
 
@@ -597,6 +624,62 @@ export default function useWebRTCCall({
     }
   }, [buildPC, getLocalMedia, offer, flushCandidates]);
 
+  // ─── Expose cleanup ──────────────────────────────────────────────
+  const cleanup = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    if (localStreamRef.current) {
+      const stream = localStreamRef.current;
+      localStreamRef.current = null;
+      try {
+        stream.getTracks().forEach((track) => {
+          try { track.enabled = false; } catch (e) {}
+          try { track.stop(); } catch (e) {}
+        });
+        if (typeof stream.release === 'function') {
+          stream.release();
+        }
+      } catch (e) {
+        console.warn('[WebRTC] localStream cleanup error:', e);
+      }
+    }
+
+    if (pcRef.current) {
+      const pc = pcRef.current;
+      pcRef.current = null;
+      pc.onicecandidate = null;
+      pc.ontrack = null;
+      pc.onconnectionstatechange = null;
+      pc.oniceconnectionstatechange = null;
+      pc.onsignalingstatechange = null;
+      if (pc.signalingState !== 'closed') {
+        try {
+          pc.close();
+        } catch (e) {
+          console.warn('[WebRTC] pc.close error:', e);
+        }
+      }
+    }
+
+    initialized.current = false;
+    remoteDescReady.current = false;
+    answerAppliedRef.current = false;
+    iceCandidatesProcessed.current = 0;
+    pendingCandidates.current = [];
+
+    if (InCallManager) {
+      try {
+        InCallManager.stop();
+        console.log('[InCallManager] Stopped');
+      } catch (e) {
+        console.warn('[InCallManager] stop error:', e);
+      }
+    }
+  }, []);
+
   // ─── Initialize (once) ───────────────────────────────────────────
   useEffect(() => {
     if (initialized.current) return;
@@ -619,42 +702,9 @@ export default function useWebRTCCall({
     }
 
     return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      if (localStreamRef.current) {
-        try {
-          if (typeof localStreamRef.current.release === 'function') {
-            localStreamRef.current.release();
-          } else {
-            localStreamRef.current.getTracks?.().forEach((t) => {
-              try { t.release?.(); } catch (e) {}
-              try { t.stop?.(); } catch (e) {}
-            });
-          }
-        } catch (e) {
-          try { localStreamRef.current.getTracks?.().forEach((t) => t.stop?.()); } catch (err) {}
-        }
-        localStreamRef.current = null;
-      }
-      if (pcRef.current) {
-        const pc = pcRef.current;
-        pcRef.current = null;
-        try {
-          pc.getSenders?.().forEach((s) => {
-            try { s.track?.release?.(); } catch (e) {}
-            try { s.track?.stop?.(); } catch (e) {}
-          });
-        } catch (e) {}
-        if (pc.signalingState !== 'closed') {
-          try { pc.close(); } catch (e) {}
-        }
-      }
-      initialized.current = false;
-      remoteDescReady.current = false;
-      answerAppliedRef.current = false;
-      iceCandidatesProcessed.current = 0;
-      pendingCandidates.current = [];
+      cleanup();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startAsCallerAsync, startAsReceiverAsync, cleanup]);
 
   // ─── Caller: apply answer when received ──────────────────────────
   useEffect(() => {
@@ -720,52 +770,6 @@ export default function useWebRTCCall({
     });
     iceCandidatesProcessed.current = iceCandidates.length;
   }, [iceCandidates]);
-
-  // ─── Expose cleanup ──────────────────────────────────────────────
-  const cleanup = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (localStreamRef.current) {
-      try {
-        if (typeof localStreamRef.current.release === 'function') {
-          localStreamRef.current.release();
-        } else {
-          localStreamRef.current.getTracks?.().forEach((t) => {
-            try { t.release?.(); } catch (e) {}
-            try { t.stop?.(); } catch (e) {}
-          });
-        }
-      } catch (e) {
-        try { localStreamRef.current.getTracks?.().forEach((t) => t.stop?.()); } catch (err) {}
-      }
-      localStreamRef.current = null;
-    }
-    if (pcRef.current) {
-      const pc = pcRef.current;
-      pcRef.current = null;
-      try {
-        pc.getSenders?.().forEach((s) => {
-          try { s.track?.release?.(); } catch (e) {}
-          try { s.track?.stop?.(); } catch (e) {}
-        });
-      } catch (e) {}
-      if (pc.signalingState !== 'closed') {
-        try { pc.close(); } catch (e) {}
-      }
-    }
-    initialized.current = false;
-    remoteDescReady.current = false;
-    answerAppliedRef.current = false;
-    iceCandidatesProcessed.current = 0;
-    pendingCandidates.current = [];
-    if (InCallManager) {
-      try {
-        InCallManager.stop();
-        console.log('[InCallManager] Stopped');
-      } catch (e) {
-        console.warn('[InCallManager] stop error:', e);
-      }
-    }
-  }, []);
 
   const setSpeaker = useCallback((on) => {
     if (InCallManager) {
