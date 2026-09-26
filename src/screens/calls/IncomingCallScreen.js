@@ -61,11 +61,21 @@ export default function IncomingCallScreen({ navigation }) {
     playRingtone();
 
     return () => {
-      // Stop ringing if screen is unmounted
+      // Stop ringing and unload if screen is unmounted
       if (soundRef.current) {
-        soundRef.current.stopAsync().catch(() => {});
-        soundRef.current.unloadAsync().catch(() => {});
+        const s = soundRef.current;
+        soundRef.current = null;
+        s.stopAsync().catch(() => {});
+        s.unloadAsync().catch(() => {});
       }
+      try {
+        Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: false,
+          playThroughEarpieceAndroid: false,
+        }).catch(() => {});
+      } catch (e) {}
     };
   }, []);
 
@@ -81,8 +91,19 @@ export default function IncomingCallScreen({ navigation }) {
     if (hasActed.current) return;
     hasActed.current = true;
     if (soundRef.current) {
-      soundRef.current.stopAsync().catch(() => {});
+      const s = soundRef.current;
+      soundRef.current = null;
+      s.stopAsync().catch(() => {});
+      s.unloadAsync().catch(() => {});
     }
+    try {
+      Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      }).catch(() => {});
+    } catch (e) {}
     // Don't emit call_answer here — useWebRTCCall hook in CallScreen
     // will create the real SDP answer and emit it after setting up media.
     // Mark as 'connecting' — the hook will set 'active' when WebRTC connects.
@@ -94,8 +115,19 @@ export default function IncomingCallScreen({ navigation }) {
     if (hasActed.current) return;
     hasActed.current = true;
     if (soundRef.current) {
-      soundRef.current.stopAsync().catch(() => {});
+      const s = soundRef.current;
+      soundRef.current = null;
+      s.stopAsync().catch(() => {});
+      s.unloadAsync().catch(() => {});
     }
+    try {
+      Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      }).catch(() => {});
+    } catch (e) {}
     const targetId = remoteUser?._id || remoteUser?.id;
     if (targetId) {
       emit('call_reject', { to: targetId });

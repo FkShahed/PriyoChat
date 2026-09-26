@@ -209,7 +209,16 @@ export default function CallScreen({ route, navigation }) {
       if (sound) {
         sound.stopAsync().catch(() => {});
         sound.unloadAsync().catch(() => {});
+        sound = null;
       }
+      try {
+        Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: false,
+          playThroughEarpieceAndroid: false,
+        }).catch(() => {});
+      } catch (e) {}
     };
   }, [callState, isReceiver, speakerOn]);
 
