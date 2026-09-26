@@ -593,24 +593,7 @@ export default function useWebRTCCall({
       }
       pcRef.current = pc;
 
-      const stream = await getLocalMedia();
-      if (!pcRef.current || pc.signalingState === 'closed') {
-        console.warn('[WebRTC] PC closed while getting media, aborting receiver setup');
-        return;
-      }
-
-      stream.getTracks().forEach((track) => {
-        if (pc.signalingState !== 'closed') {
-          console.log('[WebRTC] Adding track to PC:', track.kind);
-          pc.addTrack(track, stream);
-        }
-      });
-
-      if (!pcRef.current || pc.signalingState === 'closed') {
-        console.warn('[WebRTC] PC closed before setting remote description');
-        return;
-      }
-
+      // 1. Set remote description (offer) IMMEDIATELY so ICE candidate exchange starts without delay
       console.log('[WebRTC] Setting remote description (offer)...');
       const { type: offerType, sdp: offerSdp } = extractSdpAndType(currentOffer, 'offer');
       if (!offerSdp) {
@@ -628,9 +611,29 @@ export default function useWebRTCCall({
         return;
       }
 
-      // Flush any ICE candidates that arrived before remote desc was set
+      // Flush any ICE candidates that arrived
       flushCandidates(pc);
 
+      // 2. Get local media and add tracks
+      const stream = await getLocalMedia();
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed while getting media, aborting receiver setup');
+        return;
+      }
+
+      stream.getTracks().forEach((track) => {
+        if (pc.signalingState !== 'closed') {
+          console.log('[WebRTC] Adding track to PC:', track.kind);
+          pc.addTrack(track, stream);
+        }
+      });
+
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed before creating answer');
+        return;
+      }
+
+      // 3. Create and set local answer
       const sessionAnswer = await pc.createAnswer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: callTypeRef.current === 'video',
@@ -654,11 +657,12 @@ export default function useWebRTCCall({
         return;
       }
 
+      const targetId = remoteUserIdRef.current || useCallStore.getState().remoteUserId;
       emitRef.current('call_answer', {
-        to: remoteUserIdRef.current,
+        to: targetId,
         answer: answerPayload,
       });
-      console.log('[WebRTC] Answer sent to:', remoteUserIdRef.current);
+      console.log('[WebRTC] Answer sent to:', targetId);
 
       // Connection timeout
       timeoutRef.current = setTimeout(() => {

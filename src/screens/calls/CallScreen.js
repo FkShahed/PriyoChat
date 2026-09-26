@@ -63,7 +63,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
 
     return (
       <RTCViewComp
-        key={streamURL + '_' + (isLocal ? 'loc' : 'rem') + '_' + (revision || 0)}
+        key={streamURL + '_' + (isLocal ? 'loc' : 'rem')}
         streamURL={streamURL}
         style={style}
         objectFit="cover"
@@ -275,7 +275,10 @@ export default function CallScreen({ route, navigation }) {
   const remoteVideoTracks = remoteStream && typeof remoteStream.getVideoTracks === 'function'
     ? remoteStream.getVideoTracks()
     : [];
-  const hasRemoteVideo = remoteVideoTracks.length > 0 && remoteVideoTracks.some((t) => t.enabled !== false && t.readyState !== 'ended');
+  const hasRemoteVideo = (callType === 'video') && (
+    (remoteVideoTracks.length > 0 && remoteVideoTracks.some((t) => t.enabled !== false && t.readyState !== 'ended')) ||
+    Boolean(remoteStream)
+  );
 
   const getStatusLabel = () => {
     if (iceConnectionState === 'failed' || connectionState === 'failed') {
