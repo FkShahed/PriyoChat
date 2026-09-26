@@ -643,7 +643,7 @@ const styles = StyleSheet.create({
   videoContainer: { flex: 1, backgroundColor: '#000' },
   remoteVideo: { flex: 1, backgroundColor: '#000' },
   localVideoWrapper: {
-    position: 'absolute', top: 60, right: 16,
+    position: 'absolute', bottom: 125, right: 16,
     width: 110, height: 160, borderRadius: 16,
     overflow: 'hidden', borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.35)',
