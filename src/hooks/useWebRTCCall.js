@@ -166,6 +166,7 @@ export default function useWebRTCCall({
   const iceCandidatesProcessed = useRef(0);
   const initialized = useRef(false);
   const remoteDescReady = useRef(false);
+  const answerAppliedRef = useRef(false);
   const pendingCandidates = useRef([]);
   const timeoutRef = useRef(null);
 
@@ -343,6 +344,27 @@ export default function useWebRTCCall({
       await pc.setLocalDescription(sessionOffer);
       console.log('[WebRTC] Offer created and set as local description');
 
+      // Check if remote answer arrived while local offer setup was in progress
+      const currentAnswer = useCallStore.getState().answer;
+      if (currentAnswer && !answerAppliedRef.current && pc.signalingState === 'have-local-offer') {
+        try {
+          answerAppliedRef.current = true;
+          console.log('[WebRTC] Applying early answer that arrived during offer creation...');
+          const { type: answerType, sdp: answerSdp } = extractSdpAndType(currentAnswer, 'answer');
+          if (answerSdp) {
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: answerType, sdp: answerSdp }));
+            console.log('[WebRTC] Remote answer applied successfully (early arrival)');
+            remoteDescReady.current = true;
+            flushCandidates(pc);
+          } else {
+            answerAppliedRef.current = false;
+          }
+        } catch (e) {
+          answerAppliedRef.current = false;
+          console.warn('[WebRTC] Early answer setRemoteDescription error:', e.message);
+        }
+      }
+
       const localDesc = pc.localDescription || sessionOffer;
       const offerPayload = {
         type: localDesc?.type || localDesc?._type || 'offer',
@@ -507,25 +529,37 @@ export default function useWebRTCCall({
 
   // ─── Caller: apply answer when received ──────────────────────────
   useEffect(() => {
-    if (!answer || isReceiver || !pcRef.current) return;
+    if (!answer || isReceiver || !pcRef.current || answerAppliedRef.current) return;
     const pc = pcRef.current;
-    if (pc.signalingState === 'closed' || pc.remoteDescription) return; // already set or closed
+    
+    // An answer can ONLY be set if pc is currently in 'have-local-offer' state
+    if (pc.signalingState !== 'have-local-offer') {
+      console.log('[WebRTC] Skipping remote answer — signalingState is:', pc.signalingState, '(must be have-local-offer)');
+      return;
+    }
 
     (async () => {
       try {
+        answerAppliedRef.current = true;
         console.log('[WebRTC] Applying remote answer...');
         const { type: answerType, sdp: answerSdp } = extractSdpAndType(answer, 'answer');
         if (!answerSdp) {
           console.warn('[WebRTC] Skipping invalid or empty remote answer SDP');
+          answerAppliedRef.current = false;
           return;
         }
-        if (pc.signalingState === 'closed') return;
+        if (pc.signalingState !== 'have-local-offer') {
+          console.warn('[WebRTC] Signaling state changed before setRemoteDescription:', pc.signalingState);
+          answerAppliedRef.current = false;
+          return;
+        }
         await pc.setRemoteDescription(new RTCSessionDescription({ type: answerType, sdp: answerSdp }));
         console.log('[WebRTC] Remote answer applied successfully');
         remoteDescReady.current = true;
         flushCandidates(pc);
       } catch (e) {
-        console.error('[WebRTC] setRemoteDescription error:', e);
+        answerAppliedRef.current = false;
+        console.warn('[WebRTC] setRemoteDescription answer error:', e.message);
       }
     })();
   }, [answer, isReceiver, flushCandidates]);
@@ -569,6 +603,7 @@ export default function useWebRTCCall({
       pcRef.current = null;
     }
     remoteDescReady.current = false;
+    answerAppliedRef.current = false;
     pendingCandidates.current = [];
     if (InCallManager) {
       try {
