@@ -24,6 +24,8 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
     }
   }, [stream]);
 
+  const shouldMirror = isLocal && Boolean(mirror);
+
   if (Platform.OS === 'web') {
     if (!stream) return null;
     return (
@@ -36,7 +38,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          transform: mirror ? 'scaleX(-1)' : 'none',
+          transform: shouldMirror ? 'scaleX(-1)' : 'none',
           backgroundColor: '#000',
           ...style,
         }}
@@ -53,7 +55,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
         streamURL={streamURL}
         style={[{ width: '100%', height: '100%' }, style]}
         objectFit="cover"
-        mirror={mirror}
+        mirror={shouldMirror}
         zOrder={zOrder}
       />
     );
