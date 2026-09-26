@@ -998,7 +998,12 @@ export default function ChatScreen({ route, navigation }) {
           {datePill}
           <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
             <TouchableOpacity
-              onPress={() => emit('call_offer', { to: isMine ? otherUser._id : msg.sender?._id || otherUser._id, callType: cd.callType })}
+              onPress={() => {
+                const targetUser = isMine ? recipientUser : (msg.sender || recipientUser);
+                const type = cd.callType || 'video';
+                useCallStore.getState().startCall(targetUser, type);
+                navigation.navigate('Call', { otherUser: targetUser, callType: type });
+              }}
               activeOpacity={0.7}
               style={[styles.callBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}
             >

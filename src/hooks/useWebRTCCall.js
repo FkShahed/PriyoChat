@@ -31,26 +31,31 @@ try {
   webrtcAvailable = false;
 }
 
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  }
-];
+function getIceServers() {
+  return [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+  ];
+}
 
 const CONNECTION_TIMEOUT_MS = 45000; // 45 seconds ring timeout
 
@@ -124,8 +129,21 @@ function extractIceCandidate(raw) {
       obj = obj.candidate;
     }
   }
-  if (!obj) return null;
-  return obj;
+  if (!obj || typeof obj !== 'object') return null;
+  const candStr = typeof obj.candidate === 'string' ? obj.candidate.trim() : '';
+  if (!candStr) return null;
+
+  const res = {
+    candidate: candStr,
+    sdpMLineIndex: obj.sdpMLineIndex != null ? Number(obj.sdpMLineIndex) : null,
+    sdpMid: obj.sdpMid != null ? String(obj.sdpMid) : null,
+  };
+
+  if (res.sdpMLineIndex === null && res.sdpMid === null) {
+    res.sdpMLineIndex = 0;
+  }
+
+  return res;
 }
 
 /**
@@ -181,6 +199,20 @@ export default function useWebRTCCall({
   const pendingCandidates = useRef([]);
   const timeoutRef = useRef(null);
 
+  const onRemoteStreamRef = useRef(onRemoteStream);
+  const onLocalStreamRef = useRef(onLocalStream);
+  const remoteUserIdRef = useRef(remoteUserId);
+  const callTypeRef = useRef(callType);
+  const isReceiverRef = useRef(isReceiver);
+  const emitRef = useRef(emit);
+
+  useEffect(() => { onRemoteStreamRef.current = onRemoteStream; }, [onRemoteStream]);
+  useEffect(() => { onLocalStreamRef.current = onLocalStream; }, [onLocalStream]);
+  useEffect(() => { remoteUserIdRef.current = remoteUserId; }, [remoteUserId]);
+  useEffect(() => { callTypeRef.current = callType; }, [callType]);
+  useEffect(() => { isReceiverRef.current = isReceiver; }, [isReceiver]);
+  useEffect(() => { emitRef.current = emit; }, [emit]);
+
   // ─── Build peer connection ────────────────────────────────────────
   const buildPC = useCallback(() => {
     if (!webrtcAvailable) {
@@ -189,49 +221,35 @@ export default function useWebRTCCall({
     }
 
     console.log('[WebRTC] Building peer connection...');
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: getIceServers() });
 
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate && remoteUserId) {
-        console.log('[WebRTC] Sending ICE candidate');
-        emit('call_ice', { to: remoteUserId, candidate });
+      if (candidate && candidate.candidate && remoteUserIdRef.current) {
+        console.log('[WebRTC] Sending ICE candidate to:', remoteUserIdRef.current);
+        emitRef.current('call_ice', { to: remoteUserIdRef.current, candidate });
       }
     };
 
-    let remoteTracks = [];
-    let remoteStreamObj = null;
-
     pc.ontrack = (event) => {
-      console.log('[WebRTC] ontrack event, track:', event.track?.kind, 'streams:', event.streams?.length);
-      
-      if (InCallManager) {
-        try { InCallManager.stopRingback(); } catch (e) {}
-      }
+      console.log('[WebRTC] ontrack event, track kind:', event.track?.kind, 'id:', event.track?.id, 'streams:', event.streams?.length);
+
       useCallStore.getState().setCallConnected();
 
       let stream = event.streams?.[0];
-      if (!stream && event.track) {
-        if (!remoteTracks.some((t) => t.id === event.track.id)) {
-          remoteTracks.push(event.track);
-        }
-        const StreamCtor = (webrtc && webrtc.MediaStream) || window.MediaStream;
-        if (StreamCtor) {
-          try {
-            remoteStreamObj = new StreamCtor(remoteTracks);
-          } catch (e) {
-            try {
-              remoteStreamObj = new StreamCtor();
-              remoteTracks.forEach((t) => remoteStreamObj.addTrack(t));
-            } catch (err) {}
-          }
-        }
-        stream = remoteStreamObj;
+
+      if (event.track) {
+        try { event.track.enabled = true; } catch (e) {}
       }
 
       if (stream) {
         try { stream.getTracks().forEach((t) => { t.enabled = true; }); } catch (e) {}
+
+        let url = '';
+        try { url = typeof stream.toURL === 'function' ? stream.toURL() : (stream.streamURL || ''); } catch(e) {}
+        console.log('[WebRTC] Remote stream URL:', url, 'tracks:', stream.getTracks?.()?.length);
+
         console.log('[WebRTC] Emitting remote stream to UI');
-        onRemoteStream?.(stream);
+        onRemoteStreamRef.current?.(stream);
       }
     };
 
@@ -240,7 +258,6 @@ export default function useWebRTCCall({
       console.log('[WebRTC] connectionState:', state);
 
       if (state === 'connected') {
-        if (InCallManager) InCallManager.stopRingback();
         useCallStore.getState().setCallConnected();
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
@@ -248,13 +265,25 @@ export default function useWebRTCCall({
         }
       } else if (state === 'failed') {
         console.warn('[WebRTC] Connection failed, checking for recovery...');
+        if (pc.restartIce) {
+          try { pc.restartIce(); } catch (e) {}
+        }
         setTimeout(() => {
-          if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') {
+          if (pcRef.current && pcRef.current.connectionState === 'failed' && pcRef.current.iceConnectionState === 'failed') {
             console.warn('[WebRTC] Connection failed after grace period, ending call');
-            if (remoteUserId) emit('call_end', { to: remoteUserId });
+            if (remoteUserIdRef.current) emitRef.current('call_end', { to: remoteUserIdRef.current });
             useCallStore.getState().endCall('ended');
           }
-        }, 5000);
+        }, 15000);
+      } else if (state === 'disconnected') {
+        console.warn('[WebRTC] Connection disconnected, waiting for reconnect...');
+        setTimeout(() => {
+          if (pcRef.current && pcRef.current.connectionState === 'disconnected' && pcRef.current.iceConnectionState === 'disconnected') {
+            console.warn('[WebRTC] Disconnected timeout — ending call');
+            if (remoteUserIdRef.current) emitRef.current('call_end', { to: remoteUserIdRef.current });
+            useCallStore.getState().endCall('ended');
+          }
+        }, 15000);
       }
     };
 
@@ -263,11 +292,15 @@ export default function useWebRTCCall({
       console.log('[WebRTC] iceConnectionState:', iceState);
 
       if (iceState === 'connected' || iceState === 'completed') {
-        if (InCallManager) InCallManager.stopRingback();
         useCallStore.getState().setCallConnected();
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
+        }
+      } else if (iceState === 'failed') {
+        console.warn('[WebRTC] ICE state failed, attempting ICE restart...');
+        if (pc.restartIce) {
+          try { pc.restartIce(); } catch (e) {}
         }
       }
     };
@@ -277,7 +310,7 @@ export default function useWebRTCCall({
     };
 
     return pc;
-  }, [remoteUserId, emit, onRemoteStream]);
+  }, []);
 
   // ─── Flush buffered ICE candidates ────────────────────────────────
   const flushCandidates = useCallback((pc) => {
@@ -302,7 +335,7 @@ export default function useWebRTCCall({
     newCandidates.forEach((candidate) => {
       const validCandidate = extractIceCandidate(candidate);
       if (validCandidate && pc.signalingState !== 'closed') {
-        pc.addIceCandidate(new RTCIceCandidate(candidate))
+        pc.addIceCandidate(new RTCIceCandidate(validCandidate))
           .catch((e) => console.warn('[WebRTC] addIceCandidate error (store):', e));
       }
     });
@@ -315,37 +348,45 @@ export default function useWebRTCCall({
       throw new Error('WebRTC native module not available. You need a dev build, not Expo Go.');
     }
 
+    const currentCallType = callTypeRef.current;
+
     // Request runtime permissions on Android
-    const granted = await requestMediaPermissions(callType);
+    const granted = await requestMediaPermissions(currentCallType);
     if (!granted) {
       throw new Error('Camera/microphone permissions denied');
     }
 
-    console.log('[WebRTC] Getting user media, callType:', callType);
+    console.log('[WebRTC] Getting user media, callType:', currentCallType);
     const constraints = {
       audio: AUDIO_CONSTRAINTS,
-      video: callType === 'video' ? VIDEO_CONSTRAINTS : false,
+      video: currentCallType === 'video' ? VIDEO_CONSTRAINTS : false,
     };
 
-    const stream = await mediaDevices.getUserMedia(constraints);
+    let stream;
+    try {
+      stream = await mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      console.warn('[WebRTC] getUserMedia initial error (hardware release pending?), retrying in 400ms:', err.message);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      stream = await mediaDevices.getUserMedia(constraints);
+    }
     console.log('[WebRTC] Got local stream, tracks:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
     localStreamRef.current = stream;
-    onLocalStream?.(stream);
+    onLocalStreamRef.current?.(stream);
 
     // Start InCallManager
     if (InCallManager) {
       try {
-        const ringback = isReceiver ? '' : '_DEFAULT_';
-        InCallManager.start({ media: callType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
-        InCallManager.setForceSpeakerphoneOn(callType === 'video');
-        console.log('[InCallManager] Started, speakerphone:', callType === 'video');
+        InCallManager.start({ media: currentCallType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
+        InCallManager.setForceSpeakerphoneOn(currentCallType === 'video');
+        console.log('[InCallManager] Started, speakerphone:', currentCallType === 'video');
       } catch (e) {
         console.warn('[InCallManager] start error:', e);
       }
     }
 
     return stream;
-  }, [callType, onLocalStream]);
+  }, []);
 
   // ─── CALLER: create offer and start ──────────────────────────────
   const startAsCallerAsync = useCallback(async () => {
@@ -379,7 +420,7 @@ export default function useWebRTCCall({
 
       const sessionOffer = await pc.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: callType === 'video',
+        offerToReceiveVideo: callTypeRef.current === 'video',
       });
 
       if (!pcRef.current || pc.signalingState === 'closed') {
@@ -422,17 +463,17 @@ export default function useWebRTCCall({
         return;
       }
 
-      emit('call_offer', {
-        to: remoteUserId,
+      emitRef.current('call_offer', {
+        to: remoteUserIdRef.current,
         offer: offerPayload,
-        callType,
+        callType: callTypeRef.current,
       });
-      console.log('[WebRTC] Offer sent to:', remoteUserId);
+      console.log('[WebRTC] Offer sent to:', remoteUserIdRef.current);
 
       // Connection timeout
       timeoutRef.current = setTimeout(() => {
         console.warn('[WebRTC] Connection timeout — ending call');
-        emit('call_end', { to: remoteUserId });
+        if (remoteUserIdRef.current) emitRef.current('call_end', { to: remoteUserIdRef.current });
         useCallStore.getState().endCall('ended');
       }, CONNECTION_TIMEOUT_MS);
     } catch (err) {
@@ -444,13 +485,14 @@ export default function useWebRTCCall({
       }
       useCallStore.getState().endCall('ended');
     }
-  }, [buildPC, getLocalMedia, remoteUserId, callType, emit]);
+  }, [buildPC, getLocalMedia, flushCandidates]);
 
   // ─── RECEIVER: accept offer and create answer ─────────────────────
   const startAsReceiverAsync = useCallback(async () => {
     try {
       console.log('[WebRTC] Starting as RECEIVER...');
-      if (!offer) {
+      const currentOffer = useCallStore.getState().offer || offer;
+      if (!currentOffer) {
         throw new Error('No offer received from caller');
       }
 
@@ -481,7 +523,7 @@ export default function useWebRTCCall({
       }
 
       console.log('[WebRTC] Setting remote description (offer)...');
-      const { type: offerType, sdp: offerSdp } = extractSdpAndType(offer, 'offer');
+      const { type: offerType, sdp: offerSdp } = extractSdpAndType(currentOffer, 'offer');
       if (!offerSdp) {
         throw new Error('Invalid or missing SDP offer session description');
       }
@@ -517,16 +559,16 @@ export default function useWebRTCCall({
         return;
       }
 
-      emit('call_answer', {
-        to: remoteUserId,
+      emitRef.current('call_answer', {
+        to: remoteUserIdRef.current,
         answer: answerPayload,
       });
-      console.log('[WebRTC] Answer sent to:', remoteUserId);
+      console.log('[WebRTC] Answer sent to:', remoteUserIdRef.current);
 
       // Connection timeout
       timeoutRef.current = setTimeout(() => {
         console.warn('[WebRTC] Connection timeout — ending call');
-        emit('call_end', { to: remoteUserId });
+        if (remoteUserIdRef.current) emitRef.current('call_end', { to: remoteUserIdRef.current });
         useCallStore.getState().endCall('ended');
       }, CONNECTION_TIMEOUT_MS);
     } catch (err) {
@@ -538,7 +580,7 @@ export default function useWebRTCCall({
       }
       useCallStore.getState().endCall('ended');
     }
-  }, [buildPC, getLocalMedia, offer, remoteUserId, emit, flushCandidates]);
+  }, [buildPC, getLocalMedia, offer, flushCandidates]);
 
   // ─── Initialize (once) ───────────────────────────────────────────
   useEffect(() => {
@@ -555,7 +597,7 @@ export default function useWebRTCCall({
       return;
     }
 
-    if (isReceiver) {
+    if (isReceiverRef.current) {
       startAsReceiverAsync();
     } else {
       startAsCallerAsync();
@@ -563,13 +605,33 @@ export default function useWebRTCCall({
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      localStreamRef.current?.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
-      if (pcRef.current) {
-        if (pcRef.current.signalingState !== 'closed') {
-          try { pcRef.current.close(); } catch (e) {}
+      if (localStreamRef.current) {
+        try {
+          if (typeof localStreamRef.current.release === 'function') {
+            localStreamRef.current.release();
+          } else {
+            localStreamRef.current.getTracks?.().forEach((t) => {
+              try { t.release?.(); } catch (e) {}
+              try { t.stop?.(); } catch (e) {}
+            });
+          }
+        } catch (e) {
+          try { localStreamRef.current.getTracks?.().forEach((t) => t.stop?.()); } catch (err) {}
         }
+        localStreamRef.current = null;
+      }
+      if (pcRef.current) {
+        const pc = pcRef.current;
         pcRef.current = null;
+        try {
+          pc.getSenders?.().forEach((s) => {
+            try { s.track?.release?.(); } catch (e) {}
+            try { s.track?.stop?.(); } catch (e) {}
+          });
+        } catch (e) {}
+        if (pc.signalingState !== 'closed') {
+          try { pc.close(); } catch (e) {}
+        }
       }
       initialized.current = false;
       remoteDescReady.current = false;
@@ -647,13 +709,33 @@ export default function useWebRTCCall({
   // ─── Expose cleanup ──────────────────────────────────────────────
   const cleanup = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    localStreamRef.current = null;
-    if (pcRef.current) {
-      if (pcRef.current.signalingState !== 'closed') {
-        try { pcRef.current.close(); } catch (e) {}
+    if (localStreamRef.current) {
+      try {
+        if (typeof localStreamRef.current.release === 'function') {
+          localStreamRef.current.release();
+        } else {
+          localStreamRef.current.getTracks?.().forEach((t) => {
+            try { t.release?.(); } catch (e) {}
+            try { t.stop?.(); } catch (e) {}
+          });
+        }
+      } catch (e) {
+        try { localStreamRef.current.getTracks?.().forEach((t) => t.stop?.()); } catch (err) {}
       }
+      localStreamRef.current = null;
+    }
+    if (pcRef.current) {
+      const pc = pcRef.current;
       pcRef.current = null;
+      try {
+        pc.getSenders?.().forEach((s) => {
+          try { s.track?.release?.(); } catch (e) {}
+          try { s.track?.stop?.(); } catch (e) {}
+        });
+      } catch (e) {}
+      if (pc.signalingState !== 'closed') {
+        try { pc.close(); } catch (e) {}
+      }
     }
     initialized.current = false;
     remoteDescReady.current = false;
@@ -675,20 +757,11 @@ export default function useWebRTCCall({
       try {
         InCallManager.setForceSpeakerphoneOn(on);
         console.log('[InCallManager] Speaker:', on);
-        
-        const state = useCallStore.getState().callState;
-        const isDialing = state === 'calling' || state === 'ringing' || state === 'connecting';
-        if (!isReceiver && isDialing) {
-          InCallManager.stopRingback();
-          setTimeout(() => {
-            InCallManager.startRingback('_DEFAULT_');
-          }, 100);
-        }
       } catch (e) {
         console.warn('[InCallManager] setSpeaker error:', e);
       }
     }
-  }, [isReceiver]);
+  }, []);
 
   return { cleanup, setSpeaker };
 }

@@ -59,10 +59,12 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
       streamURL = stream;
     }
 
+    if (!streamURL) return null;
+
     return (
       <RTCViewComp
         streamURL={streamURL}
-        style={[{ width: '100%', height: '100%' }, style]}
+        style={style}
         objectFit="cover"
         mirror={shouldMirror}
         zOrder={zOrder}
@@ -267,11 +269,7 @@ export default function CallScreen({ route, navigation }) {
     const hasRemoteVideo = Boolean(remoteStream);
 
     return (
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={toggleControls}
-        style={styles.videoContainer}
-      >
+      <View style={styles.videoContainer}>
         {/* Remote video (full screen) */}
         {hasRemoteVideo ? (
           <VideoStreamView
@@ -301,6 +299,13 @@ export default function CallScreen({ route, navigation }) {
             </View>
           </LinearGradient>
         )}
+
+        {/* Tap backdrop to toggle header & footer controls */}
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={toggleControls}
+          style={StyleSheet.absoluteFillObject}
+        />
 
         {/* Local video (Picture-in-Picture) */}
         {localStream && (
@@ -334,6 +339,7 @@ export default function CallScreen({ route, navigation }) {
           <LinearGradient
             colors={['rgba(0,0,0,0.75)', 'rgba(0,0,0,0.35)', 'transparent']}
             style={styles.videoTopBar}
+            pointerEvents="box-none"
           >
             <View style={styles.topHeaderContent}>
               <View style={styles.userInfoPill}>
@@ -361,6 +367,7 @@ export default function CallScreen({ route, navigation }) {
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.85)']}
             style={styles.videoControlsBg}
+            pointerEvents="box-none"
           >
             <View style={styles.videoControlsBar}>
               {/* Mute Button */}
@@ -401,7 +408,7 @@ export default function CallScreen({ route, navigation }) {
             </View>
           </LinearGradient>
         )}
-      </TouchableOpacity>
+      </View>
     );
   }
 

@@ -63,7 +63,7 @@ const useCallStore = create(
 
       // Outgoing call — initiated by this user
       startCall: (remoteUser, callType) => {
-        set({ callState: 'calling', remoteUser, callType, iceCandidates: [], endReason: null, isReceiver: false, offer: null, answer: null });
+        set({ callState: 'calling', remoteUser, callType, iceCandidates: [], endReason: null, isReceiver: false, offer: null, answer: null, callId: null });
       },
 
       setCallRinging: () => {
@@ -139,7 +139,14 @@ const useCallStore = create(
       setCallConnected: () => {
         const { callState } = get();
         // Only transition if we're in a valid pre-active state
-        if (callState === 'connecting' || callState === 'calling' || callState === 'incoming') {
+        // NOTE: 'ringing' is included because the caller goes calling→ringing
+        // and ICE can connect while the receiver's phone is still ringing
+        if (
+          callState === 'connecting' ||
+          callState === 'calling' ||
+          callState === 'ringing' ||
+          callState === 'incoming'
+        ) {
           set({ callState: 'active' });
         }
       },
@@ -150,6 +157,11 @@ const useCallStore = create(
       },
 
       addIceCandidate: (candidate) => {
+        const { callState } = get();
+        if (callState === 'idle' || callState === 'ended') {
+          console.log('[useCallStore] Ignoring stale ICE candidate in idle/ended state');
+          return;
+        }
         set((state) => ({ iceCandidates: [...state.iceCandidates, candidate] }));
       },
 
@@ -197,6 +209,7 @@ const useCallStore = create(
           callType: null,
           iceCandidates: [],
           isReceiver: false,
+          callId: null,
         });
       },
 
@@ -210,6 +223,7 @@ const useCallStore = create(
           iceCandidates: [],
           endReason: null,
           isReceiver: false,
+          callId: null,
         });
       },
     }),
