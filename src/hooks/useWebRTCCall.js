@@ -236,14 +236,16 @@ export default function useWebRTCCall({
 
   // ─── Flush buffered ICE candidates ────────────────────────────────
   const flushCandidates = useCallback((pc) => {
-    if (!pc || !remoteDescReady.current) return;
+    if (!pc || pc.signalingState === 'closed' || !remoteDescReady.current) return;
 
     const buffered = pendingCandidates.current;
     pendingCandidates.current = [];
     console.log('[WebRTC] Flushing', buffered.length, 'buffered ICE candidates');
     buffered.forEach((candidate) => {
-      pc.addIceCandidate(new RTCIceCandidate(candidate))
-        .catch((e) => console.warn('[WebRTC] addIceCandidate error (buffered):', e));
+      if (pc.signalingState !== 'closed') {
+        pc.addIceCandidate(new RTCIceCandidate(candidate))
+          .catch((e) => console.warn('[WebRTC] addIceCandidate error (buffered):', e));
+      }
     });
 
     const storeCandidates = useCallStore.getState().iceCandidates;
@@ -252,8 +254,10 @@ export default function useWebRTCCall({
       console.log('[WebRTC] Flushing', newCandidates.length, 'store ICE candidates');
     }
     newCandidates.forEach((candidate) => {
-      pc.addIceCandidate(new RTCIceCandidate(candidate))
-        .catch((e) => console.warn('[WebRTC] addIceCandidate error (store):', e));
+      if (pc.signalingState !== 'closed') {
+        pc.addIceCandidate(new RTCIceCandidate(candidate))
+          .catch((e) => console.warn('[WebRTC] addIceCandidate error (store):', e));
+      }
     });
     iceCandidatesProcessed.current = storeCandidates.length;
   }, []);
@@ -309,15 +313,33 @@ export default function useWebRTCCall({
       pcRef.current = pc;
 
       const stream = await getLocalMedia();
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed while getting media, aborting caller setup');
+        return;
+      }
+
       stream.getTracks().forEach((track) => {
-        console.log('[WebRTC] Adding track to PC:', track.kind);
-        pc.addTrack(track, stream);
+        if (pc.signalingState !== 'closed') {
+          console.log('[WebRTC] Adding track to PC:', track.kind);
+          pc.addTrack(track, stream);
+        }
       });
+
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed before createOffer, aborting');
+        return;
+      }
 
       const sessionOffer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: callType === 'video',
       });
+
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed before setLocalDescription, aborting');
+        return;
+      }
+
       await pc.setLocalDescription(sessionOffer);
       console.log('[WebRTC] Offer created and set as local description');
 
@@ -326,6 +348,11 @@ export default function useWebRTCCall({
         type: localDesc?.type || localDesc?._type || 'offer',
         sdp: localDesc?.sdp || localDesc?._sdp || sessionOffer.sdp,
       };
+
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed after setLocalDescription, aborting offer emit');
+        return;
+      }
 
       emit('call_offer', {
         to: remoteUserId,
@@ -342,7 +369,11 @@ export default function useWebRTCCall({
       }, CONNECTION_TIMEOUT_MS);
     } catch (err) {
       console.error('[WebRTC] Caller init error:', err);
-      Alert.alert('Call Error', err.message || 'Failed to start call');
+      if (err.message && (err.message.includes('closed') || err.message.includes('wrong state'))) {
+        console.warn('[WebRTC] Caller init aborted due to closed connection');
+      } else {
+        Alert.alert('Call Error', err.message || 'Failed to start call');
+      }
       useCallStore.getState().endCall('ended');
     }
   }, [buildPC, getLocalMedia, remoteUserId, callType, emit]);
@@ -364,10 +395,22 @@ export default function useWebRTCCall({
       pcRef.current = pc;
 
       const stream = await getLocalMedia();
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed while getting media, aborting receiver setup');
+        return;
+      }
+
       stream.getTracks().forEach((track) => {
-        console.log('[WebRTC] Adding track to PC:', track.kind);
-        pc.addTrack(track, stream);
+        if (pc.signalingState !== 'closed') {
+          console.log('[WebRTC] Adding track to PC:', track.kind);
+          pc.addTrack(track, stream);
+        }
       });
+
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed before setting remote description');
+        return;
+      }
 
       console.log('[WebRTC] Setting remote description (offer)...');
       const { type: offerType, sdp: offerSdp } = extractSdpAndType(offer, 'offer');
@@ -378,10 +421,20 @@ export default function useWebRTCCall({
       remoteDescReady.current = true;
       console.log('[WebRTC] Remote description set successfully');
 
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed after setting remote description');
+        return;
+      }
+
       // Flush any ICE candidates that arrived before remote desc was set
       flushCandidates(pc);
 
       const sessionAnswer = await pc.createAnswer();
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed before setting local answer');
+        return;
+      }
+
       await pc.setLocalDescription(sessionAnswer);
       console.log('[WebRTC] Answer created and set as local description');
 
@@ -390,6 +443,11 @@ export default function useWebRTCCall({
         type: localAns?.type || localAns?._type || 'answer',
         sdp: localAns?.sdp || localAns?._sdp || sessionAnswer.sdp,
       };
+
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed before sending answer');
+        return;
+      }
 
       emit('call_answer', {
         to: remoteUserId,
@@ -405,7 +463,11 @@ export default function useWebRTCCall({
       }, CONNECTION_TIMEOUT_MS);
     } catch (err) {
       console.error('[WebRTC] Receiver init error:', err);
-      Alert.alert('Call Error', err.message || 'Failed to answer call');
+      if (err.message && (err.message.includes('closed') || err.message.includes('wrong state'))) {
+        console.warn('[WebRTC] Receiver init aborted due to closed connection');
+      } else {
+        Alert.alert('Call Error', err.message || 'Failed to answer call');
+      }
       useCallStore.getState().endCall('ended');
     }
   }, [buildPC, getLocalMedia, offer, remoteUserId, emit, flushCandidates]);
@@ -434,7 +496,12 @@ export default function useWebRTCCall({
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
-      pcRef.current?.close();
+      if (pcRef.current) {
+        if (pcRef.current.signalingState !== 'closed') {
+          try { pcRef.current.close(); } catch (e) {}
+        }
+        pcRef.current = null;
+      }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -442,7 +509,7 @@ export default function useWebRTCCall({
   useEffect(() => {
     if (!answer || isReceiver || !pcRef.current) return;
     const pc = pcRef.current;
-    if (pc.remoteDescription) return; // already set
+    if (pc.signalingState === 'closed' || pc.remoteDescription) return; // already set or closed
 
     (async () => {
       try {
@@ -452,6 +519,7 @@ export default function useWebRTCCall({
           console.warn('[WebRTC] Skipping invalid or empty remote answer SDP');
           return;
         }
+        if (pc.signalingState === 'closed') return;
         await pc.setRemoteDescription(new RTCSessionDescription({ type: answerType, sdp: answerSdp }));
         console.log('[WebRTC] Remote answer applied successfully');
         remoteDescReady.current = true;
@@ -465,7 +533,7 @@ export default function useWebRTCCall({
   // ─── Both sides: add incoming ICE candidates ─────────────────────
   useEffect(() => {
     const pc = pcRef.current;
-    if (!pc) return;
+    if (!pc || pc.signalingState === 'closed') return;
 
     const newCandidates = iceCandidates.slice(iceCandidatesProcessed.current);
     if (newCandidates.length === 0) return;
@@ -481,8 +549,10 @@ export default function useWebRTCCall({
     // Remote desc is ready — add directly
     console.log('[WebRTC] Adding', newCandidates.length, 'ICE candidates directly');
     newCandidates.forEach((candidate) => {
-      pc.addIceCandidate(new RTCIceCandidate(candidate))
-        .catch((e) => console.warn('[WebRTC] addIceCandidate error:', e));
+      if (pc.signalingState !== 'closed') {
+        pc.addIceCandidate(new RTCIceCandidate(candidate))
+          .catch((e) => console.warn('[WebRTC] addIceCandidate error:', e));
+      }
     });
     iceCandidatesProcessed.current = iceCandidates.length;
   }, [iceCandidates]);
@@ -492,8 +562,12 @@ export default function useWebRTCCall({
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
-    pcRef.current?.close();
-    pcRef.current = null;
+    if (pcRef.current) {
+      if (pcRef.current.signalingState !== 'closed') {
+        try { pcRef.current.close(); } catch (e) {}
+      }
+      pcRef.current = null;
+    }
     remoteDescReady.current = false;
     pendingCandidates.current = [];
     if (InCallManager) {
