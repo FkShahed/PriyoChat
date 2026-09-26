@@ -14,54 +14,48 @@ const useAuthStore = create((set, get) => ({
     try {
       const token = await AsyncStorage.getItem('auth_token');
       const userStr = await AsyncStorage.getItem('auth_user');
-      // Fetch global config
-      try {
-        const { data: config } = await configApi.getGlobal();
+
+      // Fetch global config in background
+      configApi.getGlobal().then(({ data: config }) => {
         if (config?.defaultRingtoneUrl) {
-          await AsyncStorage.setItem('global_ringtone_uri', config.defaultRingtoneUrl);
+          AsyncStorage.setItem('global_ringtone_uri', config.defaultRingtoneUrl);
         } else {
-          await AsyncStorage.removeItem('global_ringtone_uri');
+          AsyncStorage.removeItem('global_ringtone_uri');
         }
-      } catch (e) {
-        console.warn('Failed to fetch global config', e);
-      }
+      }).catch(e => console.warn('Failed to fetch global config', e));
 
       if (token && userStr) {
-        const user = JSON.parse(userStr);
+        let user = null;
+        try { user = JSON.parse(userStr); } catch (e) {}
         set({ user, token, isAuthenticated: true, isLoading: false });
+
         try {
           require('./useSocketStore').default.getState().connect();
           require('../services/NotificationService').default.initialize();
         } catch (e) {
           console.warn('[useAuthStore] restoreSession auto-connect error:', e);
         }
-        // Refresh user data
-        const { data } = await userApi.getMe();
-        set({ user: data });
-        await AsyncStorage.setItem('auth_user', JSON.stringify(data));
+
+        // Refresh user data in background
+        userApi.getMe().then(({ data }) => {
+          set({ user: data });
+          AsyncStorage.setItem('auth_user', JSON.stringify(data));
+        }).catch(err => {
+          if (err.response?.status === 403) {
+            const msg = err.response.data?.message?.toLowerCase() || '';
+            const isBanned = msg.includes('ban') || msg.includes('block');
+            const isSuspended = msg.includes('suspended');
+            if (isBanned || isSuspended) {
+              set((state) => ({
+                user: { ...state.user, isBlocked: isBanned, isSuspended, moderationReason: err.response.data?.reason || '' }
+              }));
+            }
+          }
+        });
       } else {
         set({ isLoading: false });
       }
     } catch (err) {
-      // If banned/suspended, the getMe call will return 403.
-      if (err.response?.status === 403) {
-        const msg = err.response.data?.message?.toLowerCase() || '';
-        const isBanned = msg.includes('ban') || msg.includes('block');
-        const isSuspended = msg.includes('suspended');
-        
-        if (isBanned || isSuspended) {
-          const userStr = await AsyncStorage.getItem('auth_user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            set({
-              user: { ...user, isBlocked: isBanned, isSuspended, moderationReason: err.response.data?.reason || '' },
-              isAuthenticated: true,
-              isLoading: false
-            });
-            return;
-          }
-        }
-      }
       set({ isLoading: false });
     }
   },

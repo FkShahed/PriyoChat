@@ -40,10 +40,13 @@ export default function ChatListScreen({ navigation }) {
 
   const loadConversations = useCallback(async () => {
     try {
-      const { data } = await conversationApi.getAll();
-      setConversations(data);
+      const res = await conversationApi.getAll();
+      const rawData = res?.data;
+      const list = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.conversations) ? rawData.conversations : (Array.isArray(rawData?.data) ? rawData.data : []));
+      setConversations(list);
     } catch (err) {
-      console.error(err.message);
+      console.error('[ChatListScreen] loadConversations error:', err.message);
+      setConversations([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -54,9 +57,11 @@ export default function ChatListScreen({ navigation }) {
 
   // Filter conversations by search
   const filtered = useMemo(() => {
-    return conversations.filter((c) => {
-      const other = c.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
-      return other?.name?.toLowerCase()?.includes(search.toLowerCase());
+    const list = Array.isArray(conversations) ? conversations : [];
+    return list.filter((c) => {
+      if (!c || !c.participants || !Array.isArray(c.participants)) return false;
+      const other = c.participants?.find((p) => p?._id?.toString() !== user?._id?.toString());
+      return (other?.name || '')?.toLowerCase()?.includes((search || '').toLowerCase());
     });
   }, [conversations, search, user]);
 
@@ -64,11 +69,13 @@ export default function ChatListScreen({ navigation }) {
   const onlineFriends = useMemo(() => {
     const list = [];
     const seenIds = new Set();
-    conversations.forEach((c) => {
-      const other = c.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
-      if (other && !seenIds.has(other._id)) {
+    const listConvos = Array.isArray(conversations) ? conversations : [];
+    listConvos.forEach((c) => {
+      if (!c || !c.participants || !Array.isArray(c.participants)) return;
+      const other = c.participants?.find((p) => p?._id?.toString() !== user?._id?.toString());
+      if (other && other._id && !seenIds.has(other._id)) {
         seenIds.add(other._id);
-        const isOnline = onlineUsers[other._id] ?? other.isOnline;
+        const isOnline = onlineUsers?.[other._id] ?? other.isOnline;
         if (isOnline) {
           list.push({ ...other, conversation: c });
         }

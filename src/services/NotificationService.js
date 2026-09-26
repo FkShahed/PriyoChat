@@ -6,14 +6,16 @@ import { navigationRef } from '../navigation/navigationRef';
 // Your Expo project ID from app.json
 const PROJECT_ID = 'ad727065-625e-4696-95f9-467baf61dd1a';
 
-// Configure foreground notification behavior — ALWAYS show heads-up banner with action buttons
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Configure foreground notification behavior — ALWAYS show heads-up banner with action buttons (Native only)
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 class NotificationService {
   static _responseListener = null;
@@ -132,6 +134,7 @@ class NotificationService {
   // ─────────────────────────────────────────────────────────────────────────
 
   static async _setupCategories() {
+    if (Platform.OS === 'web') return;
     try {
       await Notifications.setNotificationCategoryAsync('incoming_call_category', [
         {
@@ -184,6 +187,7 @@ class NotificationService {
   }
 
   static async _requestPermissionsAndGetToken() {
+    if (Platform.OS === 'web') return null;
     try {
       const { status: existing } = await Notifications.getPermissionsAsync();
       let finalStatus = existing;
@@ -411,10 +415,12 @@ class NotificationService {
   }
 }
 
-// Auto-initialize notification listeners on module import
-try {
-  NotificationService._setupTapListener();
-  NotificationService._setupCategories();
-} catch (e) {}
+// Auto-initialize notification listeners on module import (native only)
+if (Platform.OS !== 'web') {
+  try {
+    NotificationService._setupTapListener();
+    NotificationService._setupCategories();
+  } catch (e) {}
+}
 
 export default NotificationService;

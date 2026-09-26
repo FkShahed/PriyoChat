@@ -15,16 +15,18 @@ export default function FriendsListScreen({ navigation }) {
   // Extract unique friends from conversations
   const friends = useMemo(() => {
     const friendMap = {};
-    conversations.forEach((c) => {
-      const other = c.participants?.find((p) => p._id !== user?._id);
-      if (other && !friendMap[other._id]) {
+    const list = Array.isArray(conversations) ? conversations : [];
+    list.forEach((c) => {
+      if (!c || !c.participants || !Array.isArray(c.participants)) return;
+      const other = c.participants?.find((p) => p?._id?.toString() !== user?._id?.toString());
+      if (other && other._id && !friendMap[other._id]) {
         friendMap[other._id] = { ...other, conversation: c };
       }
     });
-    return Object.values(friendMap).sort((a, b) => a.name.localeCompare(b.name));
+    return Object.values(friendMap).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [conversations, user]);
 
-  const filteredFriends = friends.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredFriends = friends.filter((f) => (f.name || '').toLowerCase().includes((search || '').toLowerCase()));
 
   const handleChat = (friend) => {
     navigation.navigate('Chat', { conversation: friend.conversation, otherUser: friend });
