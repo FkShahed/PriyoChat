@@ -448,16 +448,17 @@ export default function useWebRTCCall({
     try {
       stream = await mediaDevices.getUserMedia(constraints);
     } catch (err) {
-      console.warn('[WebRTC] getUserMedia initial error, retrying with simple constraints:', err.message);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      console.warn('[WebRTC] getUserMedia initial error (retrying after delay):', err.message);
+      await new Promise((resolve) => setTimeout(resolve, 500));
       try {
+        stream = await mediaDevices.getUserMedia(constraints);
+      } catch (err2) {
+        console.warn('[WebRTC] getUserMedia second attempt error, falling back to basic constraints:', err2.message);
+        await new Promise((resolve) => setTimeout(resolve, 400));
         stream = await mediaDevices.getUserMedia({
           audio: true,
           video: currentCallType === 'video' ? true : false,
         });
-      } catch (err2) {
-        console.error('[WebRTC] getUserMedia fallback error:', err2.message);
-        throw err2;
       }
     }
     console.log('[WebRTC] Got local stream, tracks:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
@@ -698,8 +699,27 @@ export default function useWebRTCCall({
           try { track.enabled = false; } catch (e) {}
           try { track.stop(); } catch (e) {}
         });
+        if (typeof stream.release === 'function') {
+          stream.release();
+        }
       } catch (e) {
         console.warn('[WebRTC] localStream cleanup error:', e);
+      }
+    }
+
+    if (remoteMediaStreamRef.current) {
+      const rStream = remoteMediaStreamRef.current;
+      remoteMediaStreamRef.current = null;
+      try {
+        rStream.getTracks().forEach((track) => {
+          try { track.enabled = false; } catch (e) {}
+          try { track.stop(); } catch (e) {}
+        });
+        if (typeof rStream.release === 'function') {
+          rStream.release();
+        }
+      } catch (e) {
+        console.warn('[WebRTC] remoteMediaStream cleanup error:', e);
       }
     }
 

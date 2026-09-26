@@ -227,6 +227,12 @@ export default function CallScreen({ route, navigation }) {
     if ((callState === 'ended' || callState === 'idle') && !hasNavigatedBack.current) {
       hasNavigatedBack.current = true;
       Vibration.cancel();
+      if (localStream && typeof localStream.release === 'function') {
+        try { localStream.release(); } catch (e) {}
+      }
+      if (remoteStream && typeof remoteStream.release === 'function') {
+        try { remoteStream.release(); } catch (e) {}
+      }
       setLocalStream(null);
       setRemoteStream(null);
       cleanupWebRTC();
@@ -237,8 +243,15 @@ export default function CallScreen({ route, navigation }) {
   const handleEndCall = () => {
     if (hasNavigatedBack.current) return;
     hasNavigatedBack.current = true;
-    if (targetUserId) {
-      emit('call_end', { to: targetUserId, callType, duration: callDuration });
+    const targetId = targetUserId || useCallStore.getState().remoteUserId;
+    if (targetId) {
+      emit('call_end', { to: targetId, callType, duration: callDuration });
+    }
+    if (localStream && typeof localStream.release === 'function') {
+      try { localStream.release(); } catch (e) {}
+    }
+    if (remoteStream && typeof remoteStream.release === 'function') {
+      try { remoteStream.release(); } catch (e) {}
     }
     setLocalStream(null);
     setRemoteStream(null);
