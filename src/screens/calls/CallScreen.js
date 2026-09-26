@@ -11,6 +11,7 @@ import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import useWebRTCCall from '../../hooks/useWebRTCCall';
 import { getInitials } from '../../utils/helpers';
+import { webrtc } from '../../utils/nativeModules';
 
 // Universal VideoStreamView for Web (HTML5 video) and Mobile (RTCView)
 function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, style }) {
@@ -43,11 +44,13 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
     );
   }
 
-  if (webrtc && webrtc.RTCView && stream && typeof stream.toURL === 'function') {
+  if (webrtc && webrtc.RTCView && stream) {
     const RTCViewComp = webrtc.RTCView;
+    const streamURL = typeof stream.toURL === 'function' ? stream.toURL() : '';
+    if (!streamURL) return null;
     return (
       <RTCViewComp
-        streamURL={stream.toURL()}
+        streamURL={streamURL}
         style={style}
         objectFit="cover"
         mirror={mirror}
