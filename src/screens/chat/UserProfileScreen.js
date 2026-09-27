@@ -53,21 +53,18 @@ export default function UserProfileScreen({ route, navigation }) {
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.goBack()}>
             <View style={[styles.actionIconCircle, { backgroundColor: isDark ? 'rgba(0,132,255,0.15)' : 'rgba(0,132,255,0.1)' }]}>
-              <Ionicons name="chatbubble" size={24} color="#0084FF" />
+              <Ionicons name="chatbubble" size={28} color="#0084FF" />
             </View>
-            <Text style={styles.actionText}>Message</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => handleCall('audio')}>
             <View style={[styles.actionIconCircle, { backgroundColor: isDark ? 'rgba(0,132,255,0.15)' : 'rgba(0,132,255,0.1)' }]}>
-              <Ionicons name="call" size={24} color="#0084FF" />
+              <Ionicons name="call" size={28} color="#0084FF" />
             </View>
-            <Text style={styles.actionText}>Audio</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => handleCall('video')}>
             <View style={[styles.actionIconCircle, { backgroundColor: isDark ? 'rgba(0,132,255,0.15)' : 'rgba(0,132,255,0.1)' }]}>
-              <Ionicons name="videocam" size={24} color="#0084FF" />
+              <Ionicons name="videocam" size={28} color="#0084FF" />
             </View>
-            <Text style={styles.actionText}>Video</Text>
           </TouchableOpacity>
         </View>
 
@@ -175,20 +172,14 @@ const styles = StyleSheet.create({
   actionBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 80,
+    width: 60,
   },
   actionIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-  },
-  actionText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#0084FF',
   },
   infoSection: {
     paddingHorizontal: 20,
