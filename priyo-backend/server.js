@@ -38,6 +38,9 @@ const io = new Server(server, {
 // Make io accessible in controllers
 app.set('io', io);
 
+// Trust reverse proxy (Render, Heroku, Cloudflare) for rate limiting & IP detection
+app.set('trust proxy', 1);
+
 // ─── Middleware ────────────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
