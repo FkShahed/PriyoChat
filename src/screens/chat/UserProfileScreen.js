@@ -70,45 +70,32 @@ export default function UserProfileScreen({ route, navigation }) {
 
         {/* Info Section */}
         <View style={styles.infoSection}>
-          <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>USER INFORMATION</Text>
-          
           <View style={[styles.infoCard, { backgroundColor: C.surface }]}>
             {user?.email ? (
               <View style={styles.infoRow}>
-                <View style={[styles.iconBox, { backgroundColor: 'rgba(0,132,255,0.1)' }]}>
-                  <Ionicons name="mail" size={18} color="#0084FF" />
-                </View>
-                <View style={styles.infoText}>
-                  <Text style={[styles.cardLabel, { color: C.textSecondary }]}>Email</Text>
-                  <Text style={[styles.cardValue, { color: C.text }]}>{user.email}</Text>
+                <Ionicons name="mail-outline" size={24} color={isDark ? '#A1A1AA' : '#8E8E93'} style={styles.infoIcon} />
+                <View style={[styles.infoContent, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+                  <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Email</Text>
+                  <Text style={[styles.infoValue, { color: C.text }]}>{user.email}</Text>
                 </View>
               </View>
             ) : null}
 
             {user?.status ? (
-              <>
-                {user?.email && <View style={[styles.divider, { backgroundColor: C.border }]} />}
-                <View style={styles.infoRow}>
-                  <View style={[styles.iconBox, { backgroundColor: 'rgba(52,199,89,0.1)' }]}>
-                    <Ionicons name="information-circle" size={18} color="#34C759" />
-                  </View>
-                  <View style={styles.infoText}>
-                    <Text style={[styles.cardLabel, { color: C.textSecondary }]}>Status / Bio</Text>
-                    <Text style={[styles.cardValue, { color: C.text }]}>{user.status}</Text>
-                  </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="information-circle-outline" size={24} color={isDark ? '#A1A1AA' : '#8E8E93'} style={styles.infoIcon} />
+                <View style={[styles.infoContent, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+                  <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Bio</Text>
+                  <Text style={[styles.infoValue, { color: C.text }]}>{user.status}</Text>
                 </View>
-              </>
+              </View>
             ) : null}
-
-            {(user?.email || user?.status) && <View style={[styles.divider, { backgroundColor: C.border }]} />}
             
             <View style={styles.infoRow}>
-              <View style={[styles.iconBox, { backgroundColor: 'rgba(255,149,0,0.1)' }]}>
-                <Ionicons name="time" size={18} color="#FF9500" />
-              </View>
-              <View style={styles.infoText}>
-                <Text style={[styles.cardLabel, { color: C.textSecondary }]}>Last Seen</Text>
-                <Text style={[styles.cardValue, { color: C.text }]}>{statusText}</Text>
+              <Ionicons name="time-outline" size={24} color={isDark ? '#A1A1AA' : '#8E8E93'} style={styles.infoIcon} />
+              <View style={styles.infoContent}>
+                <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Last Seen</Text>
+                <Text style={[styles.infoValue, { color: C.text }]}>{statusText}</Text>
               </View>
             </View>
           </View>
@@ -184,46 +171,30 @@ const styles = StyleSheet.create({
   infoSection: {
     paddingHorizontal: 20,
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 8,
-    marginLeft: 12,
-    letterSpacing: 0.8,
-  },
   infoCard: {
-    borderRadius: 20,
-    paddingVertical: 8,
-    elevation: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingLeft: 16,
   },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  infoIcon: {
     marginRight: 16,
   },
-  infoText: {
+  infoContent: {
     flex: 1,
+    paddingVertical: 14,
+    paddingRight: 16,
   },
-  cardLabel: {
-    fontSize: 12,
+  infoLabel: {
+    fontSize: 13,
     fontWeight: '500',
     marginBottom: 2,
   },
-  cardValue: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  divider: {
-    height: 1,
-    marginLeft: 72,
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '400',
   },
 });
