@@ -196,7 +196,6 @@ const setupSocket = (io) => {
             type: 'call',
             callId: callId ? String(callId) : '',
             caller: { _id: userId, name: socket.user.name, avatar: socket.user.avatar },
-            offer,
             callType,
           });
           console.log(`[socketHandler] Sent Call Push Notification with payload to ${to}`);
