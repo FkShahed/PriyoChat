@@ -90,11 +90,24 @@ export default function ChatListScreen({ navigation }) {
     const isOnline = onlineUsers[other?._id] ?? other?.isOnline;
     const lastMsg = item.lastMessage;
     const isDeleted = lastMsg?.isDeleted;
-    const unreadCount = item.unreadCount || 0;
+
+    // Robust unread count extraction (handles Map object, number, or unread status)
+    let rawUnread = item.unreadCount;
+    let unreadCount = 0;
+    if (typeof rawUnread === 'number') {
+      unreadCount = rawUnread;
+    } else if (rawUnread && typeof rawUnread === 'object') {
+      unreadCount = rawUnread[user?._id] || rawUnread[user?._id?.toString()] || 0;
+    }
+    const isMine = lastMsg?.sender === user?._id || lastMsg?.sender?._id === user?._id;
+    if (!unreadCount && lastMsg && !isMine && lastMsg.status !== 'seen') {
+      unreadCount = 1;
+    }
+
     const isUnread = unreadCount > 0;
 
     const preview = isDeleted
-      ? 'Message deleted   '
+      ? 'Message deleted'
       : lastMsg?.images?.length
       ? `📷 Photo${lastMsg.images.length > 1 ? 's' : ''}`
       : lastMsg?.voiceNoteUrl || lastMsg?.isVoiceNote
@@ -102,13 +115,12 @@ export default function ChatListScreen({ navigation }) {
       : lastMsg?.text || 'Start a conversation';
 
     const gradColors = avatarGradient(other?.name || '');
-    const isMine = lastMsg?.sender === user?._id || lastMsg?.sender?._id === user?._id;
 
     let statusIcon = null;
     if (isMine && lastMsg) {
-      const color = lastMsg.status === 'seen' ? '#0084FF' : (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)');
+      const color = lastMsg.status === 'seen' ? '#0084FF' : (isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)');
       const iconName = lastMsg.status === 'sent' ? 'checkmark' : 'checkmark-done';
-      statusIcon = <Ionicons name={iconName} size={14} color={color} style={{ marginRight: 4 }} />;
+      statusIcon = <Ionicons name={iconName} size={15} color={color} style={{ marginRight: 4 }} />;
     }
 
     return (
@@ -128,7 +140,7 @@ export default function ChatListScreen({ navigation }) {
               <Text style={styles.avatarInitials}>{getInitials(other?.name)}</Text>
             </LinearGradient>
           )}
-          {isOnline && <View style={[styles.onlineBadge, { borderColor: isDark ? '#141A24' : '#FFFFFF' }]} />}
+          {isOnline && <View style={[styles.onlineBadge, { borderColor: isDark ? '#0D1117' : '#FFFFFF' }]} />}
         </View>
 
         <View style={styles.infoContainer}>
@@ -167,9 +179,16 @@ export default function ChatListScreen({ navigation }) {
             </View>
 
             {isUnread && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-              </View>
+              <LinearGradient
+                colors={['#0084FF', '#0066FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.unreadBadge}
+              >
+                <Text style={styles.unreadBadgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </LinearGradient>
             )}
           </View>
         </View>
@@ -550,18 +569,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   unreadBadge: {
-    backgroundColor: '#0084FF',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
+    marginLeft: 6,
+    shadowColor: '#0084FF',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   unreadBadgeText: {
     color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10.5,
+    fontWeight: '800',
+    includeFontPadding: false,
+    textAlign: 'center',
   },
 
   // ── Empty State Styles ──────────────────────────────────────────────
