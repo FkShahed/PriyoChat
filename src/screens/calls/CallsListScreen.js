@@ -29,7 +29,17 @@ export default function CallsListScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
   const { callHistory: allHistory, fetchHistory, startCall } = useCallStore();
   const [refreshing, setRefreshing] = React.useState(false);
-  const callHistory = (allHistory || []).filter(h => !h.ownerId || h.ownerId === user?._id?.toString());
+  const [filter, setFilter] = React.useState('all');
+
+  const callHistory = React.useMemo(() => {
+    return (allHistory || []).filter(h => {
+      if (h.ownerId && h.ownerId !== user?._id?.toString()) return false;
+      if (filter === 'incoming') return h.direction === 'incoming';
+      if (filter === 'outgoing') return h.direction === 'outgoing';
+      if (filter === 'missed') return h.status === 'missed';
+      return true;
+    });
+  }, [allHistory, user, filter]);
   
   const C = useColors();
   const isDark = C.bg === '#121212';
@@ -118,7 +128,35 @@ export default function CallsListScreen({ navigation }) {
             </Text>
           </View>
         </View>
+
       </LinearGradient>
+
+      <View style={[styles.filterRow, { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 6 }]}>
+        <TouchableOpacity
+          style={[styles.filterChip, { backgroundColor: C.surface, borderColor: C.border }, filter === 'all' && styles.filterChipActive]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[styles.filterText, { color: C.textSecondary }, filter === 'all' && styles.filterTextActive]}>All</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterChip, { backgroundColor: C.surface, borderColor: C.border }, filter === 'incoming' && styles.filterChipActive]}
+          onPress={() => setFilter('incoming')}
+        >
+          <Text style={[styles.filterText, { color: C.textSecondary }, filter === 'incoming' && styles.filterTextActive]}>Incoming</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterChip, { backgroundColor: C.surface, borderColor: C.border }, filter === 'outgoing' && styles.filterChipActive]}
+          onPress={() => setFilter('outgoing')}
+        >
+          <Text style={[styles.filterText, { color: C.textSecondary }, filter === 'outgoing' && styles.filterTextActive]}>Outgoing</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterChip, { backgroundColor: C.surface, borderColor: C.border }, filter === 'missed' && styles.filterChipActive]}
+          onPress={() => setFilter('missed')}
+        >
+          <Text style={[styles.filterText, { color: C.textSecondary }, filter === 'missed' && styles.filterTextActive]}>Missed</Text>
+        </TouchableOpacity>
+      </View>
 
       {callHistory.length === 0 && !refreshing ? (
         <View style={styles.empty}>
@@ -155,6 +193,11 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { fontSize: 26, fontWeight: '800', color: '#FFF', letterSpacing: -0.5 },
   headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  filterRow: { flexDirection: 'row' },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1, marginRight: 8 },
+  filterChipActive: { backgroundColor: '#0084FF', borderColor: '#0084FF' },
+  filterText: { fontSize: 13, fontWeight: '500' },
+  filterTextActive: { color: '#FFF', fontWeight: '700' },
   item: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13 },
   sep: { height: 0.5, marginLeft: 84 },
   avatarWrapper: { position: 'relative', marginRight: 14 },
