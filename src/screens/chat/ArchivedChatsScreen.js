@@ -83,9 +83,6 @@ export default function ArchivedChatsScreen({ navigation }) {
       unreadCount = rawUnread[user?._id] || rawUnread[user?._id?.toString()] || 0;
     }
     const isMine = lastMsg?.sender === user?._id || lastMsg?.sender?._id === user?._id;
-    if (!unreadCount && lastMsg && !isMine && lastMsg.status !== 'seen') {
-      unreadCount = 1;
-    }
     const isUnread = unreadCount > 0;
 
     const preview = isDeleted

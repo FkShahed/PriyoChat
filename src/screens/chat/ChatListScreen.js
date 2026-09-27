@@ -2,11 +2,11 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Image,
   TextInput, ActivityIndicator, StatusBar, ScrollView, RefreshControl,
-  Alert
+  Alert, Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { conversationApi } from '../../api/services';
+import { conversationApi, userApi } from '../../api/services';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import { formatTime, getInitials } from '../../utils/helpers';
@@ -32,6 +32,7 @@ function avatarGradient(name = '') {
 
 export default function ChatListScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
+  const updateUser = useAuthStore((s) => s.updateUser);
   const {
     conversations,
     setConversations,
@@ -42,6 +43,7 @@ export default function ChatListScreen({ navigation }) {
     archiveConversation,
     toggleMuteConversation,
     deleteConversation,
+    deletedConversationIds,
   } = useChatStore();
 
   const C = useColors();
@@ -50,6 +52,27 @@ export default function ChatListScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [newStatus, setNewStatus] = useState(user?.status || '');
+  const [savingStatus, setSavingStatus] = useState(false);
+
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [chatToDelete, setChatToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleSaveStatus = async () => {
+    try {
+      setSavingStatus(true);
+      const res = await userApi.updateProfile({ name: user?.name, status: newStatus });
+      updateUser(res.data);
+      setStatusModalVisible(false);
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'Failed to update status');
+    } finally {
+      setSavingStatus(false);
+    }
+  };
 
   const loadConversations = useCallback(async () => {
     try {
@@ -76,12 +99,13 @@ export default function ChatListScreen({ navigation }) {
     const list = Array.isArray(conversations) ? conversations : [];
     return list.filter((c) => {
       if (!c || !c.participants || !Array.isArray(c.participants)) return false;
-      // Exclude archived conversations from main chat list
+      // Exclude archived and deleted conversations from main chat list
       if (archivedConversationIds.includes(c._id)) return false;
+      if (deletedConversationIds?.includes(c._id)) return false;
       const other = c.participants?.find((p) => p?._id?.toString() !== user?._id?.toString());
       return (other?.name || '')?.toLowerCase()?.includes((search || '').toLowerCase());
     });
-  }, [conversations, archivedConversationIds, search, user]);
+  }, [conversations, archivedConversationIds, deletedConversationIds, search, user]);
 
   // Extract online friends for top "Active Now" bar
   const onlineFriends = useMemo(() => {
@@ -103,18 +127,24 @@ export default function ChatListScreen({ navigation }) {
   }, [conversations, onlineUsers, user]);
 
   const handleDelete = (item, otherName) => {
-    Alert.alert(
-      'Delete Chat',
-      `Are you sure you want to delete this chat with ${otherName || 'this user'}? All messages will be permanently removed. (You will still remain friends).`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteConversation(item._id),
-        },
-      ]
-    );
+    setChatToDelete({ item, otherName });
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!chatToDelete) return;
+    try {
+      setIsDeleting(true);
+      await conversationApi.clearHistory(chatToDelete.item._id);
+      deleteConversation(chatToDelete.item._id);
+      setDeleteModalVisible(false);
+      setChatToDelete(null);
+    } catch (e) {
+      console.error('Delete chat error:', e.response?.data || e.message);
+      Alert.alert('Error', 'Failed to delete chat history');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Render individual chat row
@@ -125,7 +155,7 @@ export default function ChatListScreen({ navigation }) {
     const lastMsg = item.lastMessage;
     const isDeleted = lastMsg?.isDeleted;
 
-    // Robust unread count extraction (handles Map object, number, or unread status)
+    // Robust unread count extraction (handles Map object or direct number)
     let rawUnread = item.unreadCount;
     let unreadCount = 0;
     if (typeof rawUnread === 'number') {
@@ -134,10 +164,6 @@ export default function ChatListScreen({ navigation }) {
       unreadCount = rawUnread[user?._id] || rawUnread[user?._id?.toString()] || 0;
     }
     const isMine = lastMsg?.sender === user?._id || lastMsg?.sender?._id === user?._id;
-    if (!unreadCount && lastMsg && !isMine && lastMsg.status !== 'seen') {
-      unreadCount = 1;
-    }
-
     const isUnread = unreadCount > 0;
 
     const preview = isDeleted
@@ -268,7 +294,7 @@ export default function ChatListScreen({ navigation }) {
 
           <Text style={[styles.headerTitleText, { color: isDark ? '#FFFFFF' : '#1C1E21' }]}>PriyoChat</Text>
 
-          {/* Action Buttons: Archive & Find Friends */}
+          {/* Action Buttons: Archive */}
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={[styles.actionIconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
@@ -283,14 +309,6 @@ export default function ChatListScreen({ navigation }) {
                   </Text>
                 </View>
               )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionIconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
-              onPress={() => navigation.navigate('SearchUsers')}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="create-outline" size={20} color={isDark ? '#FFF' : '#1C1E21'} />
             </TouchableOpacity>
           </View>
         </View>
@@ -345,10 +363,13 @@ export default function ChatListScreen({ navigation }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.activeNowScrollContent}
           >
-            {/* Create Story / New Chat Bubble */}
+            {/* Create Story / New Chat Bubble (Now Update Status) */}
             <TouchableOpacity
               style={styles.activeItem}
-              onPress={() => navigation.navigate('SearchUsers')}
+              onPress={() => {
+                setNewStatus(user?.status || '');
+                setStatusModalVisible(true);
+              }}
               activeOpacity={0.8}
             >
               <View style={[styles.createStoryRing, { backgroundColor: isDark ? 'rgba(0,132,255,0.15)' : 'rgba(0,132,255,0.1)' }]}>
@@ -428,6 +449,84 @@ export default function ChatListScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* ── Status Update Modal ────────────────────────────────────────── */}
+      <Modal visible={statusModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1E21' : '#FFFFFF' }]}>
+            <Text style={[styles.modalTitle, { color: isDark ? '#FFFFFF' : '#1C1E21' }]}>Update Status</Text>
+            <TextInput
+              style={[styles.modalInput, { 
+                color: isDark ? '#FFFFFF' : '#1C1E21',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+              }]}
+              value={newStatus}
+              onChangeText={setNewStatus}
+              placeholder="What's on your mind?"
+              placeholderTextColor={isDark ? 'rgba(255,255,255,0.5)' : '#8E8E93'}
+              maxLength={150}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
+                onPress={() => setStatusModalVisible(false)}
+                disabled={savingStatus}
+              >
+                <Text style={[styles.modalBtnText, { color: isDark ? '#FFFFFF' : '#1C1E21' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: '#0084FF' }]}
+                onPress={handleSaveStatus}
+                disabled={savingStatus}
+              >
+                {savingStatus ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={[styles.modalBtnText, { color: '#FFFFFF' }]}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {/* ── Delete Confirmation Modal ────────────────────────────────────── */}
+      <Modal visible={deleteModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1E21' : '#FFFFFF' }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={[styles.emptyIconCircle, { width: 64, height: 64, marginBottom: 12, backgroundColor: 'rgba(255,59,48,0.1)' }]}>
+                <Ionicons name="trash-outline" size={32} color="#FF3B30" />
+              </View>
+              <Text style={[styles.modalTitle, { color: isDark ? '#FFFFFF' : '#1C1E21', marginBottom: 8 }]}>Delete Chat</Text>
+              <Text style={{ color: isDark ? 'rgba(255,255,255,0.7)' : '#65676B', textAlign: 'center', fontSize: 15, lineHeight: 22 }}>
+                Are you sure you want to delete this chat with <Text style={{ fontWeight: '600', color: isDark ? '#FFFFFF' : '#1C1E21' }}>{chatToDelete?.otherName || 'this user'}</Text>? All messages will be permanently removed from your side. (You will still remain friends).
+              </Text>
+            </View>
+            <View style={[styles.modalActions, { justifyContent: 'space-between' }]}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', marginRight: 10 }]}
+                onPress={() => setDeleteModalVisible(false)}
+                disabled={isDeleting}
+              >
+                <Text style={[styles.modalBtnText, { color: isDark ? '#FFFFFF' : '#1C1E21' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, { flex: 1, backgroundColor: '#FF3B30' }]}
+                onPress={confirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={[styles.modalBtnText, { color: '#FFFFFF' }]}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -714,5 +813,45 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     fontSize: 15,
+  },
+  // ── Modal Styles ──────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  modalBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

@@ -29,13 +29,19 @@ const getMessages = async (req, res) => {
     if (!conversation || !conversation.participants.includes(req.user._id))
       return res.status(403).json({ message: 'Not authorized' });
 
-    const messages = await Message.find({ conversation: req.params.id })
+    const clearedAt = conversation.clearedAt && conversation.clearedAt.get(req.user._id.toString());
+    const query = { conversation: req.params.id };
+    if (clearedAt) {
+      query.createdAt = { $gt: clearedAt };
+    }
+
+    const messages = await Message.find(query)
       .populate('sender', 'name avatar')
       .sort('-createdAt')
       .skip((page - 1) * limit)
       .limit(Number(limit));
 
-    const total = await Message.countDocuments({ conversation: req.params.id });
+    const total = await Message.countDocuments(query);
 
     res.json({
       messages: messages.reverse(),
@@ -135,11 +141,18 @@ const searchMessages = async (req, res) => {
   try {
     const { q } = req.query;
     if (!q) return res.json([]);
-    const messages = await Message.find({
+    const conversation = await Conversation.findById(req.params.id);
+    const clearedAt = conversation?.clearedAt && conversation.clearedAt.get(req.user._id.toString());
+    const query = {
       conversation: req.params.id,
       text: { $regex: q, $options: 'i' },
       isDeleted: false,
-    })
+    };
+    if (clearedAt) {
+      query.createdAt = { $gt: clearedAt };
+    }
+
+    const messages = await Message.find(query)
       .populate('sender', 'name avatar')
       .sort('-createdAt')
       .limit(20);
@@ -189,6 +202,26 @@ const blockUser = async (req, res) => {
   }
 };
 
+// DELETE /api/conversations/:id/clear
+const clearHistory = async (req, res) => {
+  try {
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation || !conversation.participants.includes(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    if (!conversation.clearedAt) {
+      conversation.clearedAt = new Map();
+    }
+    conversation.clearedAt.set(req.user._id.toString(), new Date());
+    await conversation.save();
+
+    res.json({ message: 'History cleared' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 module.exports = {
   getConversations,
   getMessages,
@@ -198,4 +231,5 @@ module.exports = {
   searchMessages,
   reportMessage,
   blockUser,
+  clearHistory,
 };

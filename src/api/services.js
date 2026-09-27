@@ -33,6 +33,7 @@ export const conversationApi = {
   searchMessages: (id, q) => api.get(`/conversations/${id}/search?q=${q}`),
   updateTheme: (id, theme) => api.put(`/conversations/${id}/theme`, { theme }),
   deleteMessage: (msgId) => api.delete(`/conversations/messages/${msgId}`),
+  clearHistory: (id) => api.delete(`/conversations/${id}/clear`),
   reactToMessage: (msgId, emoji) =>
     api.post(`/conversations/messages/${msgId}/react`, { emoji }),
   reportMessage: (msgId, reason, details) =>

@@ -71,6 +71,8 @@ const useSocketStore = create((set, get) => ({
         const activeId = useChatStore.getState().activeConversationId;
         if (activeId === message.conversation) {
           newSocket.emit('message_seen', { conversationId: message.conversation });
+        } else {
+          useChatStore.getState().incrementUnreadCount(message.conversation);
         }
       }
 

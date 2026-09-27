@@ -74,14 +74,13 @@ const useChatStore = create((set, get) => ({
 
   deleteConversation: async (convoId) => {
     const { conversations, messages, deletedConversationIds, archivedConversationIds } = get();
-    const updatedConvos = conversations.filter((c) => c._id !== convoId);
+    // Don't remove from conversations array so the user stays in "online friends" (Active Now list)
     const updatedMessages = { ...messages };
     delete updatedMessages[convoId];
     const updatedDeleted = [convoId, ...deletedConversationIds.filter((id) => id !== convoId)];
     const updatedArchived = archivedConversationIds.filter((id) => id !== convoId);
 
     set({
-      conversations: updatedConvos,
       messages: updatedMessages,
       deletedConversationIds: updatedDeleted,
       archivedConversationIds: updatedArchived,
@@ -101,10 +100,7 @@ const useChatStore = create((set, get) => ({
   isArchived: (convoId) => get().archivedConversationIds.includes(convoId),
 
   setConversations: (conversations) => {
-    const { deletedConversationIds } = get();
-    const valid = Array.isArray(conversations)
-      ? conversations.filter((c) => !deletedConversationIds.includes(c._id))
-      : [];
+    const valid = Array.isArray(conversations) ? conversations : [];
     set({ conversations: valid });
   },
 
@@ -219,8 +215,45 @@ const useChatStore = create((set, get) => ({
     set({ messages: { ...messages, [conversationId]: updated } });
   },
 
+  clearUnreadCount: (conversationId) => {
+    const { conversations } = get();
+    const updated = conversations.map((c) => {
+      if (c._id === conversationId) {
+        return {
+          ...c,
+          unreadCount: 0,
+          lastMessage: c.lastMessage ? { ...c.lastMessage, status: 'seen' } : c.lastMessage,
+        };
+      }
+      return c;
+    });
+    set({ conversations: updated });
+  },
+
+  incrementUnreadCount: (conversationId) => {
+    const { conversations, activeConversationId } = get();
+    if (activeConversationId === conversationId) return;
+    const updated = conversations.map((c) => {
+      if (c._id === conversationId) {
+        let currentCount = 0;
+        if (typeof c.unreadCount === 'number') {
+          currentCount = c.unreadCount;
+        } else if (c.unreadCount && typeof c.unreadCount === 'object') {
+          const userId = require('./useAuthStore').default?.getState?.()?.user?._id;
+          currentCount = c.unreadCount[userId] || c.unreadCount[userId?.toString()] || 0;
+        }
+        return {
+          ...c,
+          unreadCount: currentCount + 1,
+        };
+      }
+      return c;
+    });
+    set({ conversations: updated });
+  },
+
   markConvoAsSeen: (conversationId, seenAt) => {
-    const { messages } = get();
+    const { messages, conversations } = get();
     const convoMsgs = messages[conversationId] || [];
     const timestamp = seenAt || new Date().toISOString();
     const updated = convoMsgs.map((m) => ({
@@ -228,7 +261,17 @@ const useChatStore = create((set, get) => ({
       status: 'seen',
       seenAt: m.seenAt || timestamp,
     }));
-    set({ messages: { ...messages, [conversationId]: updated } });
+    const updatedConvos = conversations.map((c) => {
+      if (c._id === conversationId) {
+        return {
+          ...c,
+          unreadCount: 0,
+          lastMessage: c.lastMessage ? { ...c.lastMessage, status: 'seen' } : c.lastMessage,
+        };
+      }
+      return c;
+    });
+    set({ messages: { ...messages, [conversationId]: updated }, conversations: updatedConvos });
   },
 
   deleteMessage: (conversationId, messageId) => {

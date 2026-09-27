@@ -509,6 +509,7 @@ export default function ChatScreen({ route, navigation }) {
 
   useEffect(() => {
     useChatStore.getState().setActiveConversationId(conversationId);
+    useChatStore.getState().clearUnreadCount(conversationId);
     loadMessages(1);
     emit('join', { conversationId });
     emit('message_seen', { conversationId });
