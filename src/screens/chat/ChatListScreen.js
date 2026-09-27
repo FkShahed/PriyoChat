@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Image,
-  TextInput, ActivityIndicator, StatusBar, ScrollView, RefreshControl
+  TextInput, ActivityIndicator, StatusBar, ScrollView, RefreshControl,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +12,7 @@ import useAuthStore from '../../store/useAuthStore';
 import { formatTime, getInitials } from '../../utils/helpers';
 import { useColors } from '../../store/useThemeStore';
 import LogoSVG from '../../components/common/LogoSVG';
+import SwipeableChatRow from '../../components/chat/SwipeableChatRow';
 
 const AVATAR_COLORS = [
   ['#0084FF', '#00C6FF'],
@@ -30,7 +32,18 @@ function avatarGradient(name = '') {
 
 export default function ChatListScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
-  const { conversations, setConversations, onlineUsers } = useChatStore();
+  const {
+    conversations,
+    setConversations,
+    onlineUsers,
+    archivedConversationIds,
+    mutedConversationIds,
+    initPreferences,
+    archiveConversation,
+    toggleMuteConversation,
+    deleteConversation,
+  } = useChatStore();
+
   const C = useColors();
   const isDark = C.bg === '#121212' || C.bg === '#0D1117' || C.bg?.toLowerCase()?.includes('12');
 
@@ -53,17 +66,22 @@ export default function ChatListScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => { loadConversations(); }, []);
+  useEffect(() => {
+    initPreferences();
+    loadConversations();
+  }, []);
 
-  // Filter conversations by search
+  // Filter conversations by search and exclude archived
   const filtered = useMemo(() => {
     const list = Array.isArray(conversations) ? conversations : [];
     return list.filter((c) => {
       if (!c || !c.participants || !Array.isArray(c.participants)) return false;
+      // Exclude archived conversations from main chat list
+      if (archivedConversationIds.includes(c._id)) return false;
       const other = c.participants?.find((p) => p?._id?.toString() !== user?._id?.toString());
       return (other?.name || '')?.toLowerCase()?.includes((search || '').toLowerCase());
     });
-  }, [conversations, search, user]);
+  }, [conversations, archivedConversationIds, search, user]);
 
   // Extract online friends for top "Active Now" bar
   const onlineFriends = useMemo(() => {
@@ -84,10 +102,26 @@ export default function ChatListScreen({ navigation }) {
     return list;
   }, [conversations, onlineUsers, user]);
 
+  const handleDelete = (item, otherName) => {
+    Alert.alert(
+      'Delete Chat',
+      `Are you sure you want to delete this chat with ${otherName || 'this user'}? All messages will be permanently removed. (You will still remain friends).`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteConversation(item._id),
+        },
+      ]
+    );
+  };
+
   // Render individual chat row
   const renderItem = ({ item }) => {
     const other = item.participants?.find((p) => p._id?.toString() !== user?._id?.toString());
     const isOnline = onlineUsers[other?._id] ?? other?.isOnline;
+    const isMuted = !!mutedConversationIds[item._id];
     const lastMsg = item.lastMessage;
     const isDeleted = lastMsg?.isDeleted;
 
@@ -124,75 +158,92 @@ export default function ChatListScreen({ navigation }) {
     }
 
     return (
-      <TouchableOpacity
-        style={[
-          styles.itemCard,
-          { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF' }
-        ]}
+      <SwipeableChatRow
+        isArchived={false}
+        isMuted={isMuted}
+        onArchive={() => archiveConversation(item._id)}
+        onMute={() => toggleMuteConversation(item._id)}
+        onDelete={() => handleDelete(item, other?.name)}
         onPress={() => navigation.navigate('Chat', { conversation: item, otherUser: other })}
-        activeOpacity={0.7}
       >
-        <View style={styles.avatarContainer}>
-          {other?.avatar ? (
-            <Image source={{ uri: other.avatar }} style={styles.avatarImage} />
-          ) : (
-            <LinearGradient colors={gradColors} style={styles.avatarImage}>
-              <Text style={styles.avatarInitials}>{getInitials(other?.name)}</Text>
-            </LinearGradient>
-          )}
-          {isOnline && <View style={[styles.onlineBadge, { borderColor: isDark ? '#0D1117' : '#FFFFFF' }]} />}
-        </View>
-
-        <View style={styles.infoContainer}>
-          <View style={styles.nameRow}>
-            <Text
-              style={[
-                styles.userName,
-                { color: isDark ? '#FFFFFF' : '#1C1E21' },
-                isUnread && styles.unreadText
-              ]}
-              numberOfLines={1}
-            >
-              {other?.name || 'User'}
-            </Text>
-            {lastMsg && (
-              <Text style={[styles.timeText, { color: isUnread ? '#0084FF' : (isDark ? '#8E8E93' : '#8E8E93') }, isUnread && { fontWeight: '700' }]}>
-                {formatTime(lastMsg.createdAt)}
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.messageRow}>
-            <View style={styles.previewWrapper}>
-              {statusIcon}
-              <Text
-                style={[
-                  styles.previewText,
-                  { color: isUnread ? (isDark ? '#FFFFFF' : '#1C1E21') : (isDark ? 'rgba(255,255,255,0.55)' : '#65676B') },
-                  isUnread && styles.unreadText,
-                  isDeleted && { fontStyle: 'italic', paddingRight: 4 }
-                ]}
-                numberOfLines={1}
-              >
-                {isMine ? `You: ${preview}` : preview}
-              </Text>
-            </View>
-
-            {isUnread && (
-              <LinearGradient
-                colors={['#0084FF', '#0066FF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.unreadBadge}
-              >
-                <Text style={styles.unreadBadgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
+        <View
+          style={[
+            styles.itemCard,
+            { backgroundColor: isDark ? '#161B22' : '#FFFFFF' }
+          ]}
+        >
+          <View style={styles.avatarContainer}>
+            {other?.avatar ? (
+              <Image source={{ uri: other.avatar }} style={styles.avatarImage} />
+            ) : (
+              <LinearGradient colors={gradColors} style={styles.avatarImage}>
+                <Text style={styles.avatarInitials}>{getInitials(other?.name)}</Text>
               </LinearGradient>
             )}
+            {isOnline && <View style={[styles.onlineBadge, { borderColor: isDark ? '#0D1117' : '#FFFFFF' }]} />}
+          </View>
+
+          <View style={styles.infoContainer}>
+            <View style={styles.nameRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                <Text
+                  style={[
+                    styles.userName,
+                    { color: isDark ? '#FFFFFF' : '#1C1E21' },
+                    isUnread && styles.unreadText
+                  ]}
+                  numberOfLines={1}
+                >
+                  {other?.name || 'User'}
+                </Text>
+                {isMuted && (
+                  <Ionicons
+                    name="volume-mute"
+                    size={14}
+                    color={isDark ? 'rgba(255,255,255,0.4)' : '#8E8E93'}
+                    style={{ marginLeft: 6 }}
+                  />
+                )}
+              </View>
+              {lastMsg && (
+                <Text style={[styles.timeText, { color: isUnread ? '#0084FF' : (isDark ? '#8E8E93' : '#8E8E93') }, isUnread && { fontWeight: '700' }]}>
+                  {formatTime(lastMsg.createdAt)}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.messageRow}>
+              <View style={styles.previewWrapper}>
+                {statusIcon}
+                <Text
+                  style={[
+                    styles.previewText,
+                    { color: isUnread ? (isDark ? '#FFFFFF' : '#1C1E21') : (isDark ? 'rgba(255,255,255,0.55)' : '#65676B') },
+                    isUnread && styles.unreadText,
+                    isDeleted && { fontStyle: 'italic', paddingRight: 4 }
+                  ]}
+                  numberOfLines={1}
+                >
+                  {isMine ? `You: ${preview}` : preview}
+                </Text>
+              </View>
+
+              {isUnread && (
+                <LinearGradient
+                  colors={['#0084FF', '#0066FF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.unreadBadge}
+                >
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </LinearGradient>
+              )}
+            </View>
           </View>
         </View>
-      </TouchableOpacity>
+      </SwipeableChatRow>
     );
   };
 
@@ -217,14 +268,29 @@ export default function ChatListScreen({ navigation }) {
 
           <Text style={[styles.headerTitleText, { color: isDark ? '#FFFFFF' : '#1C1E21' }]}>PriyoChat</Text>
 
-          {/* Action Buttons */}
+          {/* Action Buttons: Archive & Find Friends */}
           <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={[styles.actionIconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+              onPress={() => navigation.navigate('ArchivedChats')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="archive-outline" size={20} color={isDark ? '#FFF' : '#1C1E21'} />
+              {archivedConversationIds.length > 0 && (
+                <View style={styles.headerArchiveBadge}>
+                  <Text style={styles.headerArchiveBadgeText}>
+                    {archivedConversationIds.length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.actionIconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
               onPress={() => navigation.navigate('SearchUsers')}
               activeOpacity={0.7}
             >
-              <Ionicons name="create" size={20} color={isDark ? '#FFF' : '#1C1E21'} />
+              <Ionicons name="create-outline" size={20} color={isDark ? '#FFF' : '#1C1E21'} />
             </TouchableOpacity>
           </View>
         </View>
@@ -413,6 +479,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+    position: 'relative',
+  },
+  headerArchiveBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  headerArchiveBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    includeFontPadding: false,
   },
   searchPill: {
     flexDirection: 'row',
@@ -502,7 +589,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 16,
-    marginVertical: 3,
   },
   avatarContainer: {
     position: 'relative',

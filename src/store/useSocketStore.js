@@ -74,9 +74,10 @@ const useSocketStore = create((set, get) => ({
         }
       }
 
-      // Show push notification if user is NOT in this conversation
+      // Show push notification if user is NOT in this conversation and NOT muted
       const activeId = useChatStore.getState().activeConversationId;
-      if (activeId !== message.conversation) {
+      const isMuted = useChatStore.getState().isMuted?.(message.conversation);
+      if (activeId !== message.conversation && !isMuted) {
         NotificationService.showMessageNotification({
           senderName: message.sender?.name || 'New Message',
           senderId: message.sender?._id,
