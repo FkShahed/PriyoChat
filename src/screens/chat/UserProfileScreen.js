@@ -12,6 +12,7 @@ import useCallStore from '../../store/useCallStore';
 export default function UserProfileScreen({ route, navigation }) {
   const { user, isOnline, lastSeen } = route.params || {};
   const C = useColors();
+  const isDark = C.bg === '#121212';
   const startCall = useCallStore((s) => s.startCall);
 
   const statusText = isOnline
@@ -51,22 +52,22 @@ export default function UserProfileScreen({ route, navigation }) {
         {/* Quick Actions */}
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.goBack()}>
-            <LinearGradient colors={['#00C6FF', '#0072FF']} style={styles.actionIconCircle}>
-              <Ionicons name="chatbubble-ellipses" size={24} color="#FFF" />
-            </LinearGradient>
-            <Text style={[styles.actionText, { color: C.text }]}>Message</Text>
+            <View style={[styles.actionIconCircle, { backgroundColor: isDark ? 'rgba(0,132,255,0.15)' : 'rgba(0,132,255,0.1)' }]}>
+              <Ionicons name="chatbubble" size={24} color="#0084FF" />
+            </View>
+            <Text style={styles.actionText}>Message</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => handleCall('audio')}>
-            <LinearGradient colors={['#34C759', '#248A3D']} style={styles.actionIconCircle}>
-              <Ionicons name="call" size={22} color="#FFF" />
-            </LinearGradient>
-            <Text style={[styles.actionText, { color: C.text }]}>Audio</Text>
+            <View style={[styles.actionIconCircle, { backgroundColor: isDark ? 'rgba(0,132,255,0.15)' : 'rgba(0,132,255,0.1)' }]}>
+              <Ionicons name="call" size={24} color="#0084FF" />
+            </View>
+            <Text style={styles.actionText}>Audio</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => handleCall('video')}>
-            <LinearGradient colors={['#A855F7', '#7E22CE']} style={styles.actionIconCircle}>
-              <Ionicons name="videocam" size={26} color="#FFF" />
-            </LinearGradient>
-            <Text style={[styles.actionText, { color: C.text }]}>Video</Text>
+            <View style={[styles.actionIconCircle, { backgroundColor: isDark ? 'rgba(0,132,255,0.15)' : 'rgba(0,132,255,0.1)' }]}>
+              <Ionicons name="videocam" size={24} color="#0084FF" />
+            </View>
+            <Text style={styles.actionText}>Video</Text>
           </TouchableOpacity>
         </View>
 
@@ -167,33 +168,27 @@ const styles = StyleSheet.create({
   body: { flex: 1, paddingTop: 20 },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 28,
+    justifyContent: 'space-evenly',
     paddingHorizontal: 20,
-    marginBottom: 32,
-    marginTop: 8,
+    marginBottom: 24,
   },
   actionBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 72,
+    width: 80,
   },
   actionIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    marginBottom: 8,
   },
   actionText: {
-    marginTop: 10,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: '#0084FF',
   },
   infoSection: {
     paddingHorizontal: 20,
