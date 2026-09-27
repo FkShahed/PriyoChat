@@ -206,8 +206,29 @@ export default function ApkControlPage() {
 
         {/* Right Side: Update Form */}
         <div className="card">
-          <h3 style={{ marginBottom: '20px', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '20px' }}>➕</span> Publish New Version
+          <h3 style={{ marginBottom: '20px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '20px' }}>➕</span> Publish New Version
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setVersion('1.0.2');
+                setApkUrl('https://github.com/FkShahed/PriyoChat/releases/download/v1.0.2/PriyoChat-v1.0.2.apk');
+                setReleaseNotes('WebRTC multi-call stability, continuous video stream re-rendering, and bidirectional audio on Web and APK (STABLE2 Release). Standalone release APK.');
+              }}
+              style={{
+                fontSize: '12px',
+                padding: '4px 10px',
+                background: 'rgba(0, 132, 255, 0.15)',
+                color: '#0084FF',
+                border: '1px solid rgba(0, 132, 255, 0.3)',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              Fill STABLE2 (v1.0.2)
+            </button>
           </h3>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px', marginBottom: '16px' }}>

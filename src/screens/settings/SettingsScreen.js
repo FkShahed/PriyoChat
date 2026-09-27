@@ -239,26 +239,29 @@ export default function SettingsScreen({ navigation }) {
   const currentVersion =
     Constants.expoConfig?.version ||
     Constants.nativeAppVersion ||
-    '0.0.0';
+    require('../../../package.json').version ||
+    '1.0.2';
+
+  const checkVersion = useCallback(async () => {
+    setCheckingUpdate(true);
+    try {
+      const { data } = await userApi.getAppUpdate();
+      const latestVersion = data?.version || '';
+      const apkUrl = data?.apkUrl || '';
+      const isLatest = !latestVersion || !apkUrl || compareVersions(latestVersion, currentVersion) <= 0;
+      setUpdateInfo({ apkUrl, latestVersion, isLatest });
+    } catch (err) {
+      console.warn('[VersionCheck] Failed:', err);
+      setUpdateInfo({ apkUrl: null, latestVersion: null, isLatest: true });
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }, [currentVersion]);
 
   // Check for updates on mount
   useEffect(() => {
-    const checkVersion = async () => {
-      try {
-        const { data } = await userApi.getAppUpdate();
-        const latestVersion = data?.version || '';
-        const apkUrl = data?.apkUrl || '';
-        const isLatest = !latestVersion || !apkUrl || compareVersions(latestVersion, currentVersion) <= 0;
-        setUpdateInfo({ apkUrl, latestVersion, isLatest });
-      } catch (err) {
-        console.warn('[VersionCheck] Failed:', err);
-        setUpdateInfo({ apkUrl: null, latestVersion: null, isLatest: true });
-      } finally {
-        setCheckingUpdate(false);
-      }
-    };
     checkVersion();
-  }, []);
+  }, [checkVersion]);
   const handleDownloadUpdate = async () => {
     if (!updateInfo.apkUrl || isProcessingDownload.current) return;
     
@@ -619,10 +622,14 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </View>
 
-        <View style={[styles.permRow, { borderBottomWidth: 0 }]}>
+        <TouchableOpacity style={[styles.permRow, { borderBottomWidth: 0 }]} onPress={checkVersion} activeOpacity={0.7}>
           <View style={styles.permInfo}>
             <View style={[styles.iconBox, { backgroundColor: updateInfo.isLatest ? 'rgba(52,199,89,0.1)' : 'rgba(255,149,0,0.1)' }]}>
-              <Ionicons name={updateInfo.isLatest ? "checkmark-circle" : "alert-circle"} size={18} color={updateInfo.isLatest ? "#34C759" : "#FF9500"} />
+              {checkingUpdate ? (
+                <ActivityIndicator size="small" color="#0084FF" />
+              ) : (
+                <Ionicons name={updateInfo.isLatest ? "checkmark-circle" : "alert-circle"} size={18} color={updateInfo.isLatest ? "#34C759" : "#FF9500"} />
+              )}
             </View>
             <View>
               <Text style={[styles.permLabel, { color: C.text }]}>App Version</Text>
@@ -631,7 +638,7 @@ export default function SettingsScreen({ navigation }) {
               </Text>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {(!updateInfo.isLatest || checkingUpdate) && (
           <TouchableOpacity
