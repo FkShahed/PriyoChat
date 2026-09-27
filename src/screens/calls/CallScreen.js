@@ -23,11 +23,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
     if (Platform.OS === 'web' && videoRef.current && stream) {
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch((e) => {
-        console.warn('[WebVideo] play error, retrying with muted state:', e);
-        if (videoRef.current && !isLocal) {
-          videoRef.current.muted = true;
-          videoRef.current.play().catch(() => {});
-        }
+        console.warn('[WebVideo] play error:', e?.message);
       });
     }
   }, [stream, revision, videoTrackId, trackCount]);
@@ -41,7 +37,7 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
         ref={videoRef}
         autoPlay
         playsInline
-        muted={isLocal}
+        muted={true}
         style={{
           width: '100%',
           height: '100%',
@@ -87,6 +83,59 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
   }
 
   return null;
+}
+
+// Dedicated Web Remote Audio player to ensure incoming audio is played
+// on Web for both audio calls and video calls without autoplay restrictions.
+function WebRemoteAudio({ stream }) {
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !stream || !audioRef.current) return;
+    const audioEl = audioRef.current;
+
+    try {
+      audioEl.srcObject = stream;
+      audioEl.volume = 1.0;
+      audioEl.muted = false;
+
+      const playPromise = audioEl.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('[WebRemoteAudio] Audio playing successfully on Web');
+          })
+          .catch((err) => {
+            console.warn('[WebRemoteAudio] Autoplay blocked, waiting for interaction:', err?.message);
+            const resumeAudio = () => {
+              if (audioEl) {
+                audioEl.muted = false;
+                audioEl.play().catch(() => {});
+              }
+              window.removeEventListener('click', resumeAudio);
+              window.removeEventListener('touchstart', resumeAudio);
+              window.removeEventListener('keydown', resumeAudio);
+            };
+            window.addEventListener('click', resumeAudio, { once: true });
+            window.addEventListener('touchstart', resumeAudio, { once: true });
+            window.addEventListener('keydown', resumeAudio, { once: true });
+          });
+      }
+    } catch (e) {
+      console.warn('[WebRemoteAudio] setup error:', e);
+    }
+  }, [stream]);
+
+  if (Platform.OS !== 'web' || !stream) return null;
+
+  return (
+    <audio
+      ref={audioRef}
+      autoPlay
+      playsInline
+      style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+    />
+  );
 }
 
 function formatDuration(secs) {
@@ -252,6 +301,26 @@ export default function CallScreen({ route, navigation }) {
       } catch (e) {}
     };
   }, [callState, isReceiver, speakerOn]);
+
+  // On Web: resume remote audio playback on any user interaction
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const unlockWebAudio = () => {
+      const audios = document.querySelectorAll('audio');
+      audios.forEach((a) => {
+        if (a && a.srcObject && a.paused) {
+          a.muted = false;
+          a.play().catch(() => {});
+        }
+      });
+    };
+    window.addEventListener('click', unlockWebAudio);
+    window.addEventListener('touchstart', unlockWebAudio);
+    return () => {
+      window.removeEventListener('click', unlockWebAudio);
+      window.removeEventListener('touchstart', unlockWebAudio);
+    };
+  }, []);
 
   const navigateAway = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -432,6 +501,11 @@ export default function CallScreen({ route, navigation }) {
   if (callType === 'video') {
     return (
       <View style={styles.videoContainer}>
+        {/* On Web: dedicated unmuted audio playback for remote stream */}
+        {Platform.OS === 'web' && remoteStream ? (
+          <WebRemoteAudio stream={remoteStream} />
+        ) : null}
+
         {/* Remote video (full screen) - rendered continuously once remoteStream exists */}
         {remoteStream ? (
           <VideoStreamView
@@ -601,6 +675,11 @@ export default function CallScreen({ route, navigation }) {
   // ── AUDIO CALL layout ─────────────────────────────────────────────
   return (
     <View style={{ flex: 1 }}>
+      {/* On Web: dedicated unmuted audio playback for remote stream */}
+      {Platform.OS === 'web' && remoteStream ? (
+        <WebRemoteAudio stream={remoteStream} />
+      ) : null}
+
       {/* Full blurred background — auth theme */}
       <LinearGradient
         colors={['#070B19', '#0D1A3A', '#060A17']}
