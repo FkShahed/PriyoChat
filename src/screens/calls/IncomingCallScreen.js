@@ -26,17 +26,22 @@ export default function IncomingCallScreen({ navigation }) {
       RNAnimated.timing(opacityAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
     ]).start();
 
+    let isCancelled = false;
+
     // Play ringtone using expo-av
     const playRingtone = async () => {
       try {
+        if (isCancelled) return;
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
         });
+        if (isCancelled) return;
 
         const customUri = await AsyncStorage.getItem('custom_ringtone_uri');
         const globalUri = await AsyncStorage.getItem('global_ringtone_uri');
+        if (isCancelled) return;
         
         let soundSource;
         if (customUri) {
@@ -51,6 +56,11 @@ export default function IncomingCallScreen({ navigation }) {
           soundSource,
           { shouldPlay: true, isLooping: true }
         );
+        if (isCancelled) {
+          sound.stopAsync().catch(() => {});
+          sound.unloadAsync().catch(() => {});
+          return;
+        }
         soundRef.current = sound;
         console.log('[Ringtone] Started looping');
       } catch (e) {
@@ -61,6 +71,7 @@ export default function IncomingCallScreen({ navigation }) {
     playRingtone();
 
     return () => {
+      isCancelled = true;
       // Stop ringing and unload if screen is unmounted
       if (soundRef.current) {
         const s = soundRef.current;
@@ -79,11 +90,22 @@ export default function IncomingCallScreen({ navigation }) {
     };
   }, []);
 
+  const dismissScreen = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
+    }
+  };
+
   // If caller hung up or call expired before we answered → auto dismiss
   useEffect(() => {
-    if ((callState === 'ended') && !hasActed.current) {
+    if ((callState === 'ended' || callState === 'idle') && !hasActed.current) {
       hasActed.current = true;
-      navigation.goBack();
+      dismissScreen();
     }
   }, [callState]);
 
@@ -133,7 +155,7 @@ export default function IncomingCallScreen({ navigation }) {
       emit('call_reject', { to: targetId });
     }
     resetCall(); // instant reset to idle
-    navigation.goBack();
+    dismissScreen();
   };
 
   return (

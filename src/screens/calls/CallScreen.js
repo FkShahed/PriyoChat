@@ -16,13 +16,21 @@ import { webrtc } from '../../utils/nativeModules';
 // Universal VideoStreamView for Web (HTML5 video) and Mobile (RTCView)
 function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, style, revision = 0 }) {
   const videoRef = useRef(null);
+  const videoTrackId = stream?.getVideoTracks?.()?.[0]?.id || '';
+  const trackCount = stream?.getTracks?.()?.length || 0;
 
   useEffect(() => {
     if (Platform.OS === 'web' && videoRef.current && stream) {
       videoRef.current.srcObject = stream;
-      videoRef.current.play().catch((e) => console.warn('[WebVideo] play error:', e));
+      videoRef.current.play().catch((e) => {
+        console.warn('[WebVideo] play error, retrying with muted state:', e);
+        if (videoRef.current && !isLocal) {
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(() => {});
+        }
+      });
     }
-  }, [stream, revision]);
+  }, [stream, revision, videoTrackId, trackCount]);
 
   const shouldMirror = isLocal && Boolean(mirror);
 
@@ -61,14 +69,19 @@ function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, 
 
     if (!streamURL) return null;
 
+    // Composite key changes when stream, video track, or revision bumps,
+    // ensuring Android RTCView remounts and binds to the active video sink
+    const key = `${streamURL}_${isLocal ? 'loc' : 'rem'}_${videoTrackId || 'notrack'}_${revision}`;
+
     return (
       <RTCViewComp
-        key={streamURL + '_' + (isLocal ? 'loc' : 'rem')}
+        key={key}
         streamURL={streamURL}
         style={style}
         objectFit="cover"
         mirror={shouldMirror}
         zOrder={zOrder}
+        zOrderMediaOverlay={isLocal}
       />
     );
   }
@@ -94,6 +107,7 @@ export default function CallScreen({ route, navigation }) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [remoteTrackVersion, setRemoteTrackVersion] = useState(0);
+  const [hasRemoteVideoState, setHasRemoteVideoState] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(callType === 'video');
@@ -108,7 +122,10 @@ export default function CallScreen({ route, navigation }) {
   const loopRef = useRef(null);
   const timerRef = useRef(null);
   const hasNavigatedBack = useRef(false);
-  const targetUserId = otherUser?._id || otherUser?.id || storeRemoteUser?._id || storeRemoteUser?.id || useCallStore.getState().remoteUserId;
+  const targetUserId =
+    (typeof otherUser === 'string' ? otherUser : (otherUser?._id || otherUser?.id)) ||
+    (typeof storeRemoteUser === 'string' ? storeRemoteUser : (storeRemoteUser?._id || storeRemoteUser?.id)) ||
+    useCallStore.getState().remoteUserId;
 
   // ── WebRTC ────────────────────────────────────────────────────────
   const { cleanup: cleanupWebRTC, setSpeaker, connectionState, iceConnectionState, errorMessage } = useWebRTCCall({
@@ -120,20 +137,25 @@ export default function CallScreen({ route, navigation }) {
       console.log('[CallScreen] Local stream received');
       setLocalStream(s);
     }, []),
-    onRemoteStream: useCallback((s, timestamp) => {
-      console.log('[CallScreen] Remote stream received, tracks:', s?.getTracks?.().length);
+    onRemoteStream: useCallback((s, timestamp, hasVideo) => {
+      console.log('[CallScreen] Remote stream received, tracks:', s?.getTracks?.().length, 'hasVideo:', hasVideo);
       setRemoteStream(s);
       setRemoteTrackVersion(timestamp || Date.now());
+      if (hasVideo != null) {
+        setHasRemoteVideoState(Boolean(hasVideo));
+      } else {
+        const vTracks = s?.getVideoTracks?.() || [];
+        setHasRemoteVideoState(vTracks.some((t) => t.enabled !== false && t.readyState !== 'ended'));
+      }
 
       if (s && typeof s.addEventListener === 'function') {
-        s.addEventListener('addtrack', () => {
-          console.log('[CallScreen] Remote stream addtrack event');
+        const checkTracks = () => {
           setRemoteTrackVersion(Date.now());
-        });
-        s.addEventListener('removetrack', () => {
-          console.log('[CallScreen] Remote stream removetrack event');
-          setRemoteTrackVersion(Date.now());
-        });
+          const vTracks = s?.getVideoTracks?.() || [];
+          setHasRemoteVideoState(vTracks.some((t) => t.enabled !== false && t.readyState !== 'ended'));
+        };
+        s.addEventListener('addtrack', checkTracks);
+        s.addEventListener('removetrack', checkTracks);
       }
     }, []),
   });
@@ -187,18 +209,26 @@ export default function CallScreen({ route, navigation }) {
     const isDialing = callState === 'calling' || callState === 'ringing';
     if (!isDialing) return;
     let sound = null;
+    let isCancelled = false;
     const play = async () => {
       try {
+        if (isCancelled) return;
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: !speakerOn,
         });
+        if (isCancelled) return;
         const { sound: s } = await Audio.Sound.createAsync(
           require('../../../assets/ringback.wav'),
           { shouldPlay: true, isLooping: true, volume: 1.0 }
         );
+        if (isCancelled) {
+          s.stopAsync().catch(() => {});
+          s.unloadAsync().catch(() => {});
+          return;
+        }
         sound = s;
       } catch (e) {
         console.warn('[CallScreen] ringback error:', e);
@@ -206,6 +236,7 @@ export default function CallScreen({ route, navigation }) {
     };
     play();
     return () => {
+      isCancelled = true;
       if (sound) {
         sound.stopAsync().catch(() => {});
         sound.unloadAsync().catch(() => {});
@@ -222,42 +253,118 @@ export default function CallScreen({ route, navigation }) {
     };
   }, [callState, isReceiver, speakerOn]);
 
-  // ── Remote party ended/rejected ──────────────────────────────────
-  useEffect(() => {
-    if ((callState === 'ended' || callState === 'idle') && !hasNavigatedBack.current) {
-      hasNavigatedBack.current = true;
-      Vibration.cancel();
-      if (localStream && typeof localStream.release === 'function') {
-        try { localStream.release(); } catch (e) {}
-      }
-      if (remoteStream && typeof remoteStream.release === 'function') {
-        try { remoteStream.release(); } catch (e) {}
-      }
-      setLocalStream(null);
-      setRemoteStream(null);
-      cleanupWebRTC();
+  const navigateAway = useCallback(() => {
+    if (navigation.canGoBack()) {
       navigation.goBack();
+    } else {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
+    }
+  }, [navigation]);
+
+  useEffect(() => {
+    if (callState === 'calling' || callState === 'incoming' || callState === 'connecting' || callState === 'active') {
+      hasNavigatedBack.current = false;
     }
   }, [callState]);
 
-  const handleEndCall = () => {
+  const stopStream = (stream) => {
+    if (!stream) return;
+    try {
+      stream.getTracks?.().forEach((t) => {
+        try { t.enabled = false; } catch (e) {}
+        try { t.stop(); } catch (e) {}
+      });
+    } catch (e) {}
+  };
+
+  const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
+
+  useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
+
+  useEffect(() => {
+    remoteStreamRef.current = remoteStream;
+  }, [remoteStream]);
+
+  const performFullTeardown = useCallback((callerReason = 'unknown') => {
+    console.log('[CallScreen] performFullTeardown called, reason:', callerReason, 'hasNavigatedBack:', hasNavigatedBack.current);
     if (hasNavigatedBack.current) return;
     hasNavigatedBack.current = true;
+    Vibration.cancel();
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    stopStream(localStreamRef.current);
+    stopStream(remoteStreamRef.current);
+    setLocalStream(null);
+    setRemoteStream(null);
+    setHasRemoteVideoState(false);
+    try {
+      const NotificationService = require('../../services/NotificationService').default;
+      NotificationService.dismissCallNotification();
+    } catch (e) {}
+    try {
+      const CallKeepService = require('../../services/CallKeepService').default;
+      CallKeepService.endCall();
+    } catch (e) {}
+    cleanupWebRTC();
+    resetCall();
+    if (callerReason !== 'unmount_safety') {
+      navigateAway();
+    }
+  }, [cleanupWebRTC, resetCall, navigateAway]);
+
+  const performFullTeardownRef = useRef(performFullTeardown);
+  useEffect(() => {
+    performFullTeardownRef.current = performFullTeardown;
+  }, [performFullTeardown]);
+
+  // ── Remote party ended/rejected ──────────────────────────────────
+  // Track previous callState to ONLY trigger when transitioning from an in-call state to ended/idle.
+  // Never trigger on initial mount!
+  const prevCallStateRef = useRef(callState);
+  useEffect(() => {
+    const prev = prevCallStateRef.current;
+    prevCallStateRef.current = callState;
+
+    if (callState === 'calling' || callState === 'incoming' || callState === 'connecting' || callState === 'active' || callState === 'ringing') {
+      hasNavigatedBack.current = false;
+    }
+
+    const wasInCall =
+      prev === 'active' ||
+      prev === 'calling' ||
+      prev === 'connecting' ||
+      prev === 'ringing' ||
+      prev === 'incoming';
+
+    if ((callState === 'ended' || callState === 'idle') && wasInCall && !hasNavigatedBack.current) {
+      console.log('[CallScreen] Call ended transition detected (from', prev, 'to', callState, ') -> tearing down');
+      performFullTeardownRef.current?.('remote_party_ended_transition');
+    }
+  }, [callState]);
+
+  // Screen unmount safety cleanup (only on actual unmount!)
+  useEffect(() => {
+    return () => {
+      console.log('[CallScreen] Component unmounting — executing unmount safety teardown');
+      performFullTeardownRef.current?.('unmount_safety');
+    };
+  }, []);
+
+  const handleEndCall = () => {
+    if (hasNavigatedBack.current) return;
     const targetId = targetUserId || useCallStore.getState().remoteUserId;
     if (targetId) {
       emit('call_end', { to: targetId, callType, duration: callDuration });
     }
-    if (localStream && typeof localStream.release === 'function') {
-      try { localStream.release(); } catch (e) {}
-    }
-    if (remoteStream && typeof remoteStream.release === 'function') {
-      try { remoteStream.release(); } catch (e) {}
-    }
-    setLocalStream(null);
-    setRemoteStream(null);
-    cleanupWebRTC();
-    resetCall();
-    navigation.goBack();
+    performFullTeardown('user_end_button');
   };
 
   const toggleMute = () => {
@@ -298,8 +405,8 @@ export default function CallScreen({ route, navigation }) {
     ? remoteStream.getVideoTracks()
     : [];
   const hasRemoteVideo = (callType === 'video') && (
-    (remoteVideoTracks.length > 0 && remoteVideoTracks.some((t) => t.enabled !== false && t.readyState !== 'ended')) ||
-    Boolean(remoteStream)
+    hasRemoteVideoState ||
+    (remoteVideoTracks.length > 0 && remoteVideoTracks.some((t) => t.enabled !== false && t.readyState !== 'ended'))
   );
 
   const getStatusLabel = () => {
@@ -325,8 +432,8 @@ export default function CallScreen({ route, navigation }) {
   if (callType === 'video') {
     return (
       <View style={styles.videoContainer}>
-        {/* Remote video (full screen) */}
-        {hasRemoteVideo ? (
+        {/* Remote video (full screen) - rendered continuously once remoteStream exists */}
+        {remoteStream ? (
           <VideoStreamView
             stream={remoteStream}
             isLocal={false}
@@ -335,7 +442,10 @@ export default function CallScreen({ route, navigation }) {
             style={styles.remoteVideo}
             revision={remoteTrackVersion}
           />
-        ) : (
+        ) : null}
+
+        {/* Fallback overlay when remote video is not yet ready */}
+        {!hasRemoteVideo && (
           <LinearGradient colors={['#070B19', '#0D1A3A', '#060A17']} style={StyleSheet.absoluteFill}>
             <View style={styles.waitingOverlay}>
               <View style={styles.waitingAvatarContainer}>
@@ -354,7 +464,7 @@ export default function CallScreen({ route, navigation }) {
               </View>
 
               {/* Informative diagnosis when audio is connected but video is still pending */}
-              {callState === 'active' && !hasRemoteVideo && (
+              {callState === 'active' && (
                 <View style={styles.videoWaitingSubBadge}>
                   <Ionicons name="videocam-outline" size={14} color="#00C6FF" />
                   <Text style={styles.videoWaitingSubText}>

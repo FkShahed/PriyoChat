@@ -9,34 +9,47 @@ import NotificationService from '../services/NotificationService';
 
 import { SOCKET_URL } from '../api/client';
 
+let connectPromise = null;
+
 const useSocketStore = create((set, get) => ({
   socket: null,
   isConnected: false,
 
   connect: async () => {
-    const { socket } = get();
-    if (socket?.connected) return;
+    const { socket, isConnected } = get();
+    if (socket?.connected && isConnected) return socket;
+    if (connectPromise) return connectPromise;
 
-    const token = await AsyncStorage.getItem('auth_token');
-    if (!token) return;
+    connectPromise = (async () => {
+      try {
+        const token = await AsyncStorage.getItem('auth_token');
+        if (!token) return null;
 
-    const newSocket = io(SOCKET_URL, {
-      auth: { token },
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-    });
+        const existingSocket = get().socket;
+        if (existingSocket) {
+          try {
+            existingSocket.removeAllListeners();
+            existingSocket.disconnect();
+          } catch (e) {}
+        }
 
-    newSocket.on('connect', () => {
-      console.log('✅ Socket connected:', newSocket.id);
-      set({ isConnected: true });
-    });
+        const newSocket = io(SOCKET_URL, {
+          auth: { token },
+          transports: ['websocket'],
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 2000,
+        });
 
-    newSocket.on('disconnect', () => {
-      console.log('❌ Socket disconnected');
-      set({ isConnected: false });
-    });
+        newSocket.on('connect', () => {
+          console.log('✅ Socket connected:', newSocket.id);
+          set({ isConnected: true });
+        });
+
+        newSocket.on('disconnect', () => {
+          console.log('❌ Socket disconnected');
+          set({ isConnected: false });
+        });
 
     // ── Chat events ──────────────────────────────────────────────────
     newSocket.on('new_message', (message) => {
@@ -167,11 +180,13 @@ const useSocketStore = create((set, get) => ({
       useCallStore.getState().addIceCandidate(candidate);
     });
 
-    newSocket.on('call_rejected', () => {
+    newSocket.on('call_rejected', (data) => {
+      console.log('[Socket] Received call_rejected from server:', data);
       useCallStore.getState().endCall('rejected');
     });
 
-    newSocket.on('call_ended', () => {
+    newSocket.on('call_ended', (data) => {
+      console.log('[Socket] Received call_ended from server:', data);
       useCallStore.getState().endCall('ended');
     });
 
@@ -215,11 +230,24 @@ const useSocketStore = create((set, get) => ({
     });
 
     set({ socket: newSocket });
+        return newSocket;
+      } finally {
+        connectPromise = null;
+      }
+    })();
+
+    return connectPromise;
   },
 
   disconnect: () => {
+    connectPromise = null;
     const { socket } = get();
-    socket?.disconnect();
+    if (socket) {
+      try {
+        socket.removeAllListeners();
+        socket.disconnect();
+      } catch (e) {}
+    }
     set({ socket: null, isConnected: false });
   },
 

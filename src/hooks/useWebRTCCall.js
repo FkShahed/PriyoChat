@@ -33,17 +33,27 @@ try {
 
 function getIceServers() {
   return [
+    { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     {
-      urls: [
-        'turn:openrelay.metered.ca:80?transport=tcp',
-        'turn:openrelay.metered.ca:443?transport=tcp',
-        'turns:openrelay.metered.ca:443?transport=tcp',
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:443',
-      ],
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
@@ -118,8 +128,39 @@ function extractSdpAndType(raw, defaultType = 'offer') {
 }
 
 /**
+ * Retrieve the active LAN IP of the host machine (e.g. 192.168.1.102)
+ * from Metro bundler on Android or location.hostname on Web.
+ */
+function getLanHost() {
+  if (Platform.OS === 'android') {
+    try {
+      const { NativeModules } = require('react-native');
+      const scriptURL = NativeModules?.SourceCode?.scriptURL;
+      if (scriptURL) {
+        const match = scriptURL.match(/^https?:\/\/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+    } catch (e) {}
+  } else if (Platform.OS === 'web') {
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        const host = window.location.hostname;
+        if (host && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(host)) {
+          return host;
+        }
+      }
+    } catch (e) {}
+  }
+  // Default fallback to host computer IP running Metro/Backend
+  return '192.168.1.102';
+}
+
+/**
  * Safely parse and normalize raw ICE candidate objects across React Native and Web.
- * Handles _candidate, _sdpMid, _sdpMLineIndex internal fields and eliminates explicit nulls.
+ * Handles _candidate, _sdpMid, _sdpMLineIndex internal fields, unmasks mDNS .local hostnames,
+ * and eliminates explicit nulls.
  */
 function extractIceCandidate(raw) {
   if (!raw) return null;
@@ -143,13 +184,19 @@ function extractIceCandidate(raw) {
     } catch (e) {}
   }
 
-  const candStr = (
+  let candStr = (
     (typeof obj.candidate === 'string' ? obj.candidate : '') ||
     (typeof obj._candidate === 'string' ? obj._candidate : '') ||
     (typeof obj.sdp === 'string' ? obj.sdp : '')
   ).trim();
 
   if (!candStr) return null;
+
+  // Unmask mDNS .local hostnames so Android libwebrtc can reach Web directly over LAN
+  const lanHost = getLanHost();
+  if (lanHost && candStr.includes('.local')) {
+    candStr = candStr.replace(/[a-zA-Z0-9-]+\.local/g, lanHost);
+  }
 
   const rawMLine = obj.sdpMLineIndex != null ? obj.sdpMLineIndex : obj._sdpMLineIndex;
   const rawMid = obj.sdpMid != null ? obj.sdpMid : obj._sdpMid;
@@ -165,8 +212,12 @@ function extractIceCandidate(raw) {
     res.sdpMid = String(rawMid);
   }
 
-  if (res.sdpMLineIndex === undefined && res.sdpMid === undefined) {
-    res.sdpMLineIndex = 0;
+  // Cross-fill missing fields so both sdpMLineIndex and sdpMid are guaranteed for Android & Web
+  if (res.sdpMLineIndex === undefined || res.sdpMLineIndex === null || isNaN(res.sdpMLineIndex)) {
+    res.sdpMLineIndex = res.sdpMid === '1' ? 1 : 0;
+  }
+  if (res.sdpMid === undefined || res.sdpMid === null || res.sdpMid === '') {
+    res.sdpMid = String(res.sdpMLineIndex ?? 0);
   }
 
   return res;
@@ -228,6 +279,7 @@ export default function useWebRTCCall({
   const remoteDescReady = useRef(false);
   const answerAppliedRef = useRef(false);
   const pendingCandidates = useRef([]);
+  const addedCandidates = useRef(new Set());
   const timeoutRef = useRef(null);
 
   const onRemoteStreamRef = useRef(onRemoteStream);
@@ -251,9 +303,43 @@ export default function useWebRTCCall({
       return null;
     }
 
-    console.log('[WebRTC] Building peer connection with unified-plan and STUN/TURN...');
+    // Clean up any lingering previous peer connection
+    if (pcRef.current) {
+      console.log('[WebRTC] Closing lingering peer connection before creating new one...');
+      try {
+        const oldPc = pcRef.current;
+        pcRef.current = null;
+        try {
+          oldPc.getSenders?.().forEach((s) => {
+            try { s.track?.stop(); } catch (e) {}
+            try { oldPc.removeTrack?.(s); } catch (e) {}
+          });
+          oldPc.getReceivers?.().forEach((r) => {
+            try { r.track?.stop(); } catch (e) {}
+          });
+          oldPc.getTransceivers?.().forEach((t) => {
+            try { t.stop?.(); } catch (e) {}
+          });
+        } catch (e) {}
+        oldPc.onicecandidate = null;
+        oldPc.ontrack = null;
+        oldPc.onconnectionstatechange = null;
+        oldPc.oniceconnectionstatechange = null;
+        oldPc.onsignalingstatechange = null;
+        if (oldPc.signalingState !== 'closed') {
+          oldPc.close();
+        }
+      } catch (e) {
+        console.warn('[WebRTC] Error closing lingering PC:', e);
+      }
+    }
+
+    console.log('[WebRTC] Building peer connection with max-bundle and unified-plan...');
     const pc = new RTCPeerConnection({
       iceServers: getIceServers(),
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
       sdpSemantics: 'unified-plan',
     });
 
@@ -303,8 +389,9 @@ export default function useWebRTCCall({
         try { url = typeof stream.toURL === 'function' ? stream.toURL() : (stream.streamURL || ''); } catch(e) {}
         console.log('[WebRTC] Remote stream URL:', url, 'tracks:', stream.getTracks?.().map(t => `${t.kind}:${t.enabled}:${t.readyState}`));
 
-        console.log('[WebRTC] Emitting remote stream to UI');
-        onRemoteStreamRef.current?.(stream, Date.now());
+        const hasVideo = stream.getVideoTracks?.()?.some(t => t.enabled !== false && t.readyState !== 'ended');
+        console.log('[WebRTC] Emitting remote stream to UI, hasVideo:', hasVideo);
+        onRemoteStreamRef.current?.(stream, Date.now(), hasVideo);
       }
     };
 
@@ -376,7 +463,9 @@ export default function useWebRTCCall({
 
   // ─── Flush buffered ICE candidates ────────────────────────────────
   const flushCandidates = useCallback((pc) => {
-    if (!pc || pc.signalingState === 'closed' || !remoteDescReady.current) return;
+    if (!pc || pc.signalingState === 'closed') return;
+    if (!remoteDescReady.current) return;
+    if (isReceiverRef.current && !answerAppliedRef.current) return;
 
     const buffered = pendingCandidates.current;
     pendingCandidates.current = [];
@@ -386,13 +475,17 @@ export default function useWebRTCCall({
     buffered.forEach((candidate) => {
       const validCandidate = extractIceCandidate(candidate);
       if (validCandidate && pc.signalingState !== 'closed') {
+        const key = `${validCandidate.sdpMid ?? ''}_${validCandidate.sdpMLineIndex ?? ''}_${validCandidate.candidate}`;
+        if (key && addedCandidates.current.has(key)) return;
+        if (key) addedCandidates.current.add(key);
+
+        console.log('[WebRTC] Adding candidate to PC (buffered):', validCandidate.candidate.substring(0, 45));
         try {
           const iceObj = (RTCIceCandidate && typeof RTCIceCandidate === 'function')
             ? new RTCIceCandidate(validCandidate)
             : validCandidate;
           pc.addIceCandidate(iceObj).catch((e) => {
             console.warn('[WebRTC] addIceCandidate error (buffered):', e.message);
-            try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
           });
         } catch (e) {
           try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
@@ -408,13 +501,17 @@ export default function useWebRTCCall({
     newCandidates.forEach((candidate) => {
       const validCandidate = extractIceCandidate(candidate);
       if (validCandidate && pc.signalingState !== 'closed') {
+        const key = `${validCandidate.sdpMid ?? ''}_${validCandidate.sdpMLineIndex ?? ''}_${validCandidate.candidate}`;
+        if (key && addedCandidates.current.has(key)) return;
+        if (key) addedCandidates.current.add(key);
+
+        console.log('[WebRTC] Adding candidate to PC (store):', validCandidate.candidate.substring(0, 45));
         try {
           const iceObj = (RTCIceCandidate && typeof RTCIceCandidate === 'function')
             ? new RTCIceCandidate(validCandidate)
             : validCandidate;
           pc.addIceCandidate(iceObj).catch((e) => {
             console.warn('[WebRTC] addIceCandidate error (store):', e.message);
-            try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
           });
         } catch (e) {
           try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
@@ -428,6 +525,18 @@ export default function useWebRTCCall({
   const getLocalMedia = useCallback(async () => {
     if (!webrtcAvailable || !mediaDevices) {
       throw new Error('WebRTC native module not available. You need a dev build, not Expo Go.');
+    }
+
+    // Proactively stop previous local stream if still active
+    if (localStreamRef.current) {
+      console.log('[WebRTC] Releasing previous local media before acquiring new stream...');
+      try {
+        localStreamRef.current.getTracks().forEach((track) => {
+          try { track.enabled = false; } catch (e) {}
+          try { track.stop(); } catch (e) {}
+        });
+      } catch (e) {}
+      localStreamRef.current = null;
     }
 
     const currentCallType = callTypeRef.current;
@@ -596,7 +705,26 @@ export default function useWebRTCCall({
       }
       pcRef.current = pc;
 
-      // 1. Set remote description (offer) IMMEDIATELY so ICE candidate exchange starts without delay
+      // 1. Get local media FIRST so hardware is ready and tracks can be attached to the answer
+      const stream = await getLocalMedia();
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed while getting media, aborting receiver setup');
+        return;
+      }
+
+      stream.getTracks().forEach((track) => {
+        if (pc.signalingState !== 'closed') {
+          console.log('[WebRTC] Adding track to PC:', track.kind);
+          pc.addTrack(track, stream);
+        }
+      });
+
+      if (!pcRef.current || pc.signalingState === 'closed') {
+        console.warn('[WebRTC] PC closed before setting remote description');
+        return;
+      }
+
+      // 2. Set remote description (offer)
       console.log('[WebRTC] Setting remote description (offer)...');
       const { type: offerType, sdp: offerSdp } = extractSdpAndType(currentOffer, 'offer');
       if (!offerSdp) {
@@ -614,33 +742,8 @@ export default function useWebRTCCall({
         return;
       }
 
-      // Flush any ICE candidates that arrived
-      flushCandidates(pc);
-
-      // 2. Get local media and add tracks
-      const stream = await getLocalMedia();
-      if (!pcRef.current || pc.signalingState === 'closed') {
-        console.warn('[WebRTC] PC closed while getting media, aborting receiver setup');
-        return;
-      }
-
-      stream.getTracks().forEach((track) => {
-        if (pc.signalingState !== 'closed') {
-          console.log('[WebRTC] Adding track to PC:', track.kind);
-          pc.addTrack(track, stream);
-        }
-      });
-
-      if (!pcRef.current || pc.signalingState === 'closed') {
-        console.warn('[WebRTC] PC closed before creating answer');
-        return;
-      }
-
       // 3. Create and set local answer
-      const sessionAnswer = await pc.createAnswer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: callTypeRef.current === 'video',
-      });
+      const sessionAnswer = await pc.createAnswer();
       if (!pcRef.current || pc.signalingState === 'closed') {
         console.warn('[WebRTC] PC closed before setting local answer');
         return;
@@ -648,6 +751,10 @@ export default function useWebRTCCall({
 
       await pc.setLocalDescription(sessionAnswer);
       console.log('[WebRTC] Answer created and set as local description');
+      answerAppliedRef.current = true;
+
+      // 4. Flush all ICE candidates NOW that BOTH remote and local descriptions are established!
+      flushCandidates(pc);
 
       const localAns = pc.localDescription || sessionAnswer;
       const answerPayload = {
@@ -699,9 +806,6 @@ export default function useWebRTCCall({
           try { track.enabled = false; } catch (e) {}
           try { track.stop(); } catch (e) {}
         });
-        if (typeof stream.release === 'function') {
-          stream.release();
-        }
       } catch (e) {
         console.warn('[WebRTC] localStream cleanup error:', e);
       }
@@ -715,9 +819,6 @@ export default function useWebRTCCall({
           try { track.enabled = false; } catch (e) {}
           try { track.stop(); } catch (e) {}
         });
-        if (typeof rStream.release === 'function') {
-          rStream.release();
-        }
       } catch (e) {
         console.warn('[WebRTC] remoteMediaStream cleanup error:', e);
       }
@@ -726,6 +827,18 @@ export default function useWebRTCCall({
     if (pcRef.current) {
       const pc = pcRef.current;
       pcRef.current = null;
+      try {
+        pc.getSenders?.().forEach((sender) => {
+          try { sender.track?.stop(); } catch (e) {}
+          try { pc.removeTrack?.(sender); } catch (e) {}
+        });
+        pc.getReceivers?.().forEach((receiver) => {
+          try { receiver.track?.stop(); } catch (e) {}
+        });
+        pc.getTransceivers?.().forEach((transceiver) => {
+          try { transceiver.stop?.(); } catch (e) {}
+        });
+      } catch (e) {}
       pc.onicecandidate = null;
       pc.ontrack = null;
       pc.onconnectionstatechange = null;
@@ -746,6 +859,7 @@ export default function useWebRTCCall({
     answerAppliedRef.current = false;
     iceCandidatesProcessed.current = 0;
     pendingCandidates.current = [];
+    addedCandidates.current.clear();
 
     if (InCallManager) {
       try {
@@ -755,8 +869,6 @@ export default function useWebRTCCall({
         console.warn('[InCallManager] stop error:', e);
       }
     }
-
-    useCallStore.getState().resetCall();
   }, []);
 
   // ─── Initialize (once per mount) ──────────────────────────────────
@@ -833,26 +945,30 @@ export default function useWebRTCCall({
     const newCandidates = iceCandidates.slice(iceCandidatesProcessed.current);
     if (newCandidates.length === 0) return;
 
-    if (!remoteDescReady.current) {
-      // Buffer them — they'll be flushed after setRemoteDescription
-      console.log('[WebRTC] Buffering', newCandidates.length, 'ICE candidates (remote desc not ready)');
+    // Must have remote description AND if receiver, must have local description (answer) set!
+    if (!remoteDescReady.current || (isReceiver && !answerAppliedRef.current)) {
+      console.log('[WebRTC] Buffering', newCandidates.length, 'ICE candidates (descriptions not ready)');
       pendingCandidates.current = [...pendingCandidates.current, ...newCandidates];
       iceCandidatesProcessed.current = iceCandidates.length;
       return;
     }
 
-    // Remote desc is ready — add directly
+    // Both descriptions ready — add directly
     console.log('[WebRTC] Adding', newCandidates.length, 'ICE candidates directly');
     newCandidates.forEach((candidate) => {
       const validCandidate = extractIceCandidate(candidate);
       if (validCandidate && pc.signalingState !== 'closed') {
+        const key = `${validCandidate.sdpMid ?? ''}_${validCandidate.sdpMLineIndex ?? ''}_${validCandidate.candidate}`;
+        if (key && addedCandidates.current.has(key)) return;
+        if (key) addedCandidates.current.add(key);
+
+        console.log('[WebRTC] Adding candidate directly:', validCandidate.candidate.substring(0, 45));
         try {
           const iceObj = (RTCIceCandidate && typeof RTCIceCandidate === 'function')
             ? new RTCIceCandidate(validCandidate)
             : validCandidate;
           pc.addIceCandidate(iceObj).catch((e) => {
             console.warn('[WebRTC] addIceCandidate error (direct):', e.message);
-            try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
           });
         } catch (e) {
           try { pc.addIceCandidate(validCandidate).catch(() => {}); } catch(err) {}
@@ -860,7 +976,7 @@ export default function useWebRTCCall({
       }
     });
     iceCandidatesProcessed.current = iceCandidates.length;
-  }, [iceCandidates]);
+  }, [iceCandidates, isReceiver]);
 
   const setSpeaker = useCallback((on) => {
     if (InCallManager) {

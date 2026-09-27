@@ -12,6 +12,7 @@ const useCallStore = create(
       callType: null, // 'audio' | 'video'
       remoteUser: null,
       callId: null, // ID from the backend database
+      callSessionId: null, // unique epoch token per call to invalidate stale ICE candidates
       offer: null,
       answer: null,
       iceCandidates: [],
@@ -63,12 +64,22 @@ const useCallStore = create(
 
       // Outgoing call — initiated by this user
       startCall: (remoteUser, callType) => {
-        const remoteUserId = remoteUser?._id || remoteUser?.id || null;
+        let resolvedUser = remoteUser;
+        let remoteUserId = null;
+        if (typeof remoteUser === 'string') {
+          remoteUserId = remoteUser;
+          resolvedUser = { _id: remoteUser, id: remoteUser, name: 'PriyoChat User' };
+        } else if (remoteUser && typeof remoteUser === 'object') {
+          remoteUserId = remoteUser._id || remoteUser.id || null;
+        }
+        const callSessionId = Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
+        console.log('[useCallStore] startCall session:', callSessionId, 'to:', remoteUserId);
         set({
           callState: 'calling',
-          remoteUser,
+          remoteUser: resolvedUser,
           remoteUserId,
           callType,
+          callSessionId,
           iceCandidates: [],
           endReason: null,
           isReceiver: false,
@@ -123,10 +134,14 @@ const useCallStore = create(
 
         console.log('[useCallStore] setIncomingCall resolved remoteUser name:', resolvedRemoteUser.name, 'id:', callerId);
 
+        const callSessionId = data.callSessionId || (Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6));
+        console.log('[useCallStore] setIncomingCall session:', callSessionId, 'from:', callerId);
+
         set({
           callState: 'incoming',
           callType: data.callType || 'audio',
           callId: data.callId,
+          callSessionId,
           remoteUser: resolvedRemoteUser,
           offer: offerObj || data.offer,
           remoteUserId: callerId,
@@ -171,6 +186,9 @@ const useCallStore = create(
 
       addIceCandidate: (candidate) => {
         if (!candidate) return;
+        const { callState } = get();
+        // Ignore candidates only when completely idle
+        if (callState === 'idle') return;
         set((state) => ({ iceCandidates: [...state.iceCandidates, candidate] }));
       },
 
@@ -210,12 +228,13 @@ const useCallStore = create(
         }
 
         set({
-          callState: 'idle',
+          callState: 'ended',
           endReason: reason,
           offer: null,
           answer: null,
           remoteUser: null,
           remoteUserId: null,
+          callSessionId: null,
           callType: null,
           iceCandidates: [],
           isReceiver: false,
@@ -229,6 +248,7 @@ const useCallStore = create(
           callType: null,
           remoteUser: null,
           remoteUserId: null,
+          callSessionId: null,
           offer: null,
           answer: null,
           iceCandidates: [],

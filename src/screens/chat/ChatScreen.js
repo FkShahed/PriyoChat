@@ -1164,14 +1164,16 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         </TouchableOpacity>
 
-        {recipientUser?._id !== currentUser?._id && (
+        {(recipientUser?._id || otherUser?._id) !== currentUser?._id && (
           <>
             {/* Audio call */}
             <TouchableOpacity
               style={styles.headerBtn}
               onPress={() => {
-                useCallStore.getState().startCall(recipientUser, 'audio');
-                navigation.navigate('Call', { otherUser: recipientUser, callType: 'audio' });
+                const target = recipientUser || otherUser;
+                if (!target) return;
+                useCallStore.getState().startCall(target, 'audio');
+                navigation.navigate('Call', { otherUser: target, callType: 'audio' });
               }}
             >
               <Ionicons name="call-outline" size={21} color={headerIconColor} />
@@ -1181,8 +1183,10 @@ export default function ChatScreen({ route, navigation }) {
             <TouchableOpacity
               style={styles.headerBtn}
               onPress={() => {
-                useCallStore.getState().startCall(recipientUser, 'video');
-                navigation.navigate('Call', { otherUser: recipientUser, callType: 'video' });
+                const target = recipientUser || otherUser;
+                if (!target) return;
+                useCallStore.getState().startCall(target, 'video');
+                navigation.navigate('Call', { otherUser: target, callType: 'video' });
               }}
             >
               <Ionicons name="videocam-outline" size={22} color={headerIconColor} />
