@@ -147,6 +147,16 @@ const setupSocket = (io) => {
       socket.to(conversationId).emit('typing_stop', { conversationId, userId });
     });
 
+    // Helper to sanitize Mongoose ObjectIds coming from stringified payloads
+    const cleanId = (id) => {
+      if (!id) return null;
+      let str = String(id).trim();
+      while ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+        str = str.slice(1, -1).trim();
+      }
+      return str.match(/^[0-9a-fA-F]{24}$/) ? str : null;
+    };
+
     // ─── WebRTC Signaling ──────────────────────────────────────────
     socket.on('call_offer', async ({ to, offer, callType }) => {
       console.log(`📞 Call Offer from ${socket.user.name} (${userId}) to ${to}`);
@@ -160,7 +170,7 @@ const setupSocket = (io) => {
           type: callType,
           status: 'pending'
         });
-        callId = call._id;
+        callId = call._id.toString();
         console.log(`[socketHandler] Call record created: ${callId}`);
       } catch (err) {
         console.error('[socketHandler] Error creating call record:', err.message);
@@ -184,7 +194,7 @@ const setupSocket = (io) => {
           const body = `${socket.user.name} is calling you...`;
           await sendPushNotification(t, title, body, {
             type: 'call',
-            callId,
+            callId: callId ? String(callId) : '',
             caller: { _id: userId, name: socket.user.name, avatar: socket.user.avatar },
             offer,
             callType,
@@ -201,8 +211,13 @@ const setupSocket = (io) => {
     });
 
     socket.on('call_answer', async ({ to, answer, callId }) => {
-      if (callId) {
-        await Call.findByIdAndUpdate(callId, { status: 'completed' }); // Simplified: mark as completed once answered
+      try {
+        const validId = cleanId(callId);
+        if (validId) {
+          await Call.findByIdAndUpdate(validId, { status: 'completed' });
+        }
+      } catch (err) {
+        console.error('[socketHandler] call_answer error:', err.message);
       }
       io.to(to).emit('call_answered', { from: userId, answer });
     });
@@ -212,8 +227,13 @@ const setupSocket = (io) => {
     });
 
     socket.on('call_reject', async ({ to, callId, callType = 'audio' }) => {
-      if (callId) {
-        await Call.findByIdAndUpdate(callId, { status: 'rejected', endedAt: new Date() });
+      try {
+        const validId = cleanId(callId);
+        if (validId) {
+          await Call.findByIdAndUpdate(validId, { status: 'rejected', endedAt: new Date() });
+        }
+      } catch (err) {
+        console.error('[socketHandler] call_reject error:', err.message);
       }
       io.to(to).emit('call_rejected', { from: userId });
 
@@ -241,12 +261,17 @@ const setupSocket = (io) => {
     });
 
     socket.on('call_end', async ({ to, callId, duration = 0, callType = 'audio' }) => {
-      if (callId) {
-        await Call.findByIdAndUpdate(callId, { 
-          status: 'completed', 
-          endedAt: new Date(),
-          duration 
-        });
+      try {
+        const validId = cleanId(callId);
+        if (validId) {
+          await Call.findByIdAndUpdate(validId, { 
+            status: 'completed', 
+            endedAt: new Date(),
+            duration 
+          });
+        }
+      } catch (err) {
+        console.error('[socketHandler] call_end error:', err.message);
       }
       io.to(to).emit('call_ended', { from: userId });
 
