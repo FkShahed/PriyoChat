@@ -50,16 +50,22 @@ export default function UserProfileScreen({ route, navigation }) {
         
         {/* Quick Actions */}
         <View style={styles.actionRow}>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: C.surface }]} onPress={() => navigation.goBack()}>
-            <Ionicons name="chatbubble" size={22} color="#0084FF" />
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.goBack()}>
+            <LinearGradient colors={['#00C6FF', '#0072FF']} style={styles.actionIconCircle}>
+              <Ionicons name="chatbubble-ellipses" size={24} color="#FFF" />
+            </LinearGradient>
             <Text style={[styles.actionText, { color: C.text }]}>Message</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: C.surface }]} onPress={() => handleCall('audio')}>
-            <Ionicons name="call" size={22} color="#0084FF" />
+          <TouchableOpacity style={styles.actionBtn} onPress={() => handleCall('audio')}>
+            <LinearGradient colors={['#34C759', '#248A3D']} style={styles.actionIconCircle}>
+              <Ionicons name="call" size={22} color="#FFF" />
+            </LinearGradient>
             <Text style={[styles.actionText, { color: C.text }]}>Audio</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: C.surface }]} onPress={() => handleCall('video')}>
-            <Ionicons name="videocam" size={22} color="#0084FF" />
+          <TouchableOpacity style={styles.actionBtn} onPress={() => handleCall('video')}>
+            <LinearGradient colors={['#A855F7', '#7E22CE']} style={styles.actionIconCircle}>
+              <Ionicons name="videocam" size={26} color="#FFF" />
+            </LinearGradient>
             <Text style={[styles.actionText, { color: C.text }]}>Video</Text>
           </TouchableOpacity>
         </View>
@@ -161,21 +167,31 @@ const styles = StyleSheet.create({
   body: { flex: 1, paddingTop: 20 },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
+    justifyContent: 'center',
+    gap: 28,
     paddingHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 32,
+    marginTop: 8,
   },
   actionBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 100,
-    height: 80,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000', shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.1, shadowRadius: 3,
+    width: 72,
+  },
+  actionIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
   actionText: {
-    marginTop: 8,
+    marginTop: 10,
     fontSize: 13,
     fontWeight: '600',
   },
