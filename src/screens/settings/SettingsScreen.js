@@ -239,8 +239,7 @@ export default function SettingsScreen({ navigation }) {
   const currentVersion =
     Constants.expoConfig?.version ||
     Constants.nativeAppVersion ||
-    require('../../../package.json').version ||
-    '1.0.2';
+    require('../../../package.json').version;
 
   const checkVersion = useCallback(async () => {
     setCheckingUpdate(true);

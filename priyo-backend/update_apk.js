@@ -1,10 +1,7 @@
 require('dotenv').config();
-const dns = require('dns');
-try { dns.setServers(['8.8.8.8', '1.1.1.1']); } catch (e) {}
+const mongoose = require('mongoose');
 
-const mongoose = require('./node_modules/mongoose');
-
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://FazlulKarim:765502@cluster0.o5c9l.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const MONGO_URI = process.env.MONGO_URI || "mongodb://FazlulKarim:765502@ac-jcbl8z1-shard-00-00.vywt2me.mongodb.net:27017,ac-jcbl8z1-shard-00-01.vywt2me.mongodb.net:27017,ac-jcbl8z1-shard-00-02.vywt2me.mongodb.net:27017/?ssl=true&replicaSet=atlas-jcbl8z1-shard-0&authSource=admin&retryWrites=true&w=majority";
 
 const appUpdateSchema = new mongoose.Schema(
   {
