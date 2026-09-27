@@ -1131,6 +1131,7 @@ export default function ChatScreen({ route, navigation }) {
             user: recipientUser,
             isOnline: isOtherOnline,
             lastSeen: recipientUser?.lastSeen || recipientUser?.updatedAt,
+            conversationId: conversationId,
           })}
         >
           {recipientUser?.avatar ? (
@@ -1156,6 +1157,7 @@ export default function ChatScreen({ route, navigation }) {
             user: recipientUser,
             isOnline: isOtherOnline,
             lastSeen: recipientUser?.lastSeen || recipientUser?.updatedAt,
+            conversationId: conversationId,
           })}
         >
           <Text style={[styles.headerName, { color: headerNameColor }]} numberOfLines={1}>{recipientUser?.name}</Text>

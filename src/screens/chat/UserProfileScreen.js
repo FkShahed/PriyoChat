@@ -1,19 +1,24 @@
 import React from 'react';
 import {
   View, Text, Image, StyleSheet, TouchableOpacity, Modal,
-  ScrollView, Linking,
+  ScrollView, Linking, Switch, Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { getInitials, formatLastSeen } from '../../utils/helpers';
 import { useColors } from '../../store/useThemeStore';
 import useCallStore from '../../store/useCallStore';
+import useChatStore from '../../store/useChatStore';
 
 export default function UserProfileScreen({ route, navigation }) {
-  const { user, isOnline, lastSeen } = route.params || {};
+  const { user, isOnline, lastSeen, conversationId } = route.params || {};
   const C = useColors();
   const isDark = C.bg === '#121212';
   const startCall = useCallStore((s) => s.startCall);
+  
+  const isMuted = useChatStore((s) => s.mutedConversationIds[conversationId]);
+  const toggleMute = useChatStore((s) => s.toggleMuteConversation);
+  const deleteConversation = useChatStore((s) => s.deleteConversation);
 
   const statusText = isOnline
     ? '🟢 Online'
@@ -24,6 +29,17 @@ export default function UserProfileScreen({ route, navigation }) {
   const handleCall = (type) => {
     startCall(user, type);
     navigation.navigate('Call', { otherUser: user, callType: type });
+  };
+
+  const handleMute = () => {
+    if (conversationId) toggleMute(conversationId);
+  };
+
+  const handleDelete = () => {
+    if (conversationId) {
+      deleteConversation(conversationId);
+      navigation.navigate('ChatList');
+    }
   };
 
   return (
@@ -84,22 +100,48 @@ export default function UserProfileScreen({ route, navigation }) {
             {user?.status ? (
               <View style={styles.infoRow}>
                 <Ionicons name="information-circle-outline" size={24} color={isDark ? '#A1A1AA' : '#8E8E93'} style={styles.infoIcon} />
-                <View style={[styles.infoContent, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+                <View style={[styles.infoContent, { borderBottomWidth: 0 }]}>
                   <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Bio</Text>
                   <Text style={[styles.infoValue, { color: C.text }]}>{user.status}</Text>
                 </View>
               </View>
             ) : null}
-            
-            <View style={styles.infoRow}>
-              <Ionicons name="time-outline" size={24} color={isDark ? '#A1A1AA' : '#8E8E93'} style={styles.infoIcon} />
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Last Seen</Text>
-                <Text style={[styles.infoValue, { color: C.text }]}>{statusText}</Text>
-              </View>
-            </View>
           </View>
         </View>
+
+        {conversationId ? (
+          <View style={[styles.infoSection, { marginTop: 24 }]}>
+            <View style={[styles.infoCard, { backgroundColor: C.surface }]}>
+              <TouchableOpacity style={styles.infoRow} onPress={() => navigation.navigate('SharedMedia', { conversationId })}>
+                <Ionicons name="images-outline" size={24} color="#0084FF" style={styles.infoIcon} />
+                <View style={[styles.infoContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+                  <Text style={[styles.infoValue, { color: C.text }]}>Shared Media</Text>
+                  <Ionicons name="chevron-forward" size={20} color={isDark ? '#555' : '#C7C7CC'} />
+                </View>
+              </TouchableOpacity>
+              
+              <View style={styles.infoRow}>
+                <Ionicons name={isMuted ? "volume-mute-outline" : "volume-high-outline"} size={24} color={isMuted ? "#FF9500" : "#34C759"} style={styles.infoIcon} />
+                <View style={[styles.infoContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+                  <Text style={[styles.infoValue, { color: C.text, flex: 1 }]}>Mute Notifications</Text>
+                  <Switch value={!!isMuted} onValueChange={handleMute} trackColor={{ true: '#34C759' }} />
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.infoRow} onPress={() => {
+                Alert.alert("Delete Chat", "Are you sure you want to delete this chat?", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Delete", style: "destructive", onPress: handleDelete }
+                ]);
+              }}>
+                <Ionicons name="trash-outline" size={24} color="#FF3B30" style={styles.infoIcon} />
+                <View style={[styles.infoContent, { borderBottomWidth: 0, paddingVertical: 14 }]}>
+                  <Text style={[styles.infoValue, { color: '#FF3B30' }]}>Delete Chat</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
       </ScrollView>
     </View>
