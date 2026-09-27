@@ -22,9 +22,9 @@ async function updateApk() {
   await mongoose.connect(MONGO_URI);
   console.log('Connected to MongoDB successfully!');
 
-  const version = "1.0.5";
-  const apkUrl = "https://github.com/FkShahed/PriyoChat/releases/download/v1.0.5/PriyoChat-v1.0.5.apk";
-  const releaseNotes = "Swipe gestures (archive/mute/delete), archive chat list, status update from chat screen, custom delete confirmation modal, unread badge fixes, and chat history clear from your side only. (STABLE5 Release)";
+  const version = "1.0.6";
+  const apkUrl = "https://github.com/FkShahed/PriyoChat/releases/download/v1.0.6/PriyoChat-v1.0.6.apk";
+  const releaseNotes = "WebRTC Background Push Call Sync, FCM 4KB payload optimization, Express Trust Proxy, Mongoose ObjectId sanitization, custom delete modal, and unread badge fixes. (STABLE6 Release)";
 
   const update = await AppUpdate.create({
     version,
