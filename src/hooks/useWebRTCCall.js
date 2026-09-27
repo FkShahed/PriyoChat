@@ -692,7 +692,41 @@ export default function useWebRTCCall({
   const startAsReceiverAsync = useCallback(async () => {
     try {
       console.log('[WebRTC] Starting as RECEIVER...');
-      const currentOffer = useCallStore.getState().offer || offer;
+      let currentOffer = useCallStore.getState().offer || offer;
+
+      // If offer is missing (e.g. app opened from background push notification), request it from backend socket!
+      if (!currentOffer) {
+        console.log('[WebRTC] Offer not found in memory, requesting from socket server...');
+        const callId = useCallStore.getState().callId;
+        const offerResponse = await new Promise((resolve) => {
+          try {
+            const socketStore = require('../store/useSocketStore').default;
+            let socket = socketStore.getState().socket;
+            if (!socket || !socket.connected) {
+              socketStore.getState().connect().then((s) => {
+                socket = s || socketStore.getState().socket;
+                if (socket) {
+                  socket.emit('get_call_offer', { callId }, (res) => resolve(res));
+                } else {
+                  resolve(null);
+                }
+              }).catch(() => resolve(null));
+            } else {
+              socket.emit('get_call_offer', { callId }, (res) => resolve(res));
+            }
+          } catch (e) {
+            resolve(null);
+          }
+          setTimeout(() => resolve(null), 3500);
+        });
+
+        if (offerResponse?.offer) {
+          console.log('[WebRTC] Obtained offer from socket server successfully!');
+          currentOffer = offerResponse.offer;
+          useCallStore.setState({ offer: currentOffer });
+        }
+      }
+
       if (!currentOffer) {
         throw new Error('No offer received from caller');
       }

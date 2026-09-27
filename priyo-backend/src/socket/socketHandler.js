@@ -7,6 +7,8 @@ const { sendPushNotification, sendExpoPushBatch } = require('../config/firebase'
 
 // Map userId -> socketId for online tracking
 const onlineUsers = new Map();
+// Active pending calls in-memory: callId -> { callId, from, to, offer, callType, caller }
+const activeCalls = new Map();
 
 const setupSocket = (io) => {
   // Auth middleware for socket
@@ -35,6 +37,14 @@ const setupSocket = (io) => {
     // Mark user as online
     await User.findByIdAndUpdate(userId, { isOnline: true });
     io.emit('user_status', { userId, isOnline: true });
+
+    // ── Check if there are any active pending call offers for this user ──
+    for (const [cId, activeCall] of activeCalls.entries()) {
+      if (activeCall.to === userId) {
+        console.log(`[socketHandler] User ${userId} connected with pending call ${cId}. Emitting incoming_call with offer.`);
+        socket.emit('incoming_call', activeCall);
+      }
+    }
 
     // ─── Join conversation rooms ───────────────────────────────────
     const conversations = await Conversation.find({ participants: userId });
@@ -176,14 +186,21 @@ const setupSocket = (io) => {
         console.error('[socketHandler] Error creating call record:', err.message);
       }
 
-      // emit to receiver's personal room (more reliable than raw socketId)
-      io.to(to).emit('incoming_call', {
+      const activePayload = {
         from: userId,
         callId,
-        caller: { name: socket.user.name, avatar: socket.user.avatar },
+        caller: { _id: userId, name: socket.user.name, avatar: socket.user.avatar },
         offer,
         callType,
-      });
+        to,
+      };
+
+      if (callId) {
+        activeCalls.set(callId, activePayload);
+      }
+
+      // emit to receiver's personal room (more reliable than raw socketId)
+      io.to(to).emit('incoming_call', activePayload);
 
       // ── Send Push Notification to wake up the device if app is backgrounded/killed ──
       try {
@@ -205,6 +222,33 @@ const setupSocket = (io) => {
       }
     });
 
+    socket.on('get_call_offer', ({ callId }, callback) => {
+      const validId = cleanId(callId);
+      let callObj = validId ? activeCalls.get(validId) : null;
+      if (!callObj) {
+        // Fallback: search activeCalls for any call where receiver is this user
+        for (const [cId, activeCall] of activeCalls.entries()) {
+          if (activeCall.to === userId || activeCall.from === userId) {
+            callObj = activeCall;
+            break;
+          }
+        }
+      }
+      if (callObj && callObj.offer) {
+        console.log(`[socketHandler] Serving cached call offer for call ${callObj.callId} to ${userId}`);
+        callback?.({
+          offer: callObj.offer,
+          callId: callObj.callId,
+          from: callObj.from,
+          caller: callObj.caller,
+          callType: callObj.callType,
+        });
+        socket.emit('incoming_call', callObj);
+      } else {
+        callback?.({ error: 'Call offer not found or expired' });
+      }
+    });
+
     socket.on('call_ringing', ({ to }) => {
       io.to(to).emit('call_ringing', { from: userId });
     });
@@ -213,6 +257,7 @@ const setupSocket = (io) => {
       try {
         const validId = cleanId(callId);
         if (validId) {
+          activeCalls.delete(validId);
           await Call.findByIdAndUpdate(validId, { status: 'completed' });
         }
       } catch (err) {
@@ -229,6 +274,7 @@ const setupSocket = (io) => {
       try {
         const validId = cleanId(callId);
         if (validId) {
+          activeCalls.delete(validId);
           await Call.findByIdAndUpdate(validId, { status: 'rejected', endedAt: new Date() });
         }
       } catch (err) {
