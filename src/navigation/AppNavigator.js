@@ -22,6 +22,7 @@ import ThemeSelectorScreen from '../screens/chat/ThemeSelectorScreen';
 import UserProfileScreen from '../screens/chat/UserProfileScreen';
 import SharedMediaScreen from '../screens/chat/SharedMediaScreen';
 import ArchivedChatsScreen from '../screens/chat/ArchivedChatsScreen';
+import SearchChatScreen from '../screens/chat/SearchChatScreen';
 import SearchUsersScreen from '../screens/friends/SearchUsersScreen';
 import FriendRequestsScreen from '../screens/friends/FriendRequestsScreen';
 import FriendsListScreen from '../screens/friends/FriendsListScreen';
@@ -196,6 +197,7 @@ export default function AppNavigator() {
           <Stack.Screen name="ThemeSelector" component={ThemeSelectorScreen} />
           <Stack.Screen name="UserProfile" component={UserProfileScreen} />
           <Stack.Screen name="SharedMedia" component={SharedMediaScreen} />
+          <Stack.Screen name="SearchChat" component={SearchChatScreen} />
           <Stack.Screen name="ArchivedChats" component={ArchivedChatsScreen} />
           <Stack.Screen name="SearchUsers" component={SearchUsersScreen} />
           <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />

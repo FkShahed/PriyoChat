@@ -16,6 +16,10 @@ export default function UserProfileScreen({ route, navigation }) {
   const isDark = C.bg === '#121212';
   const startCall = useCallStore((s) => s.startCall);
   
+  const conversations = useChatStore((s) => s.conversations);
+  const currentConversation = conversations.find(c => c._id === conversationId);
+  const currentTheme = currentConversation?.theme || 'ClassicBlue';
+
   const isMuted = useChatStore((s) => s.mutedConversationIds[conversationId]);
   const toggleMute = useChatStore((s) => s.toggleMuteConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
@@ -112,6 +116,22 @@ export default function UserProfileScreen({ route, navigation }) {
         {conversationId ? (
           <View style={[styles.infoSection, { marginTop: 24 }]}>
             <View style={[styles.infoCard, { backgroundColor: C.surface }]}>
+              <TouchableOpacity style={styles.infoRow} onPress={() => navigation.navigate('SearchChat', { conversationId })}>
+                <Ionicons name="search-outline" size={24} color="#0084FF" style={styles.infoIcon} />
+                <View style={[styles.infoContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+                  <Text style={[styles.infoValue, { color: C.text }]}>Search Chat</Text>
+                  <Ionicons name="chevron-forward" size={20} color={isDark ? '#555' : '#C7C7CC'} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.infoRow} onPress={() => navigation.navigate('ThemeSelector', { conversationId, currentTheme })}>
+                <Ionicons name="color-palette-outline" size={24} color="#0084FF" style={styles.infoIcon} />
+                <View style={[styles.infoContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+                  <Text style={[styles.infoValue, { color: C.text }]}>Chat Theme</Text>
+                  <Ionicons name="chevron-forward" size={20} color={isDark ? '#555' : '#C7C7CC'} />
+                </View>
+              </TouchableOpacity>
+
               <TouchableOpacity style={styles.infoRow} onPress={() => navigation.navigate('SharedMedia', { conversationId })}>
                 <Ionicons name="images-outline" size={24} color="#0084FF" style={styles.infoIcon} />
                 <View style={[styles.infoContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
