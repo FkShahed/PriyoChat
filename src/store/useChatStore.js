@@ -202,9 +202,35 @@ const useChatStore = create((set, get) => ({
 
   reactMessage: (conversationId, messageId, emoji) => {
     const { messages } = get();
+    const currentUserId = require('./useAuthStore').default?.getState?.()?.user?._id;
+    const existing = messages[conversationId] || [];
+    const updated = existing.map((m) => {
+      if (m._id === messageId) {
+        let newReactions = m.reactions ? [...m.reactions] : [];
+        if (!currentUserId) return { ...m, reaction: emoji }; // fallback
+        
+        const myIdx = newReactions.findIndex(r => r.user?.toString() === currentUserId?.toString() || r.user === currentUserId?.toString());
+        if (!emoji) {
+          if (myIdx > -1) newReactions.splice(myIdx, 1);
+        } else {
+          if (myIdx > -1) {
+            newReactions[myIdx].emoji = emoji;
+          } else {
+            newReactions.push({ user: currentUserId, emoji });
+          }
+        }
+        return { ...m, reaction: emoji, reactions: newReactions };
+      }
+      return m;
+    });
+    set({ messages: { ...messages, [conversationId]: updated } });
+  },
+
+  updateMessageReactions: (conversationId, messageId, reactions) => {
+    const { messages } = get();
     const existing = messages[conversationId] || [];
     const updated = existing.map((m) =>
-      m._id === messageId ? { ...m, reaction: emoji } : m
+      m._id === messageId ? { ...m, reactions } : m
     );
     set({ messages: { ...messages, [conversationId]: updated } });
   },

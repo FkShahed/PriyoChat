@@ -1094,8 +1094,12 @@ export default function ChatScreen({ route, navigation }) {
         <TouchableOpacity
           onPress={handlePress}
           onLongPress={(e) => onLongPressMessage(msg, e)}
-          delayLongPress={200}
-          style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}
+          delayLongPress={100}
+          style={[
+            styles.bubble, 
+            isMine ? styles.myBubbleRow : styles.theirBubbleRow,
+            (msg.reaction || msg.reactions?.length > 0) ? { marginBottom: 16 } : null
+          ]}
           activeOpacity={0.85}
         >
           {!isMine && (
@@ -1132,7 +1136,7 @@ export default function ChatScreen({ route, navigation }) {
                       key={i}
                       onPress={() => setImageViewerData({ uri: img.url, msg })}
                       onLongPress={(e) => onLongPressMessage(msg, e)}
-                      delayLongPress={200}
+                      delayLongPress={100}
                       activeOpacity={0.9}
                     >
                       <Image source={{ uri: img.url }} style={styles.messageImage} />
@@ -1158,11 +1162,22 @@ export default function ChatScreen({ route, navigation }) {
                 </Text>
               </View>
             ) : null}
-            {msg.reaction && (
-              <View style={[styles.reactionBadge, { right: isMine ? 0 : 'auto', left: isMine ? 'auto' : 0 }]}>
-                <Text style={styles.reactionBadgeText}>{msg.reaction}</Text>
-              </View>
-            )}
+            
+            {(() => {
+              const displayReaction = msg.reactions?.length > 0 ? msg.reactions[msg.reactions.length - 1].emoji : msg.reaction;
+              if (!displayReaction) return null;
+              return (
+                <TouchableOpacity
+                  onPress={() => {
+                    useChatStore.getState().reactMessage(conversationId, msg._id, null);
+                    conversationApi.reactToMessage(msg._id, null).catch(err => console.warn('React error:', err));
+                  }}
+                  style={[styles.reactionBadge, { right: isMine ? 0 : 'auto', left: isMine ? 'auto' : 0 }]}
+                >
+                  <Text style={styles.reactionBadgeText}>{displayReaction}</Text>
+                </TouchableOpacity>
+              );
+            })()}
           </View>
         </TouchableOpacity>
         </SwipeableWrapper>
@@ -1513,7 +1528,12 @@ export default function ChatScreen({ route, navigation }) {
               }]}>
                 {['❤️', '😂', '😮', '😢', '👍'].map(emoji => (
                   <TouchableOpacity key={emoji} onPress={() => {
-                    useChatStore.getState().reactMessage(conversationId, selectedMessage.msg._id, emoji);
+                    const currentReaction = selectedMessage.msg.reactions?.find(r => r.user?.toString() === currentUser?._id?.toString() || r.user === currentUser?._id?.toString())?.emoji || selectedMessage.msg.reaction;
+                    const newEmoji = currentReaction === emoji ? null : emoji;
+                    
+                    useChatStore.getState().reactMessage(conversationId, selectedMessage.msg._id, newEmoji);
+                    conversationApi.reactToMessage(selectedMessage.msg._id, emoji).catch(err => console.warn('React error:', err));
+                    
                     setSelectedMessage(null);
                   }} style={styles.reactionEmojiBtn}>
                     <Text style={styles.reactionEmojiText}>{emoji}</Text>
@@ -1521,11 +1541,12 @@ export default function ChatScreen({ route, navigation }) {
                 ))}
               </TouchableOpacity>
 
-              <TouchableOpacity activeOpacity={1} style={[styles.messageActionSheet, { backgroundColor: isDarkTheme ? '#1c1c1e' : '#fff' }]}>
-                {(() => {
-                  const msg = selectedMessage.msg;
-                  const isMine = msg?.sender?._id?.toString() === currentUser?._id?.toString() || msg?.sender?.toString() === currentUser?._id?.toString();
-                  return isMine ? (
+              {(() => {
+                const msg = selectedMessage.msg;
+                const isMine = msg?.sender?._id?.toString() === currentUser?._id?.toString() || msg?.sender?.toString() === currentUser?._id?.toString();
+                if (!isMine) return null;
+                return (
+                  <TouchableOpacity activeOpacity={1} style={[styles.messageActionSheet, { backgroundColor: isDarkTheme ? '#1c1c1e' : '#fff' }]}>
                     <TouchableOpacity style={styles.actionSheetRow} onPress={() => {
                       const targetMsg = selectedMessage.msg;
                       setSelectedMessage(null);
@@ -1550,13 +1571,9 @@ export default function ChatScreen({ route, navigation }) {
                       </View>
                       <Text style={[styles.actionSheetText, { color: '#FF3B30' }]}>Delete for everyone</Text>
                     </TouchableOpacity>
-                  ) : (
-                    <View style={{ padding: 12, alignItems: 'center' }}>
-                      <Text style={{ color: theme.placeholderText }}>No actions available</Text>
-                    </View>
-                  );
-                })()}
-              </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              })()}
             </>
           )}
         </TouchableOpacity>
@@ -1999,16 +2016,11 @@ const styles = StyleSheet.create({
   },
   reactionBadge: {
     position: 'absolute',
-    bottom: -10,
+    bottom: -14,
     backgroundColor: '#fff',
     borderRadius: 12,
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
     borderWidth: 1,
     borderColor: '#eee',
     zIndex: 10,

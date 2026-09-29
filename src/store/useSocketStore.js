@@ -111,7 +111,7 @@ const useSocketStore = create((set, get) => ({
     });
 
     newSocket.on('message_reacted', ({ messageId, reactions, conversationId }) => {
-      // handled individually in chat screen
+      useChatStore.getState().updateMessageReactions(conversationId, messageId, reactions);
     });
 
     newSocket.on('typing_start', ({ conversationId, userId }) => {

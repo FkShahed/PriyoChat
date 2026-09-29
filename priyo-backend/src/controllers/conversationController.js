@@ -128,6 +128,7 @@ const reactToMessage = async (req, res) => {
     await message.save();
     req.app.get('io')?.to(message.conversation.toString()).emit('message_reacted', {
       messageId: message._id,
+      conversationId: message.conversation,
       reactions: message.reactions,
     });
 
