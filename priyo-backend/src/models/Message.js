@@ -67,6 +67,11 @@ const messageSchema = new mongoose.Schema(
       duration: { type: Number, default: 0 }, // seconds
       status: { type: String, enum: ['completed', 'missed', 'rejected'], default: null },
     },
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Message',
+      default: null,
+    },
   },
   { timestamps: true }
 );

@@ -3,7 +3,7 @@
     "name": "PriyoChat",
     "slug": "priyochat",
     "scheme": "priyochat",
-    "version": "1.0.8",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -68,7 +68,7 @@
     },
     "updates": {
       "url": "https://u.expo.dev/ad727065-625e-4696-95f9-467baf61dd1a",
-      "checkAutomatically": "ON_ERROR_RECOVERY",
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": "1.0.0"

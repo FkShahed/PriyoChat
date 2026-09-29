@@ -53,7 +53,7 @@ const setupSocket = (io) => {
     // ─── Send Message ──────────────────────────────────────────────
     socket.on('send_message', async (data, callback) => {
       try {
-        const { conversationId, text, images = [], isVoiceNote = false, voiceNoteUrl = '', voiceNoteDuration = 0 } = data;
+        const { conversationId, text, images = [], isVoiceNote = false, voiceNoteUrl = '', voiceNoteDuration = 0, replyTo = null } = data;
 
         // Verify participant
         const conversation = await Conversation.findOne({
@@ -82,9 +82,13 @@ const setupSocket = (io) => {
           voiceNoteUrl,
           voiceNoteDuration,
           status: isRecipientOnline ? 'delivered' : 'sent',
+          replyTo,
         });
 
-        await message.populate('sender', 'name avatar');
+        await message.populate([
+          { path: 'sender', select: 'name avatar' },
+          { path: 'replyTo', select: 'text images sender isVoiceNote callData isDeleted', populate: { path: 'sender', select: 'name' } }
+        ]);
 
         // Update conversation lastMessage
         await Conversation.findByIdAndUpdate(conversationId, { lastMessage: message._id });

@@ -102,8 +102,8 @@ const useSocketStore = create((set, get) => ({
       }
     });
 
-    newSocket.on('messages_seen', ({ conversationId, seenAt }) => {
-      useChatStore.getState().markConvoAsSeen(conversationId, seenAt);
+    newSocket.on('messages_seen', ({ conversationId, seenAt, seenBy }) => {
+      useChatStore.getState().markConvoAsSeen(conversationId, seenAt, seenBy);
     });
 
     newSocket.on('message_deleted', ({ messageId, conversationId }) => {

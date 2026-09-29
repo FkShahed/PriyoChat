@@ -217,12 +217,23 @@ const useChatStore = create((set, get) => ({
 
   clearUnreadCount: (conversationId) => {
     const { conversations } = get();
+    // Safely get current user ID to verify who sent the last message
+    const currentUserId = require('./useAuthStore').default?.getState?.()?.user?._id;
+    
     const updated = conversations.map((c) => {
       if (c._id === conversationId) {
+        let updatedLastMessage = c.lastMessage;
+        if (c.lastMessage) {
+          const senderId = typeof c.lastMessage.sender === 'object' ? c.lastMessage.sender?._id : c.lastMessage.sender;
+          // If the last message was NOT sent by me, then me opening the chat means I've seen it.
+          if (senderId && String(senderId) !== String(currentUserId)) {
+            updatedLastMessage = { ...c.lastMessage, status: 'seen' };
+          }
+        }
         return {
           ...c,
           unreadCount: 0,
-          lastMessage: c.lastMessage ? { ...c.lastMessage, status: 'seen' } : c.lastMessage,
+          lastMessage: updatedLastMessage,
         };
       }
       return c;
@@ -252,21 +263,35 @@ const useChatStore = create((set, get) => ({
     set({ conversations: updated });
   },
 
-  markConvoAsSeen: (conversationId, seenAt) => {
+  markConvoAsSeen: (conversationId, seenAt, seenBy) => {
     const { messages, conversations } = get();
     const convoMsgs = messages[conversationId] || [];
     const timestamp = seenAt || new Date().toISOString();
-    const updated = convoMsgs.map((m) => ({
-      ...m,
-      status: 'seen',
-      seenAt: m.seenAt || timestamp,
-    }));
+    const updated = convoMsgs.map((m) => {
+      const senderId = typeof m.sender === 'object' ? m.sender?._id : m.sender;
+      if (seenBy && senderId && String(senderId) === String(seenBy)) {
+        return m; // Don't mark my own message as seen just because I saw the conversation
+      }
+      return {
+        ...m,
+        status: 'seen',
+        seenAt: m.seenAt || timestamp,
+      };
+    });
+    
     const updatedConvos = conversations.map((c) => {
       if (c._id === conversationId) {
+        let updatedLastMessage = c.lastMessage;
+        if (c.lastMessage) {
+          const senderId = typeof c.lastMessage.sender === 'object' ? c.lastMessage.sender?._id : c.lastMessage.sender;
+          if (!seenBy || (senderId && String(senderId) !== String(seenBy))) {
+            updatedLastMessage = { ...c.lastMessage, status: 'seen' };
+          }
+        }
         return {
           ...c,
           unreadCount: 0,
-          lastMessage: c.lastMessage ? { ...c.lastMessage, status: 'seen' } : c.lastMessage,
+          lastMessage: updatedLastMessage,
         };
       }
       return c;

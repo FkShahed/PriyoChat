@@ -37,6 +37,7 @@ const getMessages = async (req, res) => {
 
     const messages = await Message.find(query)
       .populate('sender', 'name avatar')
+      .populate({ path: 'replyTo', select: 'text images sender isVoiceNote callData isDeleted', populate: { path: 'sender', select: 'name' } })
       .sort('-createdAt')
       .skip((page - 1) * limit)
       .limit(Number(limit));

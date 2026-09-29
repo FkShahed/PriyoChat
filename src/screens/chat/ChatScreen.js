@@ -71,12 +71,13 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
 
   if (!data) return null;
 
-  let PinchGestureHandler, PanGestureHandler, State;
+  let PinchGestureHandler, PanGestureHandler, State, Swipeable;
   try {
     const gh = require('react-native-gesture-handler');
     PinchGestureHandler = gh.PinchGestureHandler;
     PanGestureHandler = gh.PanGestureHandler;
     State = gh.State;
+    Swipeable = gh.Swipeable;
   } catch (e) {
     // fallback: no zoom
   }
@@ -408,6 +409,7 @@ export default function ChatScreen({ route, navigation }) {
   const convoMessages = messages[conversationId] || [];
 
   const [text, setText] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
   const [selectedImages, setSelectedImages] = useState([]);
   const [loading, setLoading] = useState(convoMessages.length === 0);
   const [page, setPage] = useState(1);
@@ -437,6 +439,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const typingTimeout = useRef(null);
   const flatListRef = useRef(null);
+  const swipeableRefs = useRef({});
   const isKeyboardVisible = useRef(false);
   const keyboardPadding = useRef(new RNAnimated.Value(0)).current;
   const isTyping = typingUsers[conversationId];
@@ -519,11 +522,8 @@ export default function ChatScreen({ route, navigation }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (convoMessages.length > 0 && !searchVisible) {
-      scrollToBottom(true);
-    }
-  }, [convoMessages.length, searchVisible, scrollToBottom]);
+  // Removed unconditional scrollToBottom on convoMessages.length change
+  // to prevent jumping to bottom when loading older messages (pagination).
 
   useEffect(() => {
     if (convoMessages.length > 0) {
@@ -707,6 +707,8 @@ export default function ChatScreen({ route, navigation }) {
     // Immediately clear input fields so the user can continue typing and sending!
     setText('');
     setSelectedImages([]);
+    const currentReplyTo = replyingTo;
+    setReplyingTo(null);
     emit('typing_stop', { conversationId });
 
     // Generate optimistic message
@@ -719,6 +721,7 @@ export default function ChatScreen({ route, navigation }) {
       images: imagesToUpload.map((img) => ({ url: img.uri, isLocal: true })),
       status: 'sending',
       createdAt: new Date().toISOString(),
+      replyTo: currentReplyTo,
     };
 
     useChatStore.getState().addMessage(conversationId, optimisticMsg);
@@ -748,7 +751,7 @@ export default function ChatScreen({ route, navigation }) {
 
         emit(
           'send_message',
-          { conversationId, text: messageText, images: uploadedData },
+          { conversationId, text: messageText, images: uploadedData, replyTo: currentReplyTo?._id || null },
           (response) => {
             if (response?.error) {
               console.warn('Send message error:', response.error);
@@ -998,6 +1001,15 @@ export default function ChatScreen({ route, navigation }) {
         <View style={{ width: '100%' }}>
           {datePill}
           <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
+            {!isMine && (
+              msg.sender?.avatar ? (
+                <Image source={{ uri: msg.sender.avatar }} style={styles.senderAvatar} />
+              ) : (
+                <LinearGradient colors={['#0084FF', '#0040CC']} style={[styles.senderAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>{getInitials(msg.sender?.name || recipientUser?.name)}</Text>
+                </LinearGradient>
+              )
+            )}
             <TouchableOpacity
               onPress={() => {
                 const { callState: cs } = useCallStore.getState();
@@ -1035,6 +1047,15 @@ export default function ChatScreen({ route, navigation }) {
         <View>
           {datePill}
           <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
+            {!isMine && (
+              msg.sender?.avatar ? (
+                <Image source={{ uri: msg.sender.avatar }} style={styles.senderAvatar} />
+              ) : (
+                <LinearGradient colors={['#0084FF', '#0040CC']} style={[styles.senderAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>{getInitials(msg.sender?.name || recipientUser?.name)}</Text>
+                </LinearGradient>
+              )
+            )}
             <View style={[styles.deletedBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble, opacity: 0.5 }]}>
               <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontStyle: 'italic', fontSize: 13, paddingRight: 6 }}>
                 {"Message deleted  "}
@@ -1045,9 +1066,30 @@ export default function ChatScreen({ route, navigation }) {
       );
     }
 
+    const renderLeftActions = () => {
+      return (
+        <View style={{ justifyContent: 'center', alignItems: 'center', width: 50 }}>
+          <View style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: 6, borderRadius: 20 }}>
+            <Ionicons name="arrow-undo" size={18} color={theme.sentBubble} />
+          </View>
+        </View>
+      );
+    };
+
+    const SwipeableWrapper = Swipeable ? Swipeable : View;
+    const swipeableProps = Swipeable ? {
+      ref: ref => { if (ref) swipeableRefs.current[msg._id] = ref; },
+      renderLeftActions: renderLeftActions,
+      onSwipeableOpen: () => {
+        setReplyingTo(msg);
+        swipeableRefs.current[msg._id]?.close();
+      }
+    } : {};
+
     return (
       <View style={{ width: '100%' }}>
         {datePill}
+        <SwipeableWrapper {...swipeableProps}>
         <TouchableOpacity
           onPress={handlePress}
           onLongPress={() => onLongPressMessage(msg)}
@@ -1064,6 +1106,19 @@ export default function ChatScreen({ route, navigation }) {
             )
           )}
           <View style={styles.bubbleContent}>
+            {msg.replyTo && (
+              <View style={[styles.replyBubbleContainer, { backgroundColor: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)' }]}>
+                <View style={[styles.replyBubbleLeftBar, { backgroundColor: isMine ? '#FFF' : theme.sentBubble }]} />
+                <View style={styles.replyBubbleContent}>
+                  <Text style={[styles.replyBubbleName, { color: isMine ? '#FFF' : theme.sentBubble }]}>
+                    {msg.replyTo.sender?.name || 'User'}
+                  </Text>
+                  <Text numberOfLines={1} style={[styles.replyBubbleText, { color: isMine ? '#FFF' : theme.receivedText }]}>
+                    {msg.replyTo.isVoiceNote ? '🎤 Voice Note' : (msg.replyTo.images?.length ? '📷 Photo' : (msg.replyTo.callData?.callType ? '📞 Call' : msg.replyTo.text))}
+                  </Text>
+                </View>
+              </View>
+            )}
             {msg.images?.length > 0 && (
               <View style={styles.imageBubbleContainer}>
                 <View style={styles.imageGrid}>
@@ -1273,6 +1328,22 @@ export default function ChatScreen({ route, navigation }) {
         end={{ x: 0, y: 1 }}
         style={styles.glassInputContainer}
       >
+        {replyingTo && (
+          <View style={[styles.replyPreviewContainer, { backgroundColor: isDarkTheme ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+            <View style={[styles.replyPreviewLeftBar, { backgroundColor: theme.sentBubble }]} />
+            <View style={styles.replyPreviewContent}>
+              <Text style={[styles.replyPreviewName, { color: theme.sentBubble }]}>
+                {replyingTo.sender?.name || 'User'}
+              </Text>
+              <Text numberOfLines={1} style={[styles.replyPreviewText, { color: theme.inputText }]}>
+                {replyingTo.isVoiceNote ? '🎤 Voice Note' : (replyingTo.images?.length ? '📷 Photo' : (replyingTo.callData?.callType ? '📞 Call' : replyingTo.text))}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyPreviewClose}>
+              <Ionicons name="close" size={20} color="#8E8E93" />
+            </TouchableOpacity>
+          </View>
+        )}
         {selectedImages.length > 0 && (
           <View style={styles.imagePreviewContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -1705,4 +1776,57 @@ const styles = StyleSheet.create({
     width: 42, height: 42, borderRadius: 21,
     alignItems: 'center', justifyContent: 'center',
   },
+  replyPreviewContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  replyPreviewLeftBar: {
+    width: 4,
+  },
+  replyPreviewContent: {
+    flex: 1,
+    padding: 8,
+    paddingLeft: 12,
+  },
+  replyPreviewName: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  replyPreviewText: {
+    fontSize: 12,
+  },
+  replyPreviewClose: {
+    padding: 8,
+    justifyContent: 'center',
+  },
+  replyBubbleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 6,
+    padding: 6,
+    marginBottom: 6,
+    overflow: 'hidden',
+  },
+  replyBubbleLeftBar: {
+    width: 3,
+    borderRadius: 2,
+    marginRight: 6,
+  },
+  replyBubbleContent: {
+    flex: 1,
+  },
+  replyBubbleName: {
+    fontWeight: 'bold',
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  replyBubbleText: {
+    fontSize: 11,
+    opacity: 0.8,
+  }
 });
