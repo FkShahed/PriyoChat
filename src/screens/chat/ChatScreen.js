@@ -16,6 +16,7 @@ import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import useCallStore from '../../store/useCallStore';
+import { EmojiKeyboard } from 'rn-emoji-keyboard';
 import { THEMES, DEFAULT_THEME } from '../../themes/themes';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
 import { formatMessageTime, formatLastSeen, getInitials } from '../../utils/helpers';
@@ -52,6 +53,17 @@ function TypingIndicator({ theme }) {
   );
 }
 
+let PinchGestureHandler, PanGestureHandler, State, Swipeable;
+try {
+  const gh = require('react-native-gesture-handler');
+  PinchGestureHandler = gh.PinchGestureHandler;
+  PanGestureHandler = gh.PanGestureHandler;
+  State = gh.State;
+  Swipeable = gh.Swipeable;
+} catch (e) {
+  // fallback: no zoom or swipe
+}
+
 // ── Full-screen image viewer with pinch-to-zoom ───────────────────────
 function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
   const scale = useRef(new RNAnimated.Value(1)).current;
@@ -70,17 +82,6 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
   }, [visible]);
 
   if (!data) return null;
-
-  let PinchGestureHandler, PanGestureHandler, State, Swipeable;
-  try {
-    const gh = require('react-native-gesture-handler');
-    PinchGestureHandler = gh.PinchGestureHandler;
-    PanGestureHandler = gh.PanGestureHandler;
-    State = gh.State;
-    Swipeable = gh.Swipeable;
-  } catch (e) {
-    // fallback: no zoom
-  }
 
   const onPinchEvent = RNAnimated.event(
     [{ nativeEvent: { scale: scale } }],
@@ -439,6 +440,10 @@ export default function ChatScreen({ route, navigation }) {
 
   const typingTimeout = useRef(null);
   const flatListRef = useRef(null);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const isEmojiPickerOpenRef = useRef(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(280);
+  const keyboardHeightRef = useRef(280);
   const swipeableRefs = useRef({});
   const isKeyboardVisible = useRef(false);
   const keyboardPadding = useRef(new RNAnimated.Value(0)).current;
@@ -448,6 +453,18 @@ export default function ChatScreen({ route, navigation }) {
   const lastSeenText = isOtherOnline
     ? 'Online'
     : formatLastSeen(recipientUser?.lastSeen || recipientUser?.updatedAt);
+
+  const [selectedMessage, setSelectedMessage] = useState(null);
+
+  const closeEmojiPicker = useCallback(() => {
+    if (isEmojiPickerOpenRef.current) {
+      isEmojiPickerOpenRef.current = false;
+      setIsEmojiPickerOpen(false);
+      if (!isKeyboardVisible.current) {
+        RNAnimated.timing(keyboardPadding, { toValue: 0, duration: 180, useNativeDriver: false }).start();
+      }
+    }
+  }, [keyboardPadding]);
 
   const scrollToBottom = useCallback((animated = true) => {
     if (flatListRef.current) {
@@ -466,27 +483,29 @@ export default function ChatScreen({ route, navigation }) {
 
     const showSub = Keyboard.addListener(showEvent, (e) => {
       isKeyboardVisible.current = true;
+      isEmojiPickerOpenRef.current = false;
+      setIsEmojiPickerOpen(false);
       const h = e?.endCoordinates?.height || 0;
-      if (Platform.OS === 'android') {
-        RNAnimated.timing(keyboardPadding, {
-          toValue: h,
-          duration: 180,
-          useNativeDriver: false,
-        }).start();
+      if (h > 0 && h !== keyboardHeightRef.current) {
+        keyboardHeightRef.current = h;
+        setKeyboardHeight(h);
       }
+      RNAnimated.timing(keyboardPadding, {
+        toValue: h,
+        duration: e?.duration || 180,
+        useNativeDriver: false,
+      }).start();
       scrollToBottom(false);
       setTimeout(() => scrollToBottom(true), 80);
     });
 
-    const hideSub = Keyboard.addListener(hideEvent, () => {
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
       isKeyboardVisible.current = false;
-      if (Platform.OS === 'android') {
-        RNAnimated.timing(keyboardPadding, {
-          toValue: 0,
-          duration: 180,
-          useNativeDriver: false,
-        }).start();
-      }
+      RNAnimated.timing(keyboardPadding, {
+        toValue: isEmojiPickerOpenRef.current ? keyboardHeightRef.current : 0,
+        duration: e?.duration || 180,
+        useNativeDriver: false,
+      }).start();
     });
 
     return () => {
@@ -768,32 +787,11 @@ export default function ChatScreen({ route, navigation }) {
     })();
   };
 
-  // ── Delete message (Supports images, voice notes, and text) ──────────
-  const onLongPressMessage = (msg) => {
-    const isMine =
-      msg.sender?._id?.toString() === currentUser?._id?.toString() ||
-      msg.sender?.toString() === currentUser?._id?.toString();
-    if (!isMine || msg.isDeleted) return;
-
-    const isImage = msg.images?.length > 0;
-    const itemType = isImage ? 'image' : msg.isVoiceNote ? 'voice note' : 'message';
-
-    Alert.alert(`Delete ${itemType}`, `Are you sure you want to delete this ${itemType}?`, [
-      {
-        text: 'Delete for everyone',
-        style: 'destructive',
-        onPress: () => {
-          if (msg._id?.toString().startsWith('temp_')) {
-            useChatStore.getState().deleteMessage(conversationId, msg._id);
-            return;
-          }
-          conversationApi.deleteMessage(msg._id).catch((err) => {
-            console.warn('Delete error:', err);
-          });
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  // ── Long Press Context Menu ───────────────────────────────────────────
+  const onLongPressMessage = (msg, e) => {
+    if (msg.isDeleted) return;
+    const pageY = e?.nativeEvent?.pageY || Dimensions.get('window').height / 2;
+    setSelectedMessage({ msg, pageY });
   };
 
   // Helper: human-readable date label for separators
@@ -1066,7 +1064,7 @@ export default function ChatScreen({ route, navigation }) {
       );
     }
 
-    const renderLeftActions = () => {
+    const renderActions = () => {
       return (
         <View style={{ justifyContent: 'center', alignItems: 'center', width: 50 }}>
           <View style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: 6, borderRadius: 20 }}>
@@ -1079,8 +1077,11 @@ export default function ChatScreen({ route, navigation }) {
     const SwipeableWrapper = Swipeable ? Swipeable : View;
     const swipeableProps = Swipeable ? {
       ref: ref => { if (ref) swipeableRefs.current[msg._id] = ref; },
-      renderLeftActions: renderLeftActions,
-      onSwipeableOpen: () => {
+      ...(isMine ? { renderRightActions: renderActions } : { renderLeftActions: renderActions }),
+      friction: 1.5,
+      overshootFriction: 8,
+      containerStyle: { width: '100%' },
+      onSwipeableWillOpen: () => {
         setReplyingTo(msg);
         swipeableRefs.current[msg._id]?.close();
       }
@@ -1092,7 +1093,8 @@ export default function ChatScreen({ route, navigation }) {
         <SwipeableWrapper {...swipeableProps}>
         <TouchableOpacity
           onPress={handlePress}
-          onLongPress={() => onLongPressMessage(msg)}
+          onLongPress={(e) => onLongPressMessage(msg, e)}
+          delayLongPress={200}
           style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}
           activeOpacity={0.85}
         >
@@ -1105,12 +1107,15 @@ export default function ChatScreen({ route, navigation }) {
               </LinearGradient>
             )
           )}
-          <View style={styles.bubbleContent}>
+          <View style={[styles.bubbleContent, { alignItems: isMine ? 'flex-end' : 'flex-start' }]}>
             {msg.replyTo && (
-              <View style={[styles.replyBubbleContainer, { backgroundColor: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)' }]}>
-                <View style={[styles.replyBubbleLeftBar, { backgroundColor: isMine ? '#FFF' : theme.sentBubble }]} />
+              <View style={[styles.replyBubbleContainer, { 
+                backgroundColor: isMine ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)',
+                marginBottom: -12,
+                paddingBottom: 20,
+              }]}>
                 <View style={styles.replyBubbleContent}>
-                  <Text style={[styles.replyBubbleName, { color: isMine ? '#FFF' : theme.sentBubble }]}>
+                  <Text numberOfLines={1} style={[styles.replyBubbleName, { color: isMine ? '#FFF' : theme.sentBubble }]}>
                     {msg.replyTo.sender?.name || 'User'}
                   </Text>
                   <Text numberOfLines={1} style={[styles.replyBubbleText, { color: isMine ? '#FFF' : theme.receivedText }]}>
@@ -1126,8 +1131,8 @@ export default function ChatScreen({ route, navigation }) {
                     <TouchableOpacity
                       key={i}
                       onPress={() => setImageViewerData({ uri: img.url, msg })}
-                      onLongPress={() => onLongPressMessage(msg)}
-                      delayLongPress={260}
+                      onLongPress={(e) => onLongPressMessage(msg, e)}
+                      delayLongPress={200}
                       activeOpacity={0.9}
                     >
                       <Image source={{ uri: img.url }} style={styles.messageImage} />
@@ -1153,8 +1158,14 @@ export default function ChatScreen({ route, navigation }) {
                 </Text>
               </View>
             ) : null}
+            {msg.reaction && (
+              <View style={[styles.reactionBadge, { right: isMine ? 0 : 'auto', left: isMine ? 'auto' : 0 }]}>
+                <Text style={styles.reactionBadgeText}>{msg.reaction}</Text>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
+        </SwipeableWrapper>
         {renderStatusFooter(msg, isMine)}
       </View>
     );
@@ -1169,11 +1180,9 @@ export default function ChatScreen({ route, navigation }) {
 
   const bgStyle = [styles.container, { backgroundColor: theme.background }];
 
-  // Platform-aware keyboard handling: on Android, animated padding avoids OxygenOS 36px ghost inset
-  const KeyboardWrapper = Platform.OS === 'ios' ? KeyboardAvoidingView : RNAnimated.View;
-  const wrapperProps = Platform.OS === 'ios'
-    ? { behavior: 'padding', keyboardVerticalOffset: 0, style: { flex: 1 } }
-    : { style: [{ flex: 1 }, { paddingBottom: keyboardPadding }] };
+  // Platform-aware keyboard handling: use animated padding for smooth transition with Emoji Keyboard
+  const KeyboardWrapper = RNAnimated.View;
+  const wrapperProps = { style: [{ flex: 1 }, { paddingBottom: keyboardPadding }] };
 
   // ── Main content (shared between View and ImageBackground wrappers)
   const content = (
@@ -1318,6 +1327,8 @@ export default function ChatScreen({ route, navigation }) {
             ) : null
           }
           keyboardShouldPersistTaps="handled"
+          onTouchStart={closeEmojiPicker}
+          onScrollBeginDrag={closeEmojiPicker}
         />
       )}
 
@@ -1330,9 +1341,8 @@ export default function ChatScreen({ route, navigation }) {
       >
         {replyingTo && (
           <View style={[styles.replyPreviewContainer, { backgroundColor: isDarkTheme ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
-            <View style={[styles.replyPreviewLeftBar, { backgroundColor: theme.sentBubble }]} />
             <View style={styles.replyPreviewContent}>
-              <Text style={[styles.replyPreviewName, { color: theme.sentBubble }]}>
+              <Text numberOfLines={1} style={[styles.replyPreviewName, { color: theme.sentBubble }]}>
                 {replyingTo.sender?.name || 'User'}
               </Text>
               <Text numberOfLines={1} style={[styles.replyPreviewText, { color: theme.inputText }]}>
@@ -1405,19 +1415,23 @@ export default function ChatScreen({ route, navigation }) {
             >
               <Ionicons name="mic" size={23} color={theme.sentBubble} />
             </TouchableOpacity>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  color: theme.inputText,
-                  backgroundColor: textInputBg,
-                  borderWidth: 1,
-                  borderColor: textInputBorderColor,
-                },
-              ]}
+            <View style={[
+              styles.textInputWrapper,
+              {
+                backgroundColor: textInputBg,
+                borderWidth: 1,
+                borderColor: textInputBorderColor,
+              }
+            ]}>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  { color: theme.inputText }
+                ]}
               value={text}
               onChangeText={handleTyping}
               onFocus={() => {
+                closeEmojiPicker();
                 scrollToBottom(true);
               }}
               placeholder="Message..."
@@ -1426,6 +1440,22 @@ export default function ChatScreen({ route, navigation }) {
               maxLength={5000}
               underlineColorAndroid="transparent"
             />
+            <TouchableOpacity onPress={() => {
+                if (isEmojiPickerOpen) {
+                  closeEmojiPicker();
+                } else {
+                  isEmojiPickerOpenRef.current = true;
+                  setIsEmojiPickerOpen(true);
+                  if (!isKeyboardVisible.current) {
+                    RNAnimated.timing(keyboardPadding, { toValue: keyboardHeightRef.current, duration: 180, useNativeDriver: false }).start();
+                  } else {
+                    Keyboard.dismiss();
+                  }
+                }
+              }} style={styles.emojiBtn}>
+                <Ionicons name="happy-outline" size={24} color={theme.sentBubble} />
+            </TouchableOpacity>
+            </View>
             <TouchableOpacity
               onPress={sendMessage}
               style={[
@@ -1443,6 +1473,8 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         )}
       </LinearGradient>
+
+
 
       {/* ── Full-screen image viewer ────────────────────────────────── */}
       <ImageViewer
@@ -1467,18 +1499,130 @@ export default function ChatScreen({ route, navigation }) {
         onClose={() => setMenuVisible(false)}
         items={menuItems}
       />
+
+      {/* ── Context Menu (Reactions & Delete) ───────────────────────── */}
+      <Modal visible={!!selectedMessage} transparent={true} animationType="fade" onRequestClose={() => setSelectedMessage(null)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={() => setSelectedMessage(null)}>
+          {selectedMessage && (
+            <>
+              {/* Reaction Bar */}
+              <TouchableOpacity activeOpacity={1} style={[styles.reactionBar, { 
+                position: 'absolute', 
+                top: Math.max(80, Math.min(selectedMessage.pageY - 60, Dimensions.get('window').height - 250)),
+                alignSelf: 'center'
+              }]}>
+                {['❤️', '😂', '😮', '😢', '👍'].map(emoji => (
+                  <TouchableOpacity key={emoji} onPress={() => {
+                    useChatStore.getState().reactMessage(conversationId, selectedMessage.msg._id, emoji);
+                    setSelectedMessage(null);
+                  }} style={styles.reactionEmojiBtn}>
+                    <Text style={styles.reactionEmojiText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={1} style={[styles.messageActionSheet, { backgroundColor: isDarkTheme ? '#1c1c1e' : '#fff' }]}>
+                {(() => {
+                  const msg = selectedMessage.msg;
+                  const isMine = msg?.sender?._id?.toString() === currentUser?._id?.toString() || msg?.sender?.toString() === currentUser?._id?.toString();
+                  return isMine ? (
+                    <TouchableOpacity style={styles.actionSheetRow} onPress={() => {
+                      const targetMsg = selectedMessage.msg;
+                      setSelectedMessage(null);
+                      
+                      Alert.alert('Confirm Delete', 'Are you sure you want to delete this for everyone? This action cannot be undone.', [
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: () => {
+                            if (targetMsg._id?.toString().startsWith('temp_')) {
+                              useChatStore.getState().deleteMessage(conversationId, targetMsg._id);
+                              return;
+                            }
+                            conversationApi.deleteMessage(targetMsg._id).catch(err => console.warn('Delete error:', err));
+                          }
+                        },
+                        { text: 'Cancel', style: 'cancel' }
+                      ]);
+                    }}>
+                      <View style={[styles.actionIconBg, { backgroundColor: isDarkTheme ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)' }]}>
+                        <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+                      </View>
+                      <Text style={[styles.actionSheetText, { color: '#FF3B30' }]}>Delete for everyone</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{ padding: 12, alignItems: 'center' }}>
+                      <Text style={{ color: theme.placeholderText }}>No actions available</Text>
+                    </View>
+                  );
+                })()}
+              </TouchableOpacity>
+            </>
+          )}
+        </TouchableOpacity>
+      </Modal>
     </KeyboardWrapper>
+  );
+
+  const emojiTranslateY = keyboardPadding.interpolate({
+    inputRange: [0, Math.max(keyboardHeight, 1)],
+    outputRange: [keyboardHeight, 0],
+    extrapolate: 'clamp',
+  });
+
+  const emojiContent = (
+    <RNAnimated.View 
+      style={{
+        position: 'absolute', left: 0, right: 0,
+        bottom: 0,
+        height: keyboardHeight, backgroundColor: isDarkTheme ? '#1c1c1e' : '#fff',
+        zIndex: isEmojiPickerOpen ? 1 : -1,
+        elevation: isEmojiPickerOpen ? 1 : -1,
+        opacity: isEmojiPickerOpen ? 1 : 0,
+        transform: [{ translateY: emojiTranslateY }]
+      }}
+      pointerEvents={isEmojiPickerOpen ? 'auto' : 'none'}
+    >
+      <EmojiKeyboard
+        defaultHeight={keyboardHeight}
+        enableCategoryChangeGesture={false}
+        onEmojiSelected={(emojiObject) => {
+            setText(prev => prev + emojiObject.emoji);
+          }}
+          hideHeader={true}
+          categoryPosition="top"
+          theme={{
+          backdrop: isDarkTheme ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)',
+          knob: theme.sentBubble,
+          container: isDarkTheme ? '#1c1c1e' : '#fff',
+          header: isDarkTheme ? '#fff' : '#000',
+          skinTonesContainer: isDarkTheme ? '#2c2c2e' : '#f0f0f0',
+          category: {
+            icon: theme.sentBubble,
+            iconActive: '#fff',
+            container: isDarkTheme ? '#2c2c2e' : '#f0f0f0',
+            containerActive: theme.sentBubble,
+          },
+        }}
+      />
+    </RNAnimated.View>
   );
 
   if (theme.bgImage) {
     return (
       <ImageBackground source={theme.bgImage} style={bgStyle} resizeMode="cover">
         {content}
+        {emojiContent}
       </ImageBackground>
     );
   }
 
-  return <View style={bgStyle}>{content}</View>;
+  return (
+    <View style={bgStyle}>
+      {content}
+      {emojiContent}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -1590,18 +1734,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF3B30', width: 20, height: 20, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF',
   },
+  textInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 22,
+    marginLeft: 4,
+    marginRight: 6,
+    minHeight: 40,
+    maxHeight: 120,
+    overflow: 'hidden',
+  },
+  emojiBtn: {
+    paddingLeft: 4,
+    paddingRight: 12,
+    justifyContent: 'center',
+  },
   textInput: {
     flex: 1,
     maxHeight: 120,
     minHeight: 40,
-    borderRadius: 22,
-    borderWidth: 0,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    paddingRight: 8,
     paddingTop: 9,
     paddingBottom: 9,
     fontSize: 15,
-    marginLeft: 4,
-    marginRight: 6,
   },
   sendBtn: {
     width: 40,
@@ -1781,11 +1938,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 4,
-    borderRadius: 8,
+    borderRadius: 18,
     overflow: 'hidden',
-  },
-  replyPreviewLeftBar: {
-    width: 4,
   },
   replyPreviewContent: {
     flex: 1,
@@ -1806,19 +1960,14 @@ const styles = StyleSheet.create({
   },
   replyBubbleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 6,
-    padding: 6,
-    marginBottom: 6,
+    borderRadius: 18,
+    padding: 10,
+    paddingHorizontal: 14,
     overflow: 'hidden',
   },
-  replyBubbleLeftBar: {
-    width: 3,
-    borderRadius: 2,
-    marginRight: 6,
-  },
   replyBubbleContent: {
-    flex: 1,
+    flexShrink: 1,
+    justifyContent: 'center',
   },
   replyBubbleName: {
     fontWeight: 'bold',
@@ -1828,5 +1977,76 @@ const styles = StyleSheet.create({
   replyBubbleText: {
     fontSize: 11,
     opacity: 0.8,
-  }
+  },
+  // Context Menu
+  reactionBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  reactionEmojiBtn: {
+    paddingHorizontal: 8,
+  },
+  reactionEmojiText: {
+    fontSize: 28,
+  },
+  reactionBadge: {
+    position: 'absolute',
+    bottom: -10,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#eee',
+    zIndex: 10,
+  },
+  reactionBadgeText: {
+    fontSize: 14,
+  },
+  messageActionSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 10,
+  },
+  actionSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  actionIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  actionSheetText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
 });

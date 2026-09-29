@@ -200,6 +200,15 @@ const useChatStore = create((set, get) => ({
     set({ messages: { ...messages, [conversationId]: updated } });
   },
 
+  reactMessage: (conversationId, messageId, emoji) => {
+    const { messages } = get();
+    const existing = messages[conversationId] || [];
+    const updated = existing.map((m) =>
+      m._id === messageId ? { ...m, reaction: emoji } : m
+    );
+    set({ messages: { ...messages, [conversationId]: updated } });
+  },
+
   updateMessageStatus: (conversationId, messageId, status, seenAt) => {
     const { messages } = get();
     const convoMsgs = messages[conversationId] || [];
