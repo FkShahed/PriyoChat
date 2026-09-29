@@ -1172,7 +1172,7 @@ export default function ChatScreen({ route, navigation }) {
                     useChatStore.getState().reactMessage(conversationId, msg._id, null);
                     conversationApi.reactToMessage(msg._id, null).catch(err => console.warn('React error:', err));
                   }}
-                  style={[styles.reactionBadge, { right: isMine ? 0 : 'auto', left: isMine ? 'auto' : 0 }]}
+                  style={[styles.reactionBadge, { right: 0, backgroundColor: theme.background, borderColor: theme.background }]}
                 >
                   <Text style={styles.reactionBadgeText}>{displayReaction}</Text>
                 </TouchableOpacity>
@@ -1523,7 +1523,7 @@ export default function ChatScreen({ route, navigation }) {
               {/* Reaction Bar */}
               <TouchableOpacity activeOpacity={1} style={[styles.reactionBar, { 
                 position: 'absolute', 
-                top: Math.max(80, Math.min(selectedMessage.pageY - 60, Dimensions.get('window').height - 250)),
+                top: Math.max(80, Math.min(selectedMessage.pageY - 85, Dimensions.get('window').height - 250)),
                 alignSelf: 'center'
               }]}>
                 {['❤️', '😂', '😮', '😢', '👍'].map(emoji => (
@@ -1887,20 +1887,20 @@ const styles = StyleSheet.create({
   statusFooterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
-    marginBottom: 2,
+    marginTop: -2,
+    marginBottom: 4,
     paddingHorizontal: 2,
     backgroundColor: 'transparent',
   },
   statusFooterMine: {
     justifyContent: 'flex-end',
     alignSelf: 'flex-end',
-    paddingRight: 4,
+    paddingRight: 10,
   },
   statusFooterTheir: {
     justifyContent: 'flex-start',
     alignSelf: 'flex-start',
-    paddingLeft: 4,
+    paddingLeft: 42, // Shifted slightly more to the right to align better with text inside bubble
   },
   statusFooterText: {
     fontSize: 10,
@@ -2017,12 +2017,10 @@ const styles = StyleSheet.create({
   reactionBadge: {
     position: 'absolute',
     bottom: -14,
-    backgroundColor: '#fff',
     borderRadius: 12,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: '#eee',
+    borderWidth: 2,
     zIndex: 10,
   },
   reactionBadgeText: {

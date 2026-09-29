@@ -294,9 +294,9 @@ export default function CallScreen({ route, navigation }) {
       try {
         Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: false,
-          playThroughEarpieceAndroid: false,
+          staysActiveInBackground: true, // Keep it true so WebRTC audio doesn't drop when screen goes off!
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: !speakerOn,
         }).catch(() => {});
       } catch (e) {}
     };
@@ -382,6 +382,17 @@ export default function CallScreen({ route, navigation }) {
       const CallKeepService = require('../../services/CallKeepService').default;
       CallKeepService.endCall();
     } catch (e) {}
+    
+    // Release background audio session so the app can sleep now
+    try {
+      Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      }).catch(() => {});
+    } catch (e) {}
+
     cleanupWebRTC();
     resetCall();
     if (callerReason !== 'unmount_safety') {
@@ -562,7 +573,12 @@ export default function CallScreen({ route, navigation }) {
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={toggleCamera}
-            style={styles.localVideoWrapper}
+            style={[
+              styles.localVideoWrapper,
+              callState === 'active' 
+                ? { bottom: 125, right: 16 }
+                : { top: 52, right: 16 } // Top-right during calling phase
+            ]}
           >
             {videoOn ? (
               <VideoStreamView
@@ -585,7 +601,7 @@ export default function CallScreen({ route, navigation }) {
         )}
 
         {/* Top Floating Glass Header */}
-        {showControls && (
+        {showControls && callState === 'active' && (
           <LinearGradient
             colors={['rgba(0,0,0,0.75)', 'rgba(0,0,0,0.35)', 'transparent']}
             style={styles.videoTopBar}
@@ -629,41 +645,43 @@ export default function CallScreen({ route, navigation }) {
             style={styles.videoControlsBg}
             pointerEvents="box-none"
           >
-            <View style={styles.videoControlsBar}>
-              {/* Mute Button */}
-              <TouchableOpacity
-                style={[styles.videoCtrlCircle, muted && styles.videoCtrlCircleActive]}
-                onPress={toggleMute}
-              >
-                <Ionicons name={muted ? 'mic-off' : 'mic-outline'} size={24} color="#FFF" />
-              </TouchableOpacity>
+            <View style={styles.videoControlsLayout}>
+              <View style={styles.videoUtilsPill}>
+                {/* Mute Button */}
+                <TouchableOpacity
+                  style={[styles.videoCtrlCircle, muted && styles.videoCtrlCircleActive]}
+                  onPress={toggleMute}
+                >
+                  <Ionicons name={muted ? 'mic-off' : 'mic-outline'} size={24} color={muted ? '#000' : '#FFF'} />
+                </TouchableOpacity>
 
-              {/* Camera Toggle Button */}
-              <TouchableOpacity
-                style={[styles.videoCtrlCircle, !videoOn && styles.videoCtrlCircleActive]}
-                onPress={toggleVideo}
-              >
-                <Ionicons name={videoOn ? 'videocam-outline' : 'videocam-off-outline'} size={24} color="#FFF" />
-              </TouchableOpacity>
+                {/* Camera Toggle Button */}
+                <TouchableOpacity
+                  style={[styles.videoCtrlCircle, !videoOn && styles.videoCtrlCircleActive]}
+                  onPress={toggleVideo}
+                >
+                  <Ionicons name={videoOn ? 'videocam-outline' : 'videocam-off-outline'} size={24} color={!videoOn ? '#000' : '#FFF'} />
+                </TouchableOpacity>
+
+                {/* Speaker Toggle Button */}
+                <TouchableOpacity
+                  style={[styles.videoCtrlCircle, speakerOn && styles.videoCtrlCircleActive]}
+                  onPress={() => { setSpeakerOn((s) => { const next = !s; setSpeaker?.(next); return next; }); }}
+                >
+                  <Ionicons name={speakerOn ? 'volume-high' : 'volume-medium-outline'} size={24} color={speakerOn ? '#000' : '#FFF'} />
+                </TouchableOpacity>
+
+                {/* Flip Camera Button */}
+                <TouchableOpacity style={styles.videoCtrlCircle} onPress={toggleCamera}>
+                  <Ionicons name="camera-reverse-outline" size={24} color="#FFF" />
+                </TouchableOpacity>
+              </View>
 
               {/* End Call Button */}
               <TouchableOpacity onPress={handleEndCall} activeOpacity={0.85} style={styles.endBtnVideoWrapper}>
                 <LinearGradient colors={['#FF3B30', '#C0392B']} style={styles.endBtnVideo}>
                   <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
                 </LinearGradient>
-              </TouchableOpacity>
-
-              {/* Speaker Toggle Button */}
-              <TouchableOpacity
-                style={[styles.videoCtrlCircle, speakerOn && styles.videoCtrlCircleActive]}
-                onPress={() => { setSpeakerOn((s) => { const next = !s; setSpeaker?.(next); return next; }); }}
-              >
-                <Ionicons name={speakerOn ? 'volume-high' : 'volume-medium-outline'} size={24} color="#FFF" />
-              </TouchableOpacity>
-
-              {/* Flip Camera Button */}
-              <TouchableOpacity style={styles.videoCtrlCircle} onPress={toggleCamera}>
-                <Ionicons name="camera-reverse-outline" size={24} color="#FFF" />
               </TouchableOpacity>
             </View>
           </LinearGradient>
@@ -871,7 +889,7 @@ const styles = StyleSheet.create({
   videoContainer: { flex: 1, backgroundColor: '#000' },
   remoteVideo: { flex: 1, backgroundColor: '#000' },
   localVideoWrapper: {
-    position: 'absolute', bottom: 125, right: 16,
+    position: 'absolute',
     width: 110, height: 160, borderRadius: 16,
     overflow: 'hidden', borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.35)',
@@ -890,7 +908,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
   },
-  waitingOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  waitingOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, paddingBottom: 80 },
   waitingAvatarContainer: { width: 110, height: 110, borderRadius: 55, overflow: 'hidden', marginBottom: 16 },
   waitingAvatar: { width: '100%', height: '100%', borderRadius: 55, borderWidth: 3, borderColor: '#00C6FF' },
   waitingAvatarFallback: { width: '100%', height: '100%', borderRadius: 55, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#00C6FF' },
@@ -898,11 +916,10 @@ const styles = StyleSheet.create({
   waitingName: { color: '#FFF', fontSize: 24, fontWeight: '700', marginBottom: 10 },
   videoBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    marginTop: 4,
   },
   connectingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFCC00' },
-  waitingText: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600' },
+  waitingText: { color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: '400', letterSpacing: 0.5 },
   videoTopBar: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 52, paddingHorizontal: 20, paddingBottom: 28, zIndex: 8 },
   topHeaderContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   userInfoPill: {
@@ -918,19 +935,23 @@ const styles = StyleSheet.create({
   activeDotSmall: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' },
   videoStatus: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500' },
   videoControlsBg: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingTop: 30, paddingBottom: 44, zIndex: 8 },
-  videoControlsBar: {
-    flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center',
-    paddingHorizontal: 12,
+  videoControlsLayout: {
+    alignItems: 'center', gap: 20,
+  },
+  videoUtilsPill: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 24, paddingVertical: 12,
+    borderRadius: 36,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
   },
   videoCtrlCircle: {
-    alignItems: 'center', justifyContent: 'center', gap: 4,
-    width: 58, height: 58, borderRadius: 29,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'transparent',
   },
   videoCtrlCircleActive: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    borderColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   ctrlLabelText: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '600' },
   endBtnVideoWrapper: { alignItems: 'center' },

@@ -224,6 +224,25 @@ const clearHistory = async (req, res) => {
   }
 };
 
+const deleteConversation = async (req, res) => {
+  try {
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation || !conversation.participants.includes(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+    
+    // Delete all messages associated with this conversation
+    await Message.deleteMany({ conversation: conversation._id });
+    
+    // Delete the conversation
+    await Conversation.findByIdAndDelete(conversation._id);
+    
+    res.json({ success: true, message: 'Conversation deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 module.exports = {
   getConversations,
   getMessages,
@@ -234,4 +253,5 @@ module.exports = {
   reportMessage,
   blockUser,
   clearHistory,
+  deleteConversation,
 };

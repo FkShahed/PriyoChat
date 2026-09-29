@@ -29,6 +29,7 @@ export const requestApi = {
 
 export const conversationApi = {
   getAll: () => api.get('/conversations'),
+  deleteConversation: (id) => api.delete(`/conversations/${id}`),
   getMessages: (id, page = 1) => api.get(`/conversations/${id}/messages?page=${page}`),
   searchMessages: (id, q) => api.get(`/conversations/${id}/search?q=${q}`),
   updateTheme: (id, theme) => api.put(`/conversations/${id}/theme`, { theme }),

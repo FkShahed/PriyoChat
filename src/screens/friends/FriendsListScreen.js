@@ -1,16 +1,29 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, Image, StatusBar } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, Image, StatusBar, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import { useColors } from '../../store/useThemeStore';
 import { getInitials } from '../../utils/helpers';
+import { requestApi, conversationApi } from '../../api/services';
 
 export default function FriendsListScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
   const conversations = useChatStore((s) => s.conversations);
   const C = useColors();
   const [search, setSearch] = useState('');
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    const fetchRequests = () => {
+      requestApi.getPending().then(({ data }) => {
+        if (Array.isArray(data)) setPendingCount(data.length);
+      }).catch(() => {});
+    };
+    fetchRequests();
+    const unsubscribe = navigation.addListener('focus', fetchRequests);
+    return unsubscribe;
+  }, [navigation]);
 
   // Extract unique friends from conversations
   const friends = useMemo(() => {
@@ -30,6 +43,31 @@ export default function FriendsListScreen({ navigation }) {
 
   const handleChat = (friend) => {
     navigation.navigate('Chat', { conversation: friend.conversation, otherUser: friend });
+  };
+
+  const handleUnfriend = (friend) => {
+    Alert.alert(
+      'Unfriend',
+      `Are you sure you want to unfriend ${friend.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Unfriend', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (friend.conversation?._id) {
+                await conversationApi.deleteConversation(friend.conversation._id);
+                const { data } = await conversationApi.getAll();
+                useChatStore.getState().setConversations(data);
+              }
+            } catch (err) {
+              console.error('Failed to unfriend:', err);
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -57,12 +95,22 @@ export default function FriendsListScreen({ navigation }) {
       <TouchableOpacity
         style={[styles.requestsBtn, { borderBottomColor: C.border }]}
         onPress={() => navigation.navigate('FriendRequests')}
+        activeOpacity={0.7}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="person-add" size={20} color="#0084FF" />
+          <View style={styles.requestIconWrapper}>
+            <Ionicons name="person-add" size={18} color="#0084FF" />
+          </View>
           <Text style={[styles.requestsText, { color: C.text }]}>Friend Requests</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={C.textSecondary} />
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {pendingCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{pendingCount}</Text>
+            </View>
+          )}
+          <Ionicons name="chevron-forward" size={20} color={C.textSecondary} />
+        </View>
       </TouchableOpacity>
 
       <FlatList
@@ -87,9 +135,15 @@ export default function FriendsListScreen({ navigation }) {
             )}
             <View style={styles.friendInfo}>
               <Text style={[styles.name, { color: C.text }]}>{item.name}</Text>
-              <Text style={[styles.status, { color: C.textSecondary }]} numberOfLines={1}>{item.status || 'Hey there! I am using PriyoChat.'}</Text>
             </View>
-            <Ionicons name="chatbubble" size={22} color="#0084FF" style={{ padding: 10 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity onPress={() => handleUnfriend(item)} style={[styles.actionIconWrapper, { borderColor: '#FF3B30' }]}>
+                <Ionicons name="person-remove-outline" size={18} color="#FF3B30" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleChat(item)} style={[styles.actionIconWrapper, { borderColor: C.border }]}>
+                <Ionicons name="chatbubble-outline" size={18} color={C.textSecondary} />
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         )}
       />
@@ -120,6 +174,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5, marginBottom: 8,
   },
   requestsText: { fontSize: 16, fontWeight: '600', marginLeft: 12 },
+  requestIconWrapper: {
+    backgroundColor: 'rgba(0, 132, 255, 0.1)',
+    width: 36, height: 36, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badge: {
+    backgroundColor: '#FF3B30', paddingHorizontal: 8, paddingVertical: 3, 
+    borderRadius: 12, marginRight: 8, minWidth: 24, alignItems: 'center'
+  },
+  badgeText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
   friendItem: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12,
@@ -129,8 +193,12 @@ const styles = StyleSheet.create({
   avatarFallback: { backgroundColor: '#0084FF', alignItems: 'center', justifyContent: 'center' },
   initials: { color: '#FFF', fontSize: 18, fontWeight: '700' },
   friendInfo: { flex: 1, marginLeft: 14 },
-  name: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  status: { fontSize: 13 },
+  name: { fontSize: 16, fontWeight: '600' },
+  actionIconWrapper: {
+    width: 36, height: 36, borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
   empty: { alignItems: 'center', justifyContent: 'center', marginTop: 60 },
   emptyText: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
   emptySub: { fontSize: 14 },

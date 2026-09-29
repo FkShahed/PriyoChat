@@ -594,9 +594,14 @@ export default function useWebRTCCall({
     // Start InCallManager
     if (InCallManager) {
       try {
-        InCallManager.start({ media: currentCallType === 'video' ? 'video' : 'audio', auto: true, ringback: '' });
-        InCallManager.setForceSpeakerphoneOn(currentCallType === 'video');
-        console.log('[InCallManager] Started, speakerphone:', currentCallType === 'video');
+        // Use auto: false to prevent proximity sensor overriding manual speaker settings
+        InCallManager.start({ media: currentCallType === 'video' ? 'video' : 'audio', auto: false, ringback: '' });
+        
+        // Delay applying speaker state to ensure InCallManager has fully initialized the audio session
+        setTimeout(() => {
+          InCallManager.setForceSpeakerphoneOn(currentCallType === 'video');
+          console.log('[InCallManager] Started, speakerphone:', currentCallType === 'video');
+        }, 500);
       } catch (e) {
         console.warn('[InCallManager] start error:', e);
       }

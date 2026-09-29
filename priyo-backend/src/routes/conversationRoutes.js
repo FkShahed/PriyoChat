@@ -2,12 +2,13 @@ const router = require('express').Router();
 const { protect } = require('../middleware/auth');
 const {
   getConversations, getMessages, updateTheme, deleteMessage,
-  reactToMessage, searchMessages, reportMessage, blockUser, clearHistory,
+  reactToMessage, searchMessages, reportMessage, blockUser, clearHistory, deleteConversation,
 } = require('../controllers/conversationController');
 
 router.use(protect);
 router.get('/', getConversations);
 router.get('/:id/messages', getMessages);
+router.delete('/:id', deleteConversation);
 router.delete('/:id/clear', clearHistory);
 router.get('/:id/search', searchMessages);
 router.put('/:id/theme', updateTheme);
