@@ -1,6 +1,7 @@
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const FriendRequest = require('../models/FriendRequest');
 const Notification = require('../models/Notification');
 const { sendPushNotification } = require('../config/firebase');
 
@@ -234,6 +235,17 @@ const deleteConversation = async (req, res) => {
     // Delete all messages associated with this conversation
     await Message.deleteMany({ conversation: conversation._id });
     
+    // Delete any existing friend requests between these two participants
+    if (conversation.participants.length === 2) {
+      const [p1, p2] = conversation.participants;
+      await FriendRequest.deleteMany({
+        $or: [
+          { from: p1, to: p2 },
+          { from: p2, to: p1 },
+        ]
+      });
+    }
+
     // Delete the conversation
     await Conversation.findByIdAndDelete(conversation._id);
     
