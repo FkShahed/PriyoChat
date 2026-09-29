@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, Image, StatusBar
+  View, Text, FlatList, TouchableOpacity, StyleSheet, Image, StatusBar, Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -55,6 +55,11 @@ export default function CallsListScreen({ navigation }) {
   }, []);
 
   const handleCall = (remoteUser, type) => {
+    const { callState } = useCallStore.getState();
+    if (callState !== 'idle' && callState !== 'ended') {
+      Alert.alert('Already in a Call', 'Please end your current call before starting a new one.');
+      return;
+    }
     startCall(remoteUser, type);
     navigation.navigate('Call', { otherUser: remoteUser, callType: type });
   };

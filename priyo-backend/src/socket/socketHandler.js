@@ -270,7 +270,15 @@ const setupSocket = (io) => {
       io.to(to).emit('call_ice', { from: userId, candidate });
     });
 
-    socket.on('call_reject', async ({ to, callId, callType = 'audio' }) => {
+    socket.on('call_reject', async ({ to, callId, callType = 'audio', reason }) => {
+      // If a specific client/tab is busy in a call, notify the caller that user is busy
+      // but do NOT drop the call for other ringing tabs.
+      if (reason === 'busy') {
+        console.log(`[socketHandler] User ${userId} is busy — notifying caller ${to}`);
+        io.to(to).emit('call_busy', { from: userId, message: 'User is busy on another call' });
+        return;
+      }
+
       try {
         const validId = cleanId(callId);
         if (validId) {
@@ -280,7 +288,7 @@ const setupSocket = (io) => {
       } catch (err) {
         console.error('[socketHandler] call_reject error:', err.message);
       }
-      io.to(to).emit('call_rejected', { from: userId });
+      io.to(to).emit('call_rejected', { from: userId, reason });
 
       // ── Create missed call message in conversation ──
       try {

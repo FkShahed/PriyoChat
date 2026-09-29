@@ -145,8 +145,19 @@ const useSocketStore = create((set, get) => ({
       });
 
       if (!accepted) {
+        // User is already in a call — notify caller that user is busy
         console.warn('[Socket] Device busy — sending call_reject busy to caller:', data.from);
         newSocket.emit('call_reject', { to: data.from, reason: 'busy' });
+        // Show a brief alert to the current user that someone tried to call them
+        const { Platform } = require('react-native');
+        if (Platform.OS !== 'web' && AppState.currentState === 'active') {
+          Alert.alert(
+            '📞 Another Call',
+            `${callerName} is trying to call you, but you are already in a call.`,
+            [{ text: 'OK', style: 'cancel' }],
+            { cancelable: true }
+          );
+        }
         return;
       }
       newSocket.emit('call_ringing', { to: data.from });
@@ -186,6 +197,20 @@ const useSocketStore = create((set, get) => ({
     newSocket.on('call_rejected', (data) => {
       console.log('[Socket] Received call_rejected from server:', data);
       useCallStore.getState().endCall('rejected');
+    });
+
+    // Caller receives this when the receiver is already busy on another call
+    newSocket.on('call_busy', (data) => {
+      console.log('[Socket] Received call_busy — user is on another call:', data);
+      const { callState } = useCallStore.getState();
+      if (callState === 'calling' || callState === 'ringing') {
+        useCallStore.getState().endCall('ended');
+        Alert.alert(
+          '📵 User is Busy',
+          'The person you are calling is already on another call. Please try again later.',
+          [{ text: 'OK' }]
+        );
+      }
     });
 
     newSocket.on('call_ended', (data) => {

@@ -1000,6 +1000,11 @@ export default function ChatScreen({ route, navigation }) {
           <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
             <TouchableOpacity
               onPress={() => {
+                const { callState: cs } = useCallStore.getState();
+                if (cs !== 'idle' && cs !== 'ended') {
+                  Alert.alert('Already in a Call', 'You cannot start a new call while already in a call.');
+                  return;
+                }
                 const targetUser = isMine ? recipientUser : (msg.sender || recipientUser);
                 const type = cd.callType || 'video';
                 useCallStore.getState().startCall(targetUser, type);
@@ -1175,6 +1180,11 @@ export default function ChatScreen({ route, navigation }) {
               onPress={() => {
                 const target = recipientUser || otherUser;
                 if (!target) return;
+                const { callState: cs } = useCallStore.getState();
+                if (cs !== 'idle' && cs !== 'ended') {
+                  Alert.alert('Already in a Call', 'Please end your current call before starting a new one.');
+                  return;
+                }
                 useCallStore.getState().startCall(target, 'audio');
                 navigation.navigate('Call', { otherUser: target, callType: 'audio' });
               }}
@@ -1188,6 +1198,11 @@ export default function ChatScreen({ route, navigation }) {
               onPress={() => {
                 const target = recipientUser || otherUser;
                 if (!target) return;
+                const { callState: cs } = useCallStore.getState();
+                if (cs !== 'idle' && cs !== 'ended') {
+                  Alert.alert('Already in a Call', 'Please end your current call before starting a new one.');
+                  return;
+                }
                 useCallStore.getState().startCall(target, 'video');
                 navigation.navigate('Call', { otherUser: target, callType: 'video' });
               }}

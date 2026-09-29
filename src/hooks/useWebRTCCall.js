@@ -40,26 +40,21 @@ function getIceServers() {
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.services.mozilla.com' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:stun.relay.metered.ca:80' },
+    { urls: 'stun:138.2.92.182:3478' },
     {
-      urls: 'turn:global.relay.metered.ca:80',
-      username: '4b74ef2aa4a495db0843cb49',
-      credential: '2AnGhj58qOqAlS1N'
+      urls: 'turn:138.2.92.182:3478?transport=tcp',
+      username: 'shahed',
+      credential: '123456'
     },
     {
-      urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-      username: '4b74ef2aa4a495db0843cb49',
-      credential: '2AnGhj58qOqAlS1N'
+      urls: 'turn:138.2.92.182:3478?transport=udp',
+      username: 'shahed',
+      credential: '123456'
     },
     {
-      urls: 'turn:global.relay.metered.ca:443',
-      username: '4b74ef2aa4a495db0843cb49',
-      credential: '2AnGhj58qOqAlS1N'
-    },
-    {
-      urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-      username: '4b74ef2aa4a495db0843cb49',
-      credential: '2AnGhj58qOqAlS1N'
+      urls: 'turn:138.2.92.182:3478',
+      username: 'shahed',
+      credential: '123456'
     }
   ];
 }
@@ -129,6 +124,40 @@ function extractSdpAndType(raw, defaultType = 'offer') {
   }
 
   return { type, sdp };
+}
+
+/**
+ * Prioritize a specific video codec (e.g. VP8) in the SDP so that
+ * Android devices (libwebrtc) receive standard VP8 streams they can always hardware-decode.
+ */
+function preferCodec(sdp, codec = 'VP8') {
+  if (!sdp || typeof sdp !== 'string') return sdp;
+  const lines = sdp.split('\r\n');
+  const mVideoIndex = lines.findIndex((l) => l.startsWith('m=video'));
+  if (mVideoIndex === -1) return sdp;
+
+  const codecRegex = new RegExp(`^a=rtpmap:(\\d+)\\s+${codec}/`, 'i');
+  let targetPayload = null;
+  for (const line of lines) {
+    const match = line.match(codecRegex);
+    if (match && match[1]) {
+      targetPayload = match[1];
+      break;
+    }
+  }
+
+  if (!targetPayload) return sdp;
+
+  const mVideoLine = lines[mVideoIndex];
+  const parts = mVideoLine.split(' ');
+  const header = parts.slice(0, 3);
+  const payloads = parts.slice(3);
+
+  const filteredPayloads = payloads.filter((p) => p !== targetPayload);
+  const newPayloads = [targetPayload, ...filteredPayloads];
+  lines[mVideoIndex] = `${header.join(' ')} ${newPayloads.join(' ')}`;
+
+  return lines.join('\r\n');
 }
 
 /**
@@ -341,6 +370,7 @@ export default function useWebRTCCall({
     console.log('[WebRTC] Building peer connection with max-bundle and unified-plan...');
     const pc = new RTCPeerConnection({
       iceServers: getIceServers(),
+      iceTransportPolicy: 'all', // 'all' = try direct first, fall back to TURN. Never force 'relay' or WiFi breaks.
       iceCandidatePoolSize: 10,
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require',
@@ -617,15 +647,38 @@ export default function useWebRTCCall({
         }
       });
 
+      // Apply standard VP8 preference for maximum cross-platform compatibility (Web <-> Android)
+      try {
+        if (typeof RTCRtpSender !== 'undefined' && RTCRtpSender.getCapabilities) {
+          const capabilities = RTCRtpSender.getCapabilities('video');
+          if (capabilities && capabilities.codecs) {
+            const vp8 = capabilities.codecs.filter((c) => c.mimeType.toLowerCase() === 'video/vp8');
+            const others = capabilities.codecs.filter((c) => c.mimeType.toLowerCase() !== 'video/vp8');
+            const sorted = [...vp8, ...others];
+            pc.getTransceivers().forEach((t) => {
+              if (t.sender?.track?.kind === 'video' && typeof t.setCodecPreferences === 'function') {
+                t.setCodecPreferences(sorted);
+                console.log('[WebRTC] Applied VP8 codec preference to video transceiver');
+              }
+            });
+          }
+        }
+      } catch (e) {}
+
       if (!pcRef.current || pc.signalingState === 'closed') {
         console.warn('[WebRTC] PC closed before createOffer, aborting');
         return;
       }
 
-      const sessionOffer = await pc.createOffer({
+      let sessionOffer = await pc.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: callTypeRef.current === 'video',
+        offerToReceiveVideo: true,
       });
+
+      if (sessionOffer?.sdp) {
+        const preferredSdp = preferCodec(sessionOffer.sdp, 'VP8');
+        sessionOffer = { type: sessionOffer.type, sdp: preferredSdp };
+      }
 
       if (!pcRef.current || pc.signalingState === 'closed') {
         console.warn('[WebRTC] PC closed before setLocalDescription, aborting');
@@ -633,7 +686,7 @@ export default function useWebRTCCall({
       }
 
       await pc.setLocalDescription(sessionOffer);
-      console.log('[WebRTC] Offer created and set as local description');
+      console.log('[WebRTC] Offer created and set as local description (VP8 preferred)');
 
       // Check if remote answer arrived while local offer setup was in progress
       const currentAnswer = useCallStore.getState().answer;
@@ -781,14 +834,35 @@ export default function useWebRTCCall({
       }
 
       // 3. Create and set local answer
-      const sessionAnswer = await pc.createAnswer();
+      try {
+        if (typeof RTCRtpSender !== 'undefined' && RTCRtpSender.getCapabilities) {
+          const capabilities = RTCRtpSender.getCapabilities('video');
+          if (capabilities && capabilities.codecs) {
+            const vp8 = capabilities.codecs.filter((c) => c.mimeType.toLowerCase() === 'video/vp8');
+            const others = capabilities.codecs.filter((c) => c.mimeType.toLowerCase() !== 'video/vp8');
+            const sorted = [...vp8, ...others];
+            pc.getTransceivers().forEach((t) => {
+              if (t.sender?.track?.kind === 'video' && typeof t.setCodecPreferences === 'function') {
+                t.setCodecPreferences(sorted);
+              }
+            });
+          }
+        }
+      } catch (e) {}
+
+      let sessionAnswer = await pc.createAnswer();
+      if (sessionAnswer?.sdp) {
+        const preferredSdp = preferCodec(sessionAnswer.sdp, 'VP8');
+        sessionAnswer = { type: sessionAnswer.type, sdp: preferredSdp };
+      }
+
       if (!pcRef.current || pc.signalingState === 'closed') {
         console.warn('[WebRTC] PC closed before setting local answer');
         return;
       }
 
       await pc.setLocalDescription(sessionAnswer);
-      console.log('[WebRTC] Answer created and set as local description');
+      console.log('[WebRTC] Answer created and set as local description (VP8 preferred)');
       answerAppliedRef.current = true;
 
       // 4. Flush all ICE candidates NOW that BOTH remote and local descriptions are established!
