@@ -103,11 +103,16 @@ const SELF_URL = process.env.SELF_URL || 'https://priyochat.onrender.com';
 const PING_INTERVAL_MS = 45 * 1000; // 45 seconds
 
 function pingServer() {
-  https.get(`${SELF_URL}/health`, (res) => {
-    console.log(`🟢 Running server - ${new Date().toLocaleTimeString()} (Status: ${res.statusCode})`);
-  }).on('error', (err) => {
-    console.warn(`⚠️ Running server - ${new Date().toLocaleTimeString()} (Ping failed: ${err.message})`);
-  });
+  try {
+    const client = SELF_URL.startsWith('https') ? https : http;
+    client.get(`${SELF_URL}/health`, (res) => {
+      console.log(`🟢 Running server - ${new Date().toLocaleTimeString()} (Status: ${res.statusCode})`);
+    }).on('error', (err) => {
+      console.warn(`⚠️ Running server ping: ${err.message}`);
+    });
+  } catch (err) {
+    console.warn(`⚠️ Ping error: ${err.message}`);
+  }
 }
 
 connectDB().then(() => {

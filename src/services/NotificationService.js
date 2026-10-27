@@ -112,7 +112,7 @@ class NotificationService {
           body: `${callerName || 'Someone'} is calling you...`,
           categoryIdentifier: 'incoming_call_category',
           data: { type: 'call', callerName, callType, callId, caller, offer },
-          ...(Platform.OS === 'android' && { channelId: 'incoming_calls_v4', sticky: true }),
+          ...(Platform.OS === 'android' && { channelId: 'incoming_calls_v5', sticky: true }),
         },
         trigger: null,
       });
@@ -173,15 +173,14 @@ class NotificationService {
       sound: 'default',
     });
 
-    // Calls — MAX importance, bypass DND
-    await Notifications.setNotificationChannelAsync('incoming_calls_v4', {
+    // Calls — MAX importance, respects Do Not Disturb / Silent Mode
+    await Notifications.setNotificationChannelAsync('incoming_calls_v5', {
       name: 'Incoming Calls Alert',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 200, 500, 200, 500],
       lightColor: '#34C759',
       enableLights: true,
       enableVibrate: true,
-      bypassDnd: true,
       sound: 'default',
     });
   }

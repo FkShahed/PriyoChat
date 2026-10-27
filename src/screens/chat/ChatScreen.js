@@ -16,7 +16,7 @@ import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import useCallStore from '../../store/useCallStore';
-import { EmojiKeyboard } from 'rn-emoji-keyboard';
+import { EmojiKeyboard } from '../../components/EmojiKeyboardWrapper';
 import { THEMES, DEFAULT_THEME } from '../../themes/themes';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
 import { formatMessageTime, formatLastSeen, getInitials } from '../../utils/helpers';

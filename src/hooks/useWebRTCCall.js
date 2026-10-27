@@ -44,10 +44,18 @@ function getIceServers() {
 
 const CONNECTION_TIMEOUT_MS = 45000; // 45 seconds ring timeout
 
-// High-quality audio constraints
-const AUDIO_CONSTRAINTS = Platform.OS === 'web'
-  ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-  : true;
+// High-quality audio constraints with echo cancellation & noise suppression
+const AUDIO_CONSTRAINTS = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  ...(Platform.OS !== 'web' ? {
+    googEchoCancellation: true,
+    googAutoGainControl: true,
+    googNoiseSuppression: true,
+    googHighpassFilter: true,
+  } : {}),
+};
 
 // High-quality video constraints
 const VIDEO_CONSTRAINTS = Platform.OS === 'web'
@@ -277,6 +285,7 @@ export default function useWebRTCCall({
   callType,
   isReceiver,
   offer,
+  initialSpeakerOn,
   onRemoteStream,
   onLocalStream,
 }) {
@@ -311,6 +320,8 @@ export default function useWebRTCCall({
   useEffect(() => { callTypeRef.current = callType; }, [callType]);
   useEffect(() => { isReceiverRef.current = isReceiver; }, [isReceiver]);
   useEffect(() => { emitRef.current = emit; }, [emit]);
+  const initialSpeakerOnRef = useRef(initialSpeakerOn);
+  useEffect(() => { initialSpeakerOnRef.current = initialSpeakerOn; }, [initialSpeakerOn]);
 
   // ─── Build peer connection ────────────────────────────────────────
   const buildPC = useCallback(() => {
@@ -594,14 +605,21 @@ export default function useWebRTCCall({
     // Start InCallManager
     if (InCallManager) {
       try {
-        // Use auto: false to prevent proximity sensor overriding manual speaker settings
-        InCallManager.start({ media: currentCallType === 'video' ? 'video' : 'audio', auto: false, ringback: '' });
-        
-        // Delay applying speaker state to ensure InCallManager has fully initialized the audio session
+        const isVideo = currentCallType === 'video';
+        const speaker = initialSpeakerOnRef.current != null ? Boolean(initialSpeakerOnRef.current) : isVideo;
+        InCallManager.start({ media: isVideo ? 'video' : 'audio', auto: false, ringback: '' });
+        InCallManager.setSpeakerphoneOn(speaker);
+        InCallManager.setForceSpeakerphoneOn(speaker);
+        // Also re-assert after 300ms once Android audio track is fully engaged
         setTimeout(() => {
-          InCallManager.setForceSpeakerphoneOn(currentCallType === 'video');
-          console.log('[InCallManager] Started, speakerphone:', currentCallType === 'video');
-        }, 500);
+          if (InCallManager) {
+            try {
+              InCallManager.setSpeakerphoneOn(speaker);
+              InCallManager.setForceSpeakerphoneOn(speaker);
+            } catch (err) {}
+          }
+        }, 300);
+        console.log('[InCallManager] Started, speakerphone:', speaker);
       } catch (e) {
         console.warn('[InCallManager] start error:', e);
       }
@@ -1078,8 +1096,9 @@ export default function useWebRTCCall({
   const setSpeaker = useCallback((on) => {
     if (InCallManager) {
       try {
-        InCallManager.setForceSpeakerphoneOn(on);
-        console.log('[InCallManager] Speaker:', on);
+        InCallManager.setSpeakerphoneOn(Boolean(on));
+        InCallManager.setForceSpeakerphoneOn(Boolean(on));
+        console.log('[InCallManager] Speaker changed to:', Boolean(on));
       } catch (e) {
         console.warn('[InCallManager] setSpeaker error:', e);
       }

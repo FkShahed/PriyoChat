@@ -39,9 +39,20 @@ const setupSocket = (io) => {
     io.emit('user_status', { userId, isOnline: true });
 
     // ── Check if there are any active pending call offers for this user ──
+    const now = Date.now();
     for (const [cId, activeCall] of activeCalls.entries()) {
+      // If call is older than 45 seconds or caller has disconnected, discard it!
+      const isExpired = (now - (activeCall.createdAt || 0)) > 45000;
+      const callerOnline = onlineUsers.has(String(activeCall.from));
+
+      if (isExpired || !callerOnline) {
+        console.log(`[socketHandler] Pruning dead call ${cId} (expired: ${isExpired}, callerOnline: ${callerOnline})`);
+        activeCalls.delete(cId);
+        continue;
+      }
+
       if (activeCall.to === userId) {
-        console.log(`[socketHandler] User ${userId} connected with pending call ${cId}. Emitting incoming_call with offer.`);
+        console.log(`[socketHandler] User ${userId} connected with VALID pending call ${cId}. Emitting incoming_call.`);
         socket.emit('incoming_call', activeCall);
       }
     }
@@ -197,10 +208,17 @@ const setupSocket = (io) => {
         offer,
         callType,
         to,
+        createdAt: Date.now(),
       };
 
       if (callId) {
         activeCalls.set(callId, activePayload);
+        setTimeout(() => {
+          if (activeCalls.has(callId)) {
+            console.log(`[socketHandler] Call ${callId} timed out after 45s — removing from activeCalls`);
+            activeCalls.delete(callId);
+          }
+        }, 45000);
       }
 
       // emit to receiver's personal room (more reliable than raw socketId)
@@ -321,11 +339,18 @@ const setupSocket = (io) => {
       try {
         const validId = cleanId(callId);
         if (validId) {
+          activeCalls.delete(validId);
           await Call.findByIdAndUpdate(validId, { 
             status: 'completed', 
             endedAt: new Date(),
             duration 
           });
+        }
+        // Also cleanup any active call from this caller
+        for (const [cId, activeCall] of activeCalls.entries()) {
+          if (activeCall.from === userId) {
+            activeCalls.delete(cId);
+          }
         }
       } catch (err) {
         console.error('[socketHandler] call_end error:', err.message);
@@ -362,6 +387,12 @@ const setupSocket = (io) => {
     // ─── Disconnect ────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       onlineUsers.delete(userId);
+      // Purge any pending call originated from this disconnected user
+      for (const [cId, activeCall] of activeCalls.entries()) {
+        if (activeCall.from === userId) {
+          activeCalls.delete(cId);
+        }
+      }
       await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
       io.emit('user_status', { userId, isOnline: false, lastSeen: new Date() });
       console.log(`🔌 User disconnected: ${socket.user.name}`);

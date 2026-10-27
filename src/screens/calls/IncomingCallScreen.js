@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { InCallManager } from '../../utils/nativeModules';
 import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import { getInitials } from '../../utils/helpers';
@@ -28,12 +29,19 @@ export default function IncomingCallScreen({ navigation }) {
 
     let isCancelled = false;
 
-    // Play ringtone using expo-av
+    // Play ringtone using native InCallManager (respects silent/vibrate mode on Android)
     const playRingtone = async () => {
       try {
         if (isCancelled) return;
+        if (InCallManager) {
+          InCallManager.startRingtone('_DEFAULT_', [500, 1000]);
+          console.log('[Ringtone] InCallManager ringtone started (respects silent mode)');
+          return;
+        }
+
+        // Web or fallback fallback:
         await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
+          playsInSilentModeIOS: false,
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
         });
@@ -62,7 +70,7 @@ export default function IncomingCallScreen({ navigation }) {
           return;
         }
         soundRef.current = sound;
-        console.log('[Ringtone] Started looping');
+        console.log('[Ringtone] Started looping fallback');
       } catch (e) {
         console.warn('[Ringtone] Play error:', e);
       }
@@ -72,6 +80,11 @@ export default function IncomingCallScreen({ navigation }) {
 
     return () => {
       isCancelled = true;
+      if (InCallManager) {
+        try {
+          InCallManager.stopRingtone();
+        } catch (e) {}
+      }
       // Stop ringing and unload if screen is unmounted
       if (soundRef.current) {
         const s = soundRef.current;
@@ -81,7 +94,7 @@ export default function IncomingCallScreen({ navigation }) {
       }
       try {
         Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
+          playsInSilentModeIOS: false,
           staysActiveInBackground: false,
           shouldDuckAndroid: false,
           playThroughEarpieceAndroid: false,
@@ -112,6 +125,9 @@ export default function IncomingCallScreen({ navigation }) {
   const handleAccept = () => {
     if (hasActed.current) return;
     hasActed.current = true;
+    if (InCallManager) {
+      try { InCallManager.stopRingtone(); } catch (e) {}
+    }
     if (soundRef.current) {
       const s = soundRef.current;
       soundRef.current = null;
@@ -120,7 +136,7 @@ export default function IncomingCallScreen({ navigation }) {
     }
     try {
       Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
+        playsInSilentModeIOS: false,
         staysActiveInBackground: false,
         shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
@@ -136,6 +152,9 @@ export default function IncomingCallScreen({ navigation }) {
   const handleReject = () => {
     if (hasActed.current) return;
     hasActed.current = true;
+    if (InCallManager) {
+      try { InCallManager.stopRingtone(); } catch (e) {}
+    }
     if (soundRef.current) {
       const s = soundRef.current;
       soundRef.current = null;
@@ -144,7 +163,7 @@ export default function IncomingCallScreen({ navigation }) {
     }
     try {
       Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
+        playsInSilentModeIOS: false,
         staysActiveInBackground: false,
         shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,

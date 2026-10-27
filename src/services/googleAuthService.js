@@ -94,12 +94,42 @@ const signInOnWeb = async (clientId) => {
         },
       });
 
-      // Prompt Google One Tap or Sign-in
+      // 1. Try One Tap
+      let oneTapShown = false;
       window.google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          console.warn('[GoogleSignIn Web] One Tap skipped or not displayed');
+        if (!notification.isNotDisplayed() && !notification.isSkippedMoment()) {
+          oneTapShown = true;
+        } else {
+          console.warn('[GoogleSignIn Web] One Tap skipped or blocked by browser policy');
         }
       });
+
+      // 2. Also create an auto-triggered popup button container if One Tap is blocked on localhost/browser
+      const btnContainer = document.createElement('div');
+      btnContainer.style.position = 'fixed';
+      btnContainer.style.top = '-9999px';
+      btnContainer.style.left = '-9999px';
+      btnContainer.id = 'g_id_signin_hidden';
+      document.body.appendChild(btnContainer);
+
+      window.google.accounts.id.renderButton(btnContainer, {
+        theme: 'outline',
+        size: 'large',
+        type: 'standard',
+      });
+
+      setTimeout(() => {
+        const btn = btnContainer.querySelector('div[role=button]') || btnContainer.querySelector('button');
+        if (btn) {
+          btn.click();
+        }
+        setTimeout(() => {
+          if (document.body.contains(btnContainer)) {
+            document.body.removeChild(btnContainer);
+          }
+        }, 3000);
+      }, 50);
+
     } catch (err) {
       reject(err);
     }

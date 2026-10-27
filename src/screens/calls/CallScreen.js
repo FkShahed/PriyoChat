@@ -182,6 +182,7 @@ export default function CallScreen({ route, navigation }) {
     callType,
     isReceiver,
     offer,
+    initialSpeakerOn: speakerOn,
     onLocalStream: useCallback((s) => {
       console.log('[CallScreen] Local stream received');
       setLocalStream(s);
@@ -209,7 +210,10 @@ export default function CallScreen({ route, navigation }) {
     }, []),
   });
 
-  // ── Ripple animation ─────────────────────────────────────────────
+  // Sync speaker state with InCallManager whenever speakerOn toggles
+  useEffect(() => {
+    setSpeaker(speakerOn);
+  }, [speakerOn, setSpeaker]);
   useEffect(() => {
     const DURATION = 2000; // one ripple cycle
 
