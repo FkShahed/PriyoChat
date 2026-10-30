@@ -29,6 +29,7 @@ import FriendsListScreen from '../screens/friends/FriendsListScreen';
 import CallsListScreen from '../screens/calls/CallsListScreen';
 import CallScreen from '../screens/calls/CallScreen';
 import IncomingCallScreen from '../screens/calls/IncomingCallScreen';
+import CallErrorBoundary from '../components/CallErrorBoundary';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import WarningDetailsScreen from '../screens/settings/WarningDetailsScreen';
 import ReportBugScreen from '../screens/settings/ReportBugScreen';
@@ -201,8 +202,8 @@ export default function AppNavigator() {
           <Stack.Screen name="ArchivedChats" component={ArchivedChatsScreen} />
           <Stack.Screen name="SearchUsers" component={SearchUsersScreen} />
           <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
-          <Stack.Screen name="Call" component={CallScreen} />
-          <Stack.Screen name="IncomingCall" component={IncomingCallScreen} />
+          <Stack.Screen name="Call" options={{ gestureEnabled: false }}>{(props) => <CallErrorBoundary navigation={props.navigation}><CallScreen {...props} /></CallErrorBoundary>}</Stack.Screen>
+          <Stack.Screen name="IncomingCall" component={IncomingCallScreen} options={{ gestureEnabled: false }} />
           <Stack.Screen name="WarningDetails" component={WarningDetailsScreen} />
           <Stack.Screen name="ReportBug" component={ReportBugScreen} />
         </Stack.Navigator>

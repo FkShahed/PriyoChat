@@ -1,20 +1,23 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ARCHIVED_KEY = '@priyo_archived_convos';
 const MUTED_KEY = '@priyo_muted_convos';
 const DELETED_KEY = '@priyo_deleted_convos';
 
-const useChatStore = create((set, get) => ({
-  conversations: [],
-  messages: {}, // { conversationId: [message, ...] }
-  typingUsers: {}, // { conversationId: userId | null }
-  onlineUsers: {}, // { userId: bool }
-  activeConversationId: null, // the conversation the user is currently viewing
+const useChatStore = create(
+  persist(
+    (set, get) => ({
+      conversations: [],
+      messages: {}, // { conversationId: [message, ...] }
+      typingUsers: {}, // { conversationId: userId | null }
+      onlineUsers: {}, // { userId: bool }
+      activeConversationId: null, // the conversation the user is currently viewing
 
-  archivedConversationIds: [],
-  mutedConversationIds: {},
-  deletedConversationIds: [],
+      archivedConversationIds: [],
+      mutedConversationIds: {},
+      deletedConversationIds: [],
 
   initPreferences: async () => {
     try {
@@ -362,6 +365,22 @@ const useChatStore = create((set, get) => ({
     set((state) => ({
       onlineUsers: { ...state.onlineUsers, [userId]: isOnline },
     })),
-}));
+    }),
+    {
+      name: 'priyochat-chat-cache-v1',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        conversations: state.conversations?.slice(0, 50) || [],
+        // Cache up to 40 recent messages per conversation so chats render instantly
+        messages: Object.fromEntries(
+          Object.entries(state.messages || {}).map(([k, v]) => [
+            k,
+            (Array.isArray(v) ? v : []).slice(-40),
+          ])
+        ),
+      }),
+    }
+  )
+);
 
 export default useChatStore;

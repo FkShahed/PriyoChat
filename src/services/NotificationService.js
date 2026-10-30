@@ -20,6 +20,7 @@ if (Platform.OS !== 'web') {
 class NotificationService {
   static _responseListener = null;
   static _initialized = false;
+  static _activeMessageHistory = {}; // { conversationId: [text1, text2, ...] }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Public API
@@ -73,6 +74,8 @@ class NotificationService {
   /**
    * Show a local notification for an incoming chat message.
    * Only fires when the user is NOT inside the active chat.
+   * Groups messages by conversation so multiple messages from the same sender
+   * are cleanly bundled together (like WhatsApp) instead of spamming separate notifications!
    */
   static async showMessageNotification({ senderName, senderId, text, callData, conversationId, avatarUrl }) {
     try {
@@ -85,19 +88,56 @@ class NotificationService {
         }
       }
 
+      const convKey = conversationId ? String(conversationId) : (senderId ? String(senderId) : 'general');
+      const notifIdentifier = `msg_thread_${convKey}`;
+
+      if (!this._activeMessageHistory[convKey]) {
+        this._activeMessageHistory[convKey] = [];
+      }
+      this._activeMessageHistory[convKey].push(bodyText);
+
+      // Keep up to 6 recent messages in the stack
+      if (this._activeMessageHistory[convKey].length > 6) {
+        this._activeMessageHistory[convKey].shift();
+      }
+
+      const count = this._activeMessageHistory[convKey].length;
+      let displayTitle = senderName;
+      let displayBody = bodyText;
+
+      if (count > 1) {
+        displayTitle = `${senderName} (${count} new messages)`;
+        // Show stacked preview (latest messages separated by newline)
+        displayBody = this._activeMessageHistory[convKey].slice(-3).join('\n');
+      }
+
       await Notifications.scheduleNotificationAsync({
+        identifier: notifIdentifier,
         content: {
-          title: senderName,
-          body: bodyText,
+          title: displayTitle,
+          body: displayBody,
           sound: 'default',
+          categoryIdentifier: 'message_reply_category',
           data: { type: 'message', conversationId, senderId, senderName, avatarUrl },
-          ...(Platform.OS === 'android' && { channelId: 'messages' }),
+          ...(Platform.OS === 'android' && { channelId: 'messages_v2' }),
         },
         trigger: null, // show immediately
       });
     } catch (e) {
       console.warn('[Push] showMessageNotification error:', e.message);
     }
+  }
+
+  /**
+   * Clear message history stack and dismiss notifications for a specific conversation when opened.
+   */
+  static async dismissConversationNotifications(conversationId) {
+    if (!conversationId) return;
+    try {
+      const convKey = String(conversationId);
+      delete this._activeMessageHistory[convKey];
+      await Notifications.dismissNotificationAsync(`msg_thread_${convKey}`);
+    } catch (e) {}
   }
 
   /**
@@ -121,6 +161,50 @@ class NotificationService {
     }
   }
 
+  /**
+   * Show a persistent ongoing call notification with caller name, duration, and "End Call" button.
+   * Keeps active even when the app is in the background or minimized.
+   */
+  static async showOngoingCallNotification({ remoteUser, callType, duration = 0 }) {
+    if (Platform.OS === 'web') return;
+    try {
+      const callerName = remoteUser?.name || 'PriyoChat User';
+      const m = Math.floor((duration || 0) / 60).toString().padStart(2, '0');
+      const s = ((duration || 0) % 60).toString().padStart(2, '0');
+      const timeStr = `${m}:${s}`;
+
+      await Notifications.scheduleNotificationAsync({
+        identifier: 'ongoing_call_notification',
+        content: {
+          title: `${callType === 'video' ? '📹 In video call' : '📞 In call'} with ${callerName}`,
+          body: `Duration: ${timeStr} • Tap to return to call`,
+          categoryIdentifier: 'ongoing_call_category',
+          data: {
+            type: 'ongoing_call',
+            remoteUser,
+            callType,
+          },
+          ...(Platform.OS === 'android' && {
+            channelId: 'ongoing_calls_v1',
+            sticky: true,
+            autoDismiss: false,
+          }),
+        },
+        trigger: null,
+      });
+    } catch (e) {
+      console.warn('[Push] showOngoingCallNotification error:', e.message);
+    }
+  }
+
+  /** Dismiss ongoing active call notification when the call ends. */
+  static async dismissOngoingCallNotification() {
+    if (Platform.OS === 'web') return;
+    try {
+      await Notifications.dismissNotificationAsync('ongoing_call_notification');
+    } catch (e) {}
+  }
+
   /** Dismiss the persistent call notification after call is handled. */
   static async dismissCallNotification() {
     try {
@@ -136,6 +220,20 @@ class NotificationService {
   static async _setupCategories() {
     if (Platform.OS === 'web') return;
     try {
+      await Notifications.setNotificationCategoryAsync('message_reply_category', [
+        {
+          identifier: 'REPLY_ACTION',
+          buttonTitle: 'Reply',
+          textInput: {
+            submitButtonTitle: 'Send',
+            placeholder: 'Type a message...',
+          },
+          options: {
+            opensAppToForeground: false, // Allows background sending without forcing app open
+          },
+        },
+      ]);
+
       await Notifications.setNotificationCategoryAsync('incoming_call_category', [
         {
           identifier: 'ACCEPT_CALL_ACTION',
@@ -155,6 +253,18 @@ class NotificationService {
           },
         },
       ]);
+
+      await Notifications.setNotificationCategoryAsync('ongoing_call_category', [
+        {
+          identifier: 'END_CALL_ACTION',
+          buttonTitle: '✕ End Call',
+          title: '✕ End Call',
+          options: {
+            isDestructive: true,
+            opensAppToForeground: false,
+          },
+        },
+      ]);
       console.log('[Push] Notification categories set up successfully');
     } catch (e) {
       console.warn('[Push] Category setup error:', e.message);
@@ -164,12 +274,14 @@ class NotificationService {
   static async _setupAndroidChannels() {
     if (Platform.OS !== 'android') return;
 
-    // Regular messages — high importance
-    await Notifications.setNotificationChannelAsync('messages', {
+    // Regular messages — high importance with default notification sound
+    await Notifications.setNotificationChannelAsync('messages_v2', {
       name: 'Messages',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#0084FF',
+      enableLights: true,
+      enableVibrate: true,
       sound: 'default',
     });
 
@@ -182,6 +294,16 @@ class NotificationService {
       enableLights: true,
       enableVibrate: true,
       sound: 'default',
+    });
+
+    // Ongoing Active Call Notification Channel (Low sound/no vibrate so it doesn't disturb)
+    await Notifications.setNotificationChannelAsync('ongoing_calls_v1', {
+      name: 'Ongoing Call',
+      importance: Notifications.AndroidImportance.LOW,
+      lightColor: '#0084FF',
+      enableLights: false,
+      enableVibrate: false,
+      sound: null,
     });
   }
 
@@ -369,6 +491,88 @@ class NotificationService {
       return;
     }
 
+    // Handle "End Call" action from ongoing call notification
+    if (actionId.includes('END_CALL')) {
+      console.log('[Push] User tapped END CALL from ongoing notification bar 🛑');
+      try {
+        const useCallStore = require('../store/useCallStore').default;
+        const useSocketStore = require('../store/useSocketStore').default;
+        const state = useCallStore.getState();
+        const targetUserId =
+          (typeof state.remoteUser === 'string' ? state.remoteUser : (state.remoteUser?._id || state.remoteUser?.id)) ||
+          state.remoteUserId;
+
+        if (targetUserId) {
+          useSocketStore.getState().emit('call_end', {
+            to: targetUserId,
+            callType: state.callType,
+            duration: state.callDuration,
+          });
+        }
+        state.resetCall();
+        NotificationService.dismissOngoingCallNotification();
+      } catch (e) {
+        console.warn('[Push] End call action error:', e.message);
+      }
+      return;
+    }
+
+    // Handle Quick Reply directly from the notification panel
+    if (actionId.includes('REPLY')) {
+      const replyText = (response?.userText || '').trim();
+      const conversationId = data?.conversationId;
+      console.log('[Push] Quick reply received:', replyText, 'for conversation:', conversationId);
+
+      if (replyText && conversationId) {
+        try {
+          const useSocketStore = require('../store/useSocketStore').default;
+          const useChatStore = require('../store/useChatStore').default;
+          const useAuthStore = require('../store/useAuthStore').default;
+
+          const currentUser = useAuthStore.getState().user;
+          const tempId = `temp_reply_${Date.now()}`;
+          const optimisticMsg = {
+            _id: tempId,
+            conversation: conversationId,
+            sender: currentUser,
+            text: replyText,
+            images: [],
+            status: 'sending',
+            createdAt: new Date().toISOString(),
+          };
+
+          useChatStore.getState().addMessage(conversationId, optimisticMsg);
+
+          const sendReply = async () => {
+            let socket = useSocketStore.getState().socket;
+            if (!socket || !socket.connected) {
+              await useSocketStore.getState().connect();
+              socket = useSocketStore.getState().socket;
+            }
+            if (socket) {
+              socket.emit('send_message', { conversationId, text: replyText, images: [] }, (res) => {
+                if (res?.message) {
+                  useChatStore.getState().replaceOptimisticMessage(conversationId, tempId, res.message);
+                } else if (res?.error) {
+                  useChatStore.getState().updateMessageStatus(conversationId, tempId, 'failed');
+                }
+              });
+            }
+          };
+
+          sendReply();
+          // Dismiss the message notification once replied
+          const notificationId = response?.notification?.request?.identifier;
+          if (notificationId) {
+            Notifications.dismissNotificationAsync(notificationId).catch(() => {});
+          }
+        } catch (err) {
+          console.warn('[Push] Quick reply handler error:', err.message);
+        }
+      }
+      return;
+    }
+
     if (!data) return;
 
     const navigateWhenReady = (screen, params) => {
@@ -380,6 +584,26 @@ class NotificationService {
     };
 
     if (data?.type === 'message' && data?.conversationId) {
+      // Optimistically ingest the message payload into useChatStore immediately
+      // so when ChatScreen opens, the message is ALREADY there without waiting for network!
+      try {
+        const useChatStore = require('../store/useChatStore').default;
+        let parsedMessage = data?.message;
+        if (typeof parsedMessage === 'string') {
+          try { parsedMessage = JSON.parse(parsedMessage); } catch (e) {}
+        }
+        if (parsedMessage && typeof parsedMessage === 'object' && parsedMessage._id) {
+          useChatStore.getState().addMessage(data.conversationId, parsedMessage);
+          useChatStore.getState().addOrUpdateConversation({
+            _id: data.conversationId,
+            lastMessage: parsedMessage,
+            updatedAt: parsedMessage.createdAt || new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        console.warn('[Push] Error pre-caching message from notification data:', err.message);
+      }
+
       navigateWhenReady('Chat', {
         conversation: { _id: data.conversationId },
         otherUser: {
@@ -410,6 +634,15 @@ class NotificationService {
         } catch (e) {}
       }
       navigateWhenReady('IncomingCall');
+    } else if (data?.type === 'ongoing_call') {
+      try {
+        const useCallStore = require('../store/useCallStore').default;
+        const state = useCallStore.getState();
+        navigateWhenReady('Call', {
+          otherUser: state.remoteUser || data.remoteUser,
+          callType: state.callType || data.callType || 'audio',
+        });
+      } catch (e) {}
     }
   }
 }

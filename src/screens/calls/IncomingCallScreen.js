@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Image, Easing,
+  View, Text, TouchableOpacity, StyleSheet, Image, Easing, Platform,
 } from 'react-native';
 import { Animated as RNAnimated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -92,6 +92,7 @@ export default function IncomingCallScreen({ navigation }) {
         s.stopAsync().catch(() => {});
         s.unloadAsync().catch(() => {});
       }
+      if (Platform.OS !== 'web') {
       try {
         Audio.setAudioModeAsync({
           playsInSilentModeIOS: false,
@@ -100,6 +101,7 @@ export default function IncomingCallScreen({ navigation }) {
           playThroughEarpieceAndroid: false,
         }).catch(() => {});
       } catch (e) {}
+    }
     };
   }, []);
 
@@ -126,7 +128,29 @@ export default function IncomingCallScreen({ navigation }) {
     if (hasActed.current) return;
     hasActed.current = true;
     if (InCallManager) {
-      try { InCallManager.stopRingtone(); } catch (e) {}
+      try {
+        InCallManager.stopRingtone();
+        // Immediately ensure speakerphone is OFF when receiver accepts an audio call
+        if (callType !== 'video') {
+          InCallManager.setSpeakerphoneOn(false);
+          InCallManager.setForceSpeakerphoneOn(false);
+          if (typeof InCallManager.chooseAudioRoute === 'function') {
+            InCallManager.chooseAudioRoute('EARPIECE').catch(() => {});
+          }
+          // Multi-stage check to override any lingering ringtone restore
+          [100, 250].forEach((delay) => {
+            setTimeout(() => {
+              try {
+                InCallManager.setSpeakerphoneOn(false);
+                InCallManager.setForceSpeakerphoneOn(false);
+                if (typeof InCallManager.chooseAudioRoute === 'function') {
+                  InCallManager.chooseAudioRoute('EARPIECE').catch(() => {});
+                }
+              } catch (e) {}
+            }, delay);
+          });
+        }
+      } catch (e) {}
     }
     if (soundRef.current) {
       const s = soundRef.current;
@@ -134,7 +158,8 @@ export default function IncomingCallScreen({ navigation }) {
       s.stopAsync().catch(() => {});
       s.unloadAsync().catch(() => {});
     }
-    try {
+    if (Platform.OS !== 'web') {
+      try {
       Audio.setAudioModeAsync({
         playsInSilentModeIOS: false,
         staysActiveInBackground: false,
@@ -142,6 +167,7 @@ export default function IncomingCallScreen({ navigation }) {
         playThroughEarpieceAndroid: false,
       }).catch(() => {});
     } catch (e) {}
+    }
     // Don't emit call_answer here — useWebRTCCall hook in CallScreen
     // will create the real SDP answer and emit it after setting up media.
     // Mark as 'connecting' — the hook will set 'active' when WebRTC connects.
@@ -161,7 +187,8 @@ export default function IncomingCallScreen({ navigation }) {
       s.stopAsync().catch(() => {});
       s.unloadAsync().catch(() => {});
     }
-    try {
+    if (Platform.OS !== 'web') {
+      try {
       Audio.setAudioModeAsync({
         playsInSilentModeIOS: false,
         staysActiveInBackground: false,
@@ -169,6 +196,7 @@ export default function IncomingCallScreen({ navigation }) {
         playThroughEarpieceAndroid: false,
       }).catch(() => {});
     } catch (e) {}
+    }
     const targetId = remoteUser?._id || remoteUser?.id;
     if (targetId) {
       emit('call_reject', { to: targetId });

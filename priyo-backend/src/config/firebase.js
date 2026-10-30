@@ -32,13 +32,30 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
   // Raw FCM token — use Firebase Admin SDK
   if (!firebaseApp) return;
   try {
-    await admin.messaging().send({
+    const collapseKey = data.conversationId ? `conv_${data.conversationId}` : (data.senderId ? `user_${data.senderId}` : undefined);
+    const res = await admin.messaging().send({
       token: fcmToken,
       notification: { title, body },
       data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])),
-      android: { priority: 'high' },
-      apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+      android: {
+        priority: 'high',
+        collapseKey,
+        notification: {
+          tag: collapseKey,
+          channelId: 'messages_v2',
+          sound: 'default',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+        },
+      },
+      apns: {
+        headers: {
+          ...(collapseKey ? { 'apns-collapse-id': collapseKey } : {}),
+        },
+        payload: { aps: { sound: 'default', badge: 1 } },
+      },
     });
+    return res;
   } catch (err) {
     console.warn('FCM push failed:', err.message);
   }
@@ -47,20 +64,40 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
 // Send via Expo Push API (single notification)
 const sendExpoNotification = (to, title, body, data = {}) => {
   return new Promise((resolve) => {
-    const channelId = data.type === 'call' ? 'incoming_calls_v3' : 'messages';
-    const payload = JSON.stringify({ to, title, body, data, sound: 'default', priority: 'high', channelId });
+    const channelId = data.type === 'call' ? 'incoming_calls_v5' : 'messages_v2';
+    const categoryIdentifier = data.type === 'message' || data.type === 'new_message' ? 'message_reply_category' : (data.type === 'call' ? 'incoming_call_category' : undefined);
+    const collapseKey = data.conversationId ? `conv_${data.conversationId}` : (data.senderId ? `user_${data.senderId}` : undefined);
+    const payload = JSON.stringify({
+      to,
+      title,
+      body,
+      data,
+      sound: 'default',
+      priority: 'high',
+      channelId,
+      categoryIdentifier,
+      ...(collapseKey ? { _displayInForeground: true, collapseKey } : {}),
+    });
     const req = https.request({
       hostname: 'exp.host',
       path: '/--/api/v2/push/send',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Accept-Encoding': 'gzip, deflate' },
     }, (res) => {
-      res.on('data', () => {});
-      res.on('end', resolve);
+      let bodyData = '';
+      res.on('data', (chunk) => { bodyData += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(bodyData);
+          resolve(parsed);
+        } catch (e) {
+          resolve(bodyData);
+        }
+      });
     });
     req.on('error', (err) => {
       console.warn('Expo push failed:', err.message);
-      resolve();
+      resolve(null);
     });
     req.write(payload);
     req.end();
@@ -73,15 +110,19 @@ const sendExpoPushBatch = async (tokens, title, body, data = {}, options = {}) =
   let sent = 0;
   for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
     const batch = tokens.slice(i, i + BATCH_SIZE);
-    const messages = batch.map((to) => ({ 
-      to, 
-      title, 
-      body, 
-      data, 
-      sound: 'default', 
-      priority: 'high',
-      channelId: options.channelId || undefined 
-    }));
+    const messages = batch.map((to) => {
+      const categoryIdentifier = data.type === 'message' || data.type === 'new_message' ? 'message_reply_category' : (data.type === 'call' ? 'incoming_call_category' : undefined);
+      return { 
+        to, 
+        title, 
+        body, 
+        data, 
+        sound: 'default', 
+        priority: 'high',
+        channelId: options.channelId || undefined,
+        categoryIdentifier,
+      };
+    });
     await new Promise((resolve) => {
       const payload = JSON.stringify(messages);
       const req = https.request({

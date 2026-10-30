@@ -606,20 +606,32 @@ export default function useWebRTCCall({
     if (InCallManager) {
       try {
         const isVideo = currentCallType === 'video';
-        const speaker = initialSpeakerOnRef.current != null ? Boolean(initialSpeakerOnRef.current) : isVideo;
+        // For audio calls, ALWAYS force speaker off (earpiece mode) initially for both caller and receiver!
+        // Only video calls start on speakerphone.
+        const speaker = isVideo ? true : false;
         InCallManager.start({ media: isVideo ? 'video' : 'audio', auto: false, ringback: '' });
         InCallManager.setSpeakerphoneOn(speaker);
         InCallManager.setForceSpeakerphoneOn(speaker);
-        // Also re-assert after 300ms once Android audio track is fully engaged
-        setTimeout(() => {
-          if (InCallManager) {
-            try {
-              InCallManager.setSpeakerphoneOn(speaker);
-              InCallManager.setForceSpeakerphoneOn(speaker);
-            } catch (err) {}
-          }
-        }, 300);
-        console.log('[InCallManager] Started, speakerphone:', speaker);
+        if (typeof InCallManager.chooseAudioRoute === 'function') {
+          InCallManager.chooseAudioRoute(speaker ? 'SPEAKER_PHONE' : 'EARPIECE').catch(() => {});
+        }
+        
+        // Multi-stage re-assertion for Android audio routing to guarantee earpiece for audio calls
+        // This overcomes OEM race conditions with ringtone cleanup / restoreOriginalAudioSetup
+        [100, 300, 600, 1200].forEach((delay) => {
+          setTimeout(() => {
+            if (InCallManager) {
+              try {
+                InCallManager.setSpeakerphoneOn(speaker);
+                InCallManager.setForceSpeakerphoneOn(speaker);
+                if (typeof InCallManager.chooseAudioRoute === 'function') {
+                  InCallManager.chooseAudioRoute(speaker ? 'SPEAKER_PHONE' : 'EARPIECE').catch(() => {});
+                }
+              } catch (err) {}
+            }
+          }, delay);
+        });
+        console.log('[InCallManager] Started, enforced speakerphone:', speaker);
       } catch (e) {
         console.warn('[InCallManager] start error:', e);
       }
@@ -978,8 +990,14 @@ export default function useWebRTCCall({
 
     if (InCallManager) {
       try {
+        // Explicitly clear speaker state so the next call never inherits a lingering speaker state
+        InCallManager.setSpeakerphoneOn(false);
+        InCallManager.setForceSpeakerphoneOn(false);
+        if (typeof InCallManager.chooseAudioRoute === 'function') {
+          InCallManager.chooseAudioRoute('EARPIECE').catch(() => {});
+        }
         InCallManager.stop();
-        console.log('[InCallManager] Stopped');
+        console.log('[InCallManager] Stopped and audio route reset to earpiece');
       } catch (e) {
         console.warn('[InCallManager] stop error:', e);
       }
@@ -1096,9 +1114,13 @@ export default function useWebRTCCall({
   const setSpeaker = useCallback((on) => {
     if (InCallManager) {
       try {
-        InCallManager.setSpeakerphoneOn(Boolean(on));
-        InCallManager.setForceSpeakerphoneOn(Boolean(on));
-        console.log('[InCallManager] Speaker changed to:', Boolean(on));
+        const isSpeaker = Boolean(on);
+        InCallManager.setSpeakerphoneOn(isSpeaker);
+        InCallManager.setForceSpeakerphoneOn(isSpeaker);
+        if (typeof InCallManager.chooseAudioRoute === 'function') {
+          InCallManager.chooseAudioRoute(isSpeaker ? 'SPEAKER_PHONE' : 'EARPIECE').catch(() => {});
+        }
+        console.log('[InCallManager] Speaker changed to:', isSpeaker);
       } catch (e) {
         console.warn('[InCallManager] setSpeaker error:', e);
       }

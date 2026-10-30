@@ -85,13 +85,37 @@ export default function ArchivedChatsScreen({ navigation }) {
     const isMine = lastMsg?.sender === user?._id || lastMsg?.sender?._id === user?._id;
     const isUnread = unreadCount > 0;
 
-    const preview = isDeleted
-      ? 'Message deleted'
-      : lastMsg?.images?.length
-      ? `📷 Photo${lastMsg.images.length > 1 ? 's' : ''}`
-      : lastMsg?.voiceNoteUrl || lastMsg?.isVoiceNote
-      ? '🎤 Voice note'
-      : lastMsg?.text || 'Start a conversation';
+    let preview = 'Start a conversation';
+    let isCallPreview = false;
+    let callIconColor = '#8E8E93';
+
+    if (lastMsg) {
+      if (isDeleted) {
+        preview = 'Message deleted';
+      } else if (lastMsg.callData?.callType) {
+        isCallPreview = true;
+        const cd = lastMsg.callData;
+        const isVideo = cd.callType === 'video';
+        const isMissed = cd.status === 'rejected' || cd.status === 'missed';
+        
+        if (isMissed) {
+          preview = isMine ? (isVideo ? '📹 Cancelled video call' : '📞 Cancelled call') : (isVideo ? '📹 Missed video call' : '📞 Missed call');
+          callIconColor = isMine ? '#8E8E93' : '#FF3B30';
+        } else {
+          const mins = Math.floor((cd.duration || 0) / 60).toString().padStart(2, '0');
+          const secs = ((cd.duration || 0) % 60).toString().padStart(2, '0');
+          const durationStr = cd.duration > 0 ? ` (${mins}:${secs})` : '';
+          preview = isVideo ? `📹 Video call${durationStr}` : `📞 Voice call${durationStr}`;
+          callIconColor = '#0084FF';
+        }
+      } else if (lastMsg.images?.length) {
+        preview = `📷 ${lastMsg.images.length > 1 ? `${lastMsg.images.length} Photos` : 'Photo'}`;
+      } else if (lastMsg.voiceNoteUrl || lastMsg.isVoiceNote) {
+        preview = '🎤 Voice note';
+      } else if (lastMsg.text && lastMsg.text.trim().length > 0) {
+        preview = lastMsg.text;
+      }
+    }
 
     const gradColors = avatarGradient(other?.name || '');
 
@@ -179,7 +203,7 @@ export default function ArchivedChatsScreen({ navigation }) {
                   ]}
                   numberOfLines={1}
                 >
-                  {isMine ? `You: ${preview}` : preview}
+                  {isDeleted || !lastMsg || isCallPreview ? preview : (isMine ? `You: ${preview}` : preview)}
                 </Text>
               </View>
 

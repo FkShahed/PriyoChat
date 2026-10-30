@@ -3,217 +3,1109 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PriyoChat API</title>
+  <title>PriyoChat Cloud Engine · Cyber Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Orbitron:wght@500;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-void: #05080f;
+      --bg-terminal: #090e17;
+      --card-bg: rgba(10, 16, 28, 0.78);
+      --card-border: rgba(0, 240, 255, 0.16);
+      --card-hover-border: rgba(0, 240, 255, 0.5);
+      --neon-cyan: #00f0ff;
+      --neon-green: #00ff66;
+      --neon-amber: #ffb800;
+      --neon-red: #ff3366;
+      --neon-purple: #9d4edd;
+      --text-white: #e6f1ff;
+      --text-dim: #798da3;
+      --text-cyan: #38bdf8;
+    }
 
     body {
       min-height: 100vh;
+      background-color: var(--bg-void);
+      font-family: 'Chakra Petch', sans-serif;
+      color: var(--text-white);
+      overflow-x: hidden;
+      padding: 32px 20px 80px;
+      position: relative;
+    }
+
+    /* Cyber Grid Matrix Background */
+    .cyber-grid {
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(to right, rgba(0, 240, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 240, 255, 0.035) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* CRT Scanline Overlay Effect */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.6;
+    }
+
+    /* Radial Ambient Neon Glows */
+    .ambient-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background: 
+        radial-gradient(circle at 10% 10%, rgba(0, 240, 255, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 90% 15%, rgba(157, 78, 221, 0.12) 0%, transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(0, 255, 102, 0.08) 0%, transparent 50%);
+    }
+
+    .container {
+      position: relative;
+      z-index: 2;
+      max-width: 1140px;
+      margin: 0 auto;
+    }
+
+    /* ─── Top Terminal Header ─── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 26px;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-logo {
+      width: 52px;
+      height: 52px;
+      background: rgba(0, 240, 255, 0.08);
+      border: 1.5px solid var(--neon-cyan);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 10px rgba(0, 240, 255, 0.2);
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #0D1117;
-      font-family: 'Inter', sans-serif;
-      color: #fff;
-      overflow: hidden;
+      font-size: 26px;
+      clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+      transition: all 0.3s;
     }
 
-    /* Animated background blobs */
-    .bg {
-      position: fixed; inset: 0; z-index: 0;
-      background: radial-gradient(ellipse at 20% 50%, rgba(0,132,255,0.15) 0%, transparent 60%),
-                  radial-gradient(ellipse at 80% 20%, rgba(0,100,255,0.10) 0%, transparent 60%),
-                  radial-gradient(ellipse at 60% 80%, rgba(100,0,255,0.10) 0%, transparent 60%);
+    .brand-logo:hover {
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.7), inset 0 0 15px rgba(0, 240, 255, 0.4);
+      transform: scale(1.03);
     }
 
-    .card {
-      position: relative; z-index: 1;
-      text-align: center;
-      padding: 56px 64px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 28px;
-      backdrop-filter: blur(24px);
-      max-width: 520px;
-      width: 90vw;
-      animation: fadeUp 0.7s ease both;
-    }
-
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(30px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .icon {
-      font-size: 72px;
-      display: block;
-      margin-bottom: 24px;
-      animation: pulse 2.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50%       { transform: scale(1.08); }
-    }
-
-    h1 {
-      font-size: 2.4rem;
+    .brand-text h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.65rem;
       font-weight: 800;
-      background: linear-gradient(135deg, #60A5FA 0%, #818CF8 100%);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #ffffff 0%, var(--neon-cyan) 60%, #38bdf8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 12px;
-      letter-spacing: -0.5px;
+      text-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
     }
 
-    .tagline {
-      font-size: 1rem;
-      color: rgba(255,255,255,0.5);
-      font-weight: 400;
-      margin-bottom: 40px;
-      line-height: 1.6;
-    }
-
-    .badges {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
-      margin-bottom: 36px;
-    }
-
-    .badge {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      font-weight: 600;
-      border: 1px solid;
-    }
-
-    .badge-green  { background: rgba(52,199,89,0.12);  border-color: rgba(52,199,89,0.3);  color: #34C759; }
-    .badge-blue   { background: rgba(0,132,255,0.12);  border-color: rgba(0,132,255,0.3);  color: #60A5FA; }
-    .badge-purple { background: rgba(130,80,255,0.12); border-color: rgba(130,80,255,0.3); color: #A78BFA; }
-
-    .divider {
-      width: 40px; height: 2px;
-      background: linear-gradient(90deg, #0084FF, #8250FF);
-      border-radius: 999px;
-      margin: 0 auto 32px;
-    }
-
-    .endpoints {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      text-align: left;
-    }
-
-    .endpoint {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 12px;
-      font-size: 0.82rem;
-    }
-
-    .method {
-      font-size: 0.7rem;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: rgba(52,199,89,0.15);
-      color: #34C759;
+    .brand-text p {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 4px;
       letter-spacing: 0.5px;
     }
 
-    .path {
-      color: rgba(255,255,255,0.75);
-      font-family: 'Courier New', monospace;
+    .terminal-tag {
+      color: var(--neon-cyan);
+      font-weight: 700;
     }
 
-    .desc {
-      color: rgba(255,255,255,0.35);
-      margin-left: auto;
-      font-size: 0.75rem;
+    /* ─── Server Status Badge (Command Console Style) ─── */
+    .server-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 18px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      background: rgba(0, 0, 0, 0.6);
+      clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+      transition: all 0.3s ease;
+    }
+
+    /* Operational: Neon Green */
+    .server-badge.operational {
+      border: 1px solid rgba(0, 255, 102, 0.45);
+      color: var(--neon-green);
+      box-shadow: 0 0 14px rgba(0, 255, 102, 0.25);
+    }
+    .server-badge.operational .pulse-dot {
+      background: var(--neon-green);
+      box-shadow: 0 0 10px var(--neon-green), 0 0 20px var(--neon-green);
+    }
+
+    /* Degraded / Warning: Neon Amber */
+    .server-badge.degraded {
+      border: 1px solid rgba(255, 184, 0, 0.5);
+      color: var(--neon-amber);
+      box-shadow: 0 0 14px rgba(255, 184, 0, 0.25);
+    }
+    .server-badge.degraded .pulse-dot {
+      background: var(--neon-amber);
+      box-shadow: 0 0 10px var(--neon-amber);
+    }
+
+    /* Offline / Error: Neon Red */
+    .server-badge.offline {
+      border: 1px solid rgba(255, 51, 102, 0.5);
+      color: var(--neon-red);
+      box-shadow: 0 0 14px rgba(255, 51, 102, 0.25);
+    }
+    .server-badge.offline .pulse-dot {
+      background: var(--neon-red);
+      box-shadow: 0 0 10px var(--neon-red);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+
+    /* ─── Cyber Tactical Download Banner ─── */
+    .download-banner {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.08) 0%, rgba(157, 78, 221, 0.08) 100%);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      border-left: 4px solid var(--neon-cyan);
+      border-radius: 12px;
+      padding: 18px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .download-text h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .download-text p {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    .btn-download {
+      background: rgba(0, 255, 102, 0.12);
+      border: 1.5px solid var(--neon-green);
+      color: var(--neon-green);
+      text-decoration: none;
+      padding: 11px 22px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 0.86rem;
+      letter-spacing: 0.6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+      box-shadow: 0 0 15px rgba(0, 255, 102, 0.25);
+      transition: all 0.25s;
+    }
+
+    .btn-download:hover {
+      background: var(--neon-green);
+      color: #05080f;
+      box-shadow: 0 0 25px rgba(0, 255, 102, 0.6);
+      transform: translateY(-2px);
+    }
+
+    /* ─── HUD KPI Cards (Corner Cut Matrix Style) ─── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-top: 2px solid rgba(0, 240, 255, 0.4);
+      padding: 18px 20px;
+      backdrop-filter: blur(16px);
+      position: relative;
+      transition: all 0.25s ease;
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 12px;
+      height: 12px;
+      background: rgba(0, 240, 255, 0.4);
+      clip-path: polygon(0 0, 100% 100%, 100% 0);
+    }
+
+    .card:hover {
+      border-color: var(--neon-cyan);
+      box-shadow: 0 8px 25px -5px rgba(0, 240, 255, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .card-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-cyan);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-value {
+      font-size: 1.85rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: #fff;
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+      margin-bottom: 6px;
+    }
+
+    .card-subtitle {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      color: var(--text-dim);
+    }
+
+    /* ─── Cyberpunk Live Charts ─── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    @media (max-width: 860px) {
+      .charts-row { grid-template-columns: 1fr; }
+    }
+
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-left: 3px solid var(--neon-cyan);
+      padding: 20px 22px;
+      backdrop-filter: blur(16px);
+      clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+    }
+
+    .chart-card:nth-child(2) {
+      border-left: 3px solid var(--neon-purple);
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .chart-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.92rem;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-latency {
+      background: rgba(0, 240, 255, 0.12);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      color: var(--neon-cyan);
+    }
+
+    .badge-ram {
+      background: rgba(157, 78, 221, 0.15);
+      border: 1px solid rgba(157, 78, 221, 0.4);
+      color: #c77dff;
+    }
+
+    .canvas-container {
+      position: relative;
+      height: 180px;
+      width: 100%;
+    }
+
+    /* ─── Tactical Telemetry Row ─── */
+    .telemetry-row {
+      display: grid;
+      grid-template-columns: 2fr 1.2fr;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    @media (max-width: 860px) {
+      .telemetry-row { grid-template-columns: 1fr; }
+    }
+
+    .detail-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-top: 1px solid rgba(0, 240, 255, 0.3);
+      padding: 22px 24px;
+      backdrop-filter: blur(16px);
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+    }
+
+    .section-header {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.96rem;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .metric-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .metric-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(0, 240, 255, 0.1);
+      border-left: 2px solid var(--neon-cyan);
+    }
+
+    .metric-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .metric-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* ─── Live Ping Console ─── */
+    .ping-box {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px dashed rgba(0, 240, 255, 0.3);
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .ping-display {
+      font-size: 2.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 900;
+      color: var(--neon-cyan);
+      text-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+      margin: 4px 0;
+    }
+
+    .btn-action {
+      background: rgba(0, 240, 255, 0.12);
+      border: 1.5px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 0.82rem;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 12px 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+    }
+
+    .btn-action:hover {
+      background: var(--neon-cyan);
+      color: #05080f;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.6);
+      transform: translateY(-1px);
+    }
+
+    /* ─── Endpoints Grid ─── */
+    .endpoint-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+    }
+
+    .api-pill {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(0, 240, 255, 0.1);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+    }
+
+    .method {
+      font-weight: 700;
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 3px;
+    }
+
+    .get { background: rgba(0, 255, 102, 0.15); color: var(--neon-green); border: 1px solid rgba(0, 255, 102, 0.3); }
+    .post { background: rgba(0, 240, 255, 0.15); color: var(--neon-cyan); border: 1px solid rgba(0, 240, 255, 0.3); }
+
+    .api-status-check {
+      font-size: 0.72rem;
+      color: var(--neon-green);
+      font-weight: 700;
     }
 
     .footer {
-      margin-top: 36px;
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.2);
+      text-align: center;
+      margin-top: 40px;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      letter-spacing: 0.6px;
     }
 
-    /* Live status dot */
-    .status-dot {
-      display: inline-block;
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #34C759;
-      margin-right: 6px;
-      box-shadow: 0 0 8px #34C759;
-      animation: blink 1.8s ease-in-out infinite;
-    }
+    /* ─── High Performance Mobile Optimization ─── */
+    @media (max-width: 640px) {
+      body {
+        padding: 18px 12px 50px;
+      }
 
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding-bottom: 14px;
+      }
+
+      .brand-wrap {
+        width: 100%;
+        gap: 12px;
+      }
+
+      .brand-logo {
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
+        flex-shrink: 0;
+      }
+
+      .brand-text h1 {
+        font-size: 1.25rem;
+        letter-spacing: 1px;
+      }
+
+      .brand-text p {
+        font-size: 0.72rem;
+      }
+
+      .server-badge {
+        font-size: 0.74rem;
+        padding: 5px 12px;
+      }
+
+      .download-banner {
+        padding: 16px 16px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .download-text h3 {
+        font-size: 1rem;
+      }
+
+      .download-text p {
+        font-size: 0.74rem;
+      }
+
+      .btn-download {
+        justify-content: center;
+        width: 100%;
+        padding: 12px 16px;
+        font-size: 0.85rem;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .card {
+        padding: 14px 16px;
+      }
+
+      .card-value {
+        font-size: 1.55rem;
+      }
+
+      .charts-row {
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .chart-card {
+        padding: 14px 14px 18px;
+      }
+
+      .canvas-container {
+        height: 155px;
+      }
+
+      .chart-title {
+        font-size: 0.84rem;
+      }
+
+      .telemetry-row {
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .detail-card {
+        padding: 16px 14px;
+      }
+
+      .section-header {
+        font-size: 0.88rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+
+      .section-header span:last-child {
+        font-size: 0.72rem !important;
+      }
+
+      .metric-list {
+        gap: 6px;
+      }
+
+      .metric-item {
+        padding: 8px 12px;
+      }
+
+      .metric-name {
+        font-size: 0.74rem;
+      }
+
+      .metric-val {
+        font-size: 0.76rem;
+      }
+
+      .ping-display {
+        font-size: 2rem;
+      }
+
+      .endpoint-grid {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .api-pill {
+        padding: 8px 12px;
+        font-size: 0.74rem;
+      }
+
+      .footer {
+        font-size: 0.7rem;
+        margin-top: 25px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="bg"></div>
+  <!-- Cyber Matrix Grid & Scanline Backgrounds -->
+  <div class="cyber-grid"></div>
+  <div class="scanlines"></div>
+  <div class="ambient-glow"></div>
 
-  <div class="card">
-    <span class="icon">💬</span>
-    <h1>PriyoChat API</h1>
-    <p class="tagline">Real-time messaging backend powering the PriyoChat mobile application.</p>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand-wrap">
+        <div class="brand-logo">⚡</div>
+        <div class="brand-text">
+          <h1>PriyoChat Cloud Engine</h1>
+          <p><span class="terminal-tag">ORACLE_VM</span> :: Ashburn [US-EAST] · TLS_1.3_ACTIVE · PROTO_v1.0.9</p>
+        </div>
+      </div>
+      <div class="server-badge operational" id="server-badge-wrap">
+        <span class="pulse-dot"></span>
+        <span id="badge-status">SYS_ALL_OPERATIONAL</span>
+      </div>
+    </header>
 
-    <div class="badges">
-      <span class="badge badge-green"><span class="status-dot"></span> Server Online</span>
-      <span class="badge badge-blue">⚡ Socket.IO</span>
-      <span class="badge badge-purple">🛡️ JWT Auth</span>
+    <!-- Download APK Banner -->
+    <div class="download-banner">
+      <div class="download-text">
+        <h3>📲 DOWNLOAD RELEASE APK :: v1.0.9</h3>
+        <p>Production binaries with WebRTC audio/video fixes and high-throughput cloud sockets.</p>
+      </div>
+      <a href="/apk/PriyoChat-v1.0.8.apk" class="btn-download" download>
+        <span>📥 DEPLOY_APK (151 MB)</span>
+      </a>
     </div>
 
-    <div class="divider"></div>
+    <!-- Live Telemetry KPI Cards -->
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">
+          <span>CLIENT_TO_SERVER_RTT</span>
+          <span>⚡</span>
+        </div>
+        <div class="card-value" id="client-ping">-- ms</div>
+        <div class="card-subtitle" id="client-ping-status">Measuring latency...</div>
+      </div>
 
-    <div class="endpoints">
-      <div class="endpoint">
-        <span class="method">GET</span>
-        <span class="path">/health</span>
-        <span class="desc">Health check</span>
+      <div class="card">
+        <div class="card-title">
+          <span>MONGODB_ATLAS_PING</span>
+          <span>🍃</span>
+        </div>
+        <div class="card-value" id="db-latency">-- ms</div>
+        <div class="card-subtitle" id="db-status">Cluster pinging...</div>
       </div>
-      <div class="endpoint">
-        <span class="method">POST</span>
-        <span class="path">/api/auth/login</span>
-        <span class="desc">Sign in</span>
+
+      <div class="card">
+        <div class="card-title">
+          <span>ACTIVE_SOCKET_SESSIONS</span>
+          <span>🔌</span>
+        </div>
+        <div class="card-value" id="active-sockets">--</div>
+        <div class="card-subtitle">Socket.IO real-time pool</div>
       </div>
-      <div class="endpoint">
-        <span class="method">POST</span>
-        <span class="path">/api/auth/signup</span>
-        <span class="desc">Register</span>
-      </div>
-      <div class="endpoint">
-        <span class="method">GET</span>
-        <span class="path">/api/users</span>
-        <span class="desc">Search users</span>
-      </div>
-      <div class="endpoint">
-        <span class="method">GET</span>
-        <span class="path">/api/conversations</span>
-        <span class="desc">Get chats</span>
+
+      <div class="card">
+        <div class="card-title">
+          <span>SYSTEM_UPTIME</span>
+          <span>⏱️</span>
+        </div>
+        <div class="card-value" id="server-uptime">--</div>
+        <div class="card-subtitle" id="server-uptime-sub">Continuous run</div>
       </div>
     </div>
 
-    <p class="footer">© 2025 PriyoChat · Built with ❤️ by Fazlul Karim</p>
+    <!-- Live Interactive Charts Row -->
+    <div class="charts-row">
+      <!-- Latency History Chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">
+            <span>📈 RTT_LATENCY_TELEMETRY</span>
+          </div>
+          <span class="chart-badge badge-latency" id="chart-latency-val">Live: -- ms</span>
+        </div>
+        <div class="canvas-container">
+          <canvas id="latencyChart"></canvas>
+        </div>
+      </div>
+
+      <!-- RAM Usage Chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">
+            <span>🧠 PROCESS_MEMORY_STABILITY</span>
+          </div>
+          <span class="chart-badge badge-ram" id="chart-ram-val">RSS: -- MB</span>
+        </div>
+        <div class="canvas-container">
+          <canvas id="ramChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Telemetry & Diagnostic Tools -->
+    <div class="telemetry-row">
+      <!-- Diagnostics table -->
+      <div class="detail-card">
+        <div class="section-header">
+          <span>📊 REAL-TIME SERVER METRICS</span>
+          <span style="font-size: 0.76rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace;" id="last-updated">Polling 3000ms</span>
+        </div>
+        <div class="metric-list">
+          <div class="metric-item">
+            <span class="metric-name">🖥️ CPU_ARCHITECTURE</span>
+            <span class="metric-val" id="cpu-info">AMD EPYC (2 Cores)</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-name">🧠 NODEJS_PROCESS_RSS</span>
+            <span class="metric-val" id="ram-usage">-- MB RSS</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-name">💾 SYSTEM_FREE_RAM</span>
+            <span class="metric-val" id="system-ram">-- MB Free</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-name">🔒 HTTPS_TLS_CIPHER</span>
+            <span class="metric-val" style="color: var(--neon-green);">TLSv1.3 Active</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-name">📦 RELEASE_BUILD</span>
+            <span class="metric-val" style="color: var(--neon-cyan);">v1.0.9 Production</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Realtime Interactive Ping Tester -->
+      <div class="detail-card">
+        <div class="section-header">
+          <span>⚡ LIVE_RTT_BENCHMARK</span>
+        </div>
+        <div class="ping-tool">
+          <p style="font-size: 0.78rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; line-height: 1.45; margin-bottom: 12px;">
+            Benchmarking true round-trip network response from your client to Oracle VM.
+          </p>
+          <div class="ping-box">
+            <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-family: 'JetBrains Mono', monospace;">Live RTT Response</div>
+            <div class="ping-display" id="interactive-ping">-- ms</div>
+            <div style="font-size: 0.76rem; color: var(--neon-green); font-family: 'JetBrains Mono', monospace;" id="interactive-quality">Excellent Response</div>
+          </div>
+          <button class="btn-action" onclick="measureLivePing()">▶ RUN_DIAGNOSTIC_PING</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Health Status -->
+    <div class="detail-card">
+      <div class="section-header">
+        <span>🌐 SYSTEM_ENDPOINTS_REGISTRY</span>
+        <span style="font-size: 0.76rem; color: var(--neon-green); font-family: 'JetBrains Mono', monospace;">● ALL_OPERATIONAL</span>
+      </div>
+      <div class="endpoint-grid">
+        <div class="api-pill">
+          <div><span class="method get">GET</span> /health</div>
+          <div class="api-status-check">200 OK</div>
+        </div>
+        <div class="api-pill">
+          <div><span class="method get">GET</span> /api/status</div>
+          <div class="api-status-check">200 OK</div>
+        </div>
+        <div class="api-pill">
+          <div><span class="method get">GET</span> /api/users/app-update</div>
+          <div class="api-status-check">200 OK</div>
+        </div>
+        <div class="api-pill">
+          <div><span class="method post">POST</span> /api/auth/login</div>
+          <div class="api-status-check">Active</div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      [PRIYO_ENGINE] · ORACLE CLOUD INFRASTRUCTURE · ASHBURN REGION · © 2026 FAZLUL KARIM
+    </footer>
   </div>
+
+  <script>
+    // Max data points on live chart
+    const MAX_POINTS = 14;
+    // Persist client latency history in browser localStorage so it NEVER resets or mismatches
+    const STORAGE_KEY_LATENCY = 'priyo_telemetry_latency';
+    const STORAGE_KEY_LABELS = 'priyo_telemetry_labels';
+
+    function getSavedHistory() {
+      try {
+        const l = JSON.parse(localStorage.getItem(STORAGE_KEY_LATENCY) || '[]');
+        const t = JSON.parse(localStorage.getItem(STORAGE_KEY_LABELS) || '[]');
+        return { latency: l, labels: t };
+      } catch (e) {
+        return { latency: [], labels: [] };
+      }
+    }
+
+    function saveHistory(labels, latency) {
+      try {
+        localStorage.setItem(STORAGE_KEY_LATENCY, JSON.stringify(latency.slice(-MAX_POINTS)));
+        localStorage.setItem(STORAGE_KEY_LABELS, JSON.stringify(labels.slice(-MAX_POINTS)));
+      } catch (e) {}
+    }
+
+    const saved = getSavedHistory();
+    const initialLabels = saved.labels.length > 0 ? saved.labels : [];
+    const initialLatency = saved.latency.length > 0 ? saved.latency : [];
+
+    // Initialize Chart.js Latency Chart (Cyber Cyan Theme)
+    const ctxLatency = document.getElementById('latencyChart').getContext('2d');
+    const latencyGradient = ctxLatency.createLinearGradient(0, 0, 0, 180);
+    latencyGradient.addColorStop(0, 'rgba(0, 240, 255, 0.45)');
+    latencyGradient.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+
+    const latencyChart = new Chart(ctxLatency, {
+      type: 'line',
+      data: {
+        labels: initialLabels,
+        datasets: [{
+          label: 'Client Latency (ms)',
+          data: initialLatency,
+          borderColor: '#00f0ff',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#00f0ff',
+          pointBorderColor: '#05080f',
+          pointBorderWidth: 1.5,
+          backgroundColor: latencyGradient,
+          fill: true,
+          tension: 0.25
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: {
+            grid: { color: 'rgba(0, 240, 255, 0.08)' },
+            ticks: { color: '#798da3', font: { family: 'JetBrains Mono', size: 10 } },
+            suggestedMin: 30,
+            suggestedMax: 200
+          }
+        }
+      }
+    });
+
+    // Initialize Chart.js RAM Chart (Cyber Purple Theme)
+    const ctxRam = document.getElementById('ramChart').getContext('2d');
+    const ramGradient = ctxRam.createLinearGradient(0, 0, 0, 180);
+    ramGradient.addColorStop(0, 'rgba(157, 78, 221, 0.45)');
+    ramGradient.addColorStop(1, 'rgba(157, 78, 221, 0.0)');
+
+    const ramChart = new Chart(ctxRam, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'RAM RSS (MB)',
+          data: [],
+          borderColor: '#9d4edd',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#9d4edd',
+          pointBorderColor: '#05080f',
+          pointBorderWidth: 1.5,
+          backgroundColor: ramGradient,
+          fill: true,
+          tension: 0.25
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: {
+            grid: { color: 'rgba(157, 78, 221, 0.08)' },
+            ticks: { color: '#798da3', font: { family: 'JetBrains Mono', size: 10 } },
+            suggestedMin: 80,
+            suggestedMax: 130
+          }
+        }
+      }
+    });
+
+    let ramInitialized = false;
+
+    function appendChart(chart, label, val) {
+      chart.data.labels.push(label);
+      chart.data.datasets[0].data.push(val);
+      if (chart.data.labels.length > MAX_POINTS) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      chart.update('none');
+    }
+
+    async function fetchTelemetry() {
+      const clientStart = performance.now();
+      try {
+        const res = await fetch('/api/status?t=' + Date.now());
+        const clientLatency = Math.round(performance.now() - clientStart);
+        const data = await res.json();
+        const timeNow = new Date().toLocaleTimeString();
+
+        // 1. Sync RAM Chart directly from server persistent buffer
+        if (!ramInitialized && data.history && data.history.length > 0) {
+          ramChart.data.labels = data.history.map(h => h.time);
+          ramChart.data.datasets[0].data = data.history.map(h => h.memoryRssMB);
+          ramChart.update('none');
+          ramInitialized = true;
+        } else {
+          appendChart(ramChart, timeNow, data.system.memoryRssMB);
+        }
+
+        // Measure accurate TCP/HTTP ping to /health
+        const pingStart = performance.now();
+        await fetch('/health?t=' + Date.now());
+        const pingLatency = Math.round(performance.now() - pingStart);
+
+        // 2. Sync Client Latency Chart & persist in localStorage
+        appendChart(latencyChart, timeNow, pingLatency);
+        saveHistory(latencyChart.data.labels, latencyChart.data.datasets[0].data);
+
+        // Update Client Ping
+        const pingEl = document.getElementById('client-ping');
+        pingEl.textContent = pingLatency + ' ms';
+        const pingSub = document.getElementById('client-ping-status');
+        if (pingLatency < 160) {
+          pingSub.textContent = '🟢 OPTIMAL (Direct Cloud RTT)';
+          pingSub.style.color = '#00ff66';
+        } else if (pingLatency < 280) {
+          pingSub.textContent = '🟡 ACCEPTABLE RESPONSE';
+          pingSub.style.color = '#ffb800';
+        } else {
+          pingSub.textContent = '🔴 HIGH LATENCY SPIKE';
+          pingSub.style.color = '#ff3366';
+        }
+
+        document.getElementById('interactive-ping').textContent = pingLatency + ' ms';
+        document.getElementById('chart-latency-val').textContent = `Live: ${pingLatency} ms`;
+        document.getElementById('chart-ram-val').textContent = `RSS: ${data.system.memoryRssMB} MB`;
+
+        // Update Database Latency
+        const dbEl = document.getElementById('db-latency');
+        dbEl.textContent = (data.database.latencyMs >= 0 ? data.database.latencyMs : '--') + ' ms';
+        const dbSub = document.getElementById('db-status');
+        dbSub.textContent = `CLUSTER: ${data.database.name} (${data.database.status.toUpperCase()})`;
+        dbSub.style.color = data.database.status === 'connected' ? '#00ff66' : '#ff3366';
+
+        // Active Sockets & Uptime
+        document.getElementById('active-sockets').textContent = data.sockets.activeConnections;
+        document.getElementById('server-uptime').textContent = data.system.uptimeFormatted;
+
+        // Metric details
+        const isMobile = window.innerWidth <= 640;
+        document.getElementById('cpu-info').textContent = isMobile 
+          ? `${data.system.cpuCount} Cores (AMD)` 
+          : `${data.system.cpuCount} Cores · ${data.system.cpuModel}`;
+        document.getElementById('ram-usage').textContent = isMobile
+          ? `${data.system.memoryRssMB} MB RSS`
+          : `${data.system.memoryRssMB} MB (Heap: ${data.system.memoryHeapUsedMB} MB)`;
+        document.getElementById('system-ram').textContent = `${data.system.freeSystemMemMB} / ${data.system.totalSystemMemMB} MB`;
+        document.getElementById('last-updated').textContent = 'POLL: ' + timeNow;
+
+        // Update Top Server Health Status Badge
+        const badgeWrap = document.getElementById('server-badge-wrap');
+        const badgeStatus = document.getElementById('badge-status');
+        if (data.database && data.database.status === 'connected') {
+          badgeWrap.className = 'server-badge operational';
+          badgeStatus.textContent = 'SYS_ALL_OPERATIONAL';
+        } else {
+          badgeWrap.className = 'server-badge degraded';
+          badgeStatus.textContent = 'DATABASE_DEGRADED';
+        }
+
+      } catch (err) {
+        console.error('Failed to load telemetry:', err);
+        const badgeWrap = document.getElementById('server-badge-wrap');
+        const badgeStatus = document.getElementById('badge-status');
+        if (badgeWrap && badgeStatus) {
+          badgeWrap.className = 'server-badge offline';
+          badgeStatus.textContent = 'SERVER_OFFLINE';
+        }
+      }
+    }
+
+    async function measureLivePing() {
+      const btn = document.querySelector('.btn-action');
+      btn.textContent = '⏳ RUNNING_PING...';
+      const start = performance.now();
+      try {
+        await fetch('/health?t=' + Date.now());
+        const latency = Math.round(performance.now() - start);
+        document.getElementById('interactive-ping').textContent = latency + ' ms';
+        const quality = document.getElementById('interactive-quality');
+        quality.textContent = latency < 150 ? '⚡ ULTRA_FAST_RTT' : '🌐 NORMAL_CLOUD_RTT';
+      } finally {
+        btn.textContent = '▶ RUN_DIAGNOSTIC_PING';
+      }
+    }
+
+    fetchTelemetry();
+    setInterval(fetchTelemetry, 3000);
+  </script>
 </body>
 </html>

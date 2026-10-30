@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Image, Vibration, Platform,
+  Image, Vibration, Platform, BackHandler, DeviceEventEmitter,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +11,7 @@ import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import useWebRTCCall from '../../hooks/useWebRTCCall';
 import { getInitials } from '../../utils/helpers';
-import { webrtc } from '../../utils/nativeModules';
+import { webrtc, InCallManager } from '../../utils/nativeModules';
 
 // Universal VideoStreamView for Web (HTML5 video) and Mobile (RTCView)
 function VideoStreamView({ stream, isLocal = false, mirror = false, zOrder = 0, style, revision = 0 }) {
@@ -214,6 +214,53 @@ export default function CallScreen({ route, navigation }) {
   useEffect(() => {
     setSpeaker(speakerOn);
   }, [speakerOn, setSpeaker]);
+
+  // Proximity Sensor Handling for Audio Calls:
+  // When the phone is brought near the ear (and speaker is off), turn the screen off.
+  // When moved away from the ear, turn the screen back on.
+  // Standard phone behavior: if speaker is ON or call is video, proximity screen-off is disabled.
+  useEffect(() => {
+    if (Platform.OS === 'web' || callType === 'video' || !InCallManager) {
+      return;
+    }
+
+    try {
+      InCallManager.startProximitySensor();
+      console.log('[CallScreen] Proximity sensor started for audio call');
+    } catch (e) {
+      console.warn('[CallScreen] Failed to start proximity sensor:', e);
+    }
+
+    const sub = DeviceEventEmitter.addListener('Proximity', (data) => {
+      console.log('[CallScreen] Proximity event received:', data);
+      const isNear = Boolean(data?.isNear);
+      if (!speakerOn) {
+        if (isNear) {
+          try {
+            InCallManager.turnScreenOff();
+          } catch (e) {}
+        } else {
+          try {
+            InCallManager.turnScreenOn();
+          } catch (e) {}
+        }
+      } else {
+        // Speaker is ON: screen must stay ON
+        try {
+          InCallManager.turnScreenOn();
+        } catch (e) {}
+      }
+    });
+
+    return () => {
+      sub.remove();
+      try {
+        InCallManager.stopProximitySensor();
+        InCallManager.turnScreenOn();
+        console.log('[CallScreen] Proximity sensor stopped');
+      } catch (e) {}
+    };
+  }, [callType, speakerOn]);
   useEffect(() => {
     const DURATION = 2000; // one ripple cycle
 
@@ -266,12 +313,14 @@ export default function CallScreen({ route, navigation }) {
     const play = async () => {
       try {
         if (isCancelled) return;
-        await Audio.setAudioModeAsync({
+        if (Platform.OS !== 'web') {
+          await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: !speakerOn,
         });
+        }
         if (isCancelled) return;
         const { sound: s } = await Audio.Sound.createAsync(
           require('../../../assets/ringback.wav'),
@@ -295,6 +344,7 @@ export default function CallScreen({ route, navigation }) {
         sound.unloadAsync().catch(() => {});
         sound = null;
       }
+      if (Platform.OS !== 'web') {
       try {
         Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
@@ -303,6 +353,7 @@ export default function CallScreen({ route, navigation }) {
           playThroughEarpieceAndroid: !speakerOn,
         }).catch(() => {});
       } catch (e) {}
+    }
     };
   }, [callState, isReceiver, speakerOn]);
 
@@ -388,17 +439,36 @@ export default function CallScreen({ route, navigation }) {
     } catch (e) {}
     
     // Release background audio session so the app can sleep now
-    try {
-      Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
-      }).catch(() => {});
-    } catch (e) {}
+    if (Platform.OS !== 'web') {
+      try {
+        if (InCallManager) {
+          InCallManager.turnScreenOn();
+          InCallManager.stopProximitySensor();
+          InCallManager.setSpeakerphoneOn(false);
+          InCallManager.setForceSpeakerphoneOn(false);
+          if (typeof InCallManager.chooseAudioRoute === 'function') {
+            InCallManager.chooseAudioRoute('EARPIECE').catch(() => {});
+          }
+        }
+      } catch (e) {}
+      try {
+        Audio.setAudioModeAsync({
+          playsInSilentModeIOS: false,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: false,
+          playThroughEarpieceAndroid: false,
+        }).catch(() => {});
+      } catch (e) {}
+    }
 
     cleanupWebRTC();
     resetCall();
+    const targetId = targetUserId || useCallStore.getState().remoteUserId;
+    if (targetId && (callerReason === 'unmount_safety' || callerReason === 'user_back')) {
+      try {
+        emit('call_end', { to: targetId, callType, duration: callDuration });
+      } catch (e) {}
+    }
     if (callerReason !== 'unmount_safety') {
       navigateAway();
     }
@@ -442,14 +512,25 @@ export default function CallScreen({ route, navigation }) {
     };
   }, []);
 
-  const handleEndCall = () => {
+  const handleEndCall = useCallback(() => {
     if (hasNavigatedBack.current) return;
     const targetId = targetUserId || useCallStore.getState().remoteUserId;
     if (targetId) {
       emit('call_end', { to: targetId, callType, duration: callDuration });
     }
     performFullTeardown('user_end_button');
-  };
+  }, [targetUserId, callType, callDuration, emit, performFullTeardown]);
+
+  // Prevent accidental Android hardware back button from hanging up or exiting call
+  useEffect(() => {
+    const onBackPress = () => {
+      console.log('[CallScreen] Hardware back button pressed -> ignored to protect active call');
+      // Return true to prevent React Navigation / Android from exiting the screen or hanging up
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, []);
 
   const toggleMute = () => {
     localStream?.getAudioTracks().forEach((t) => { t.enabled = muted; });

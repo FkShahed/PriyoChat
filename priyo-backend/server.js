@@ -10,7 +10,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./src/config/db');
 const { initFirebase } = require('./src/config/firebase');
-const { setupSocket } = require('./src/socket/socketHandler');
+const { setupSocket, onlineUsers } = require('./src/socket/socketHandler');
 
 // Routes
 const authRoutes = require('./src/routes/authRoutes');
@@ -41,8 +41,10 @@ app.set('io', io);
 // Trust reverse proxy (Render, Heroku, Cloudflare) for rate limiting & IP detection
 app.set('trust proxy', 1);
 
-// ─── Middleware ────────────────────────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cors({
   origin: (origin, callback) => callback(null, true),
   credentials: true,
@@ -57,6 +59,7 @@ const limiter = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === '/status' || req.path === '/telemetry' || req.path === '/health',
 });
 app.use('/api', limiter);
 
@@ -84,6 +87,85 @@ app.use('/api/config', configRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
+
+// ─── Live Telemetry & Status API ───────────────────────────────────────────────
+const os = require('os');
+const mongoose = require('mongoose');
+
+// Rolling in-memory metrics history (last 20 sample points, stored on server)
+const metricsHistory = [];
+const MAX_HISTORY = 20;
+
+setInterval(async () => {
+  try {
+    let dbLatencyMs = -1;
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      const dbStart = Date.now();
+      await mongoose.connection.db.admin().ping();
+      dbLatencyMs = Date.now() - dbStart;
+    }
+    const mem = process.memoryUsage();
+    metricsHistory.push({
+      time: new Date().toLocaleTimeString(),
+      dbLatencyMs: dbLatencyMs >= 0 ? dbLatencyMs : 60,
+      memoryRssMB: Math.round(mem.rss / (1024 * 1024)),
+      activeConnections: onlineUsers ? onlineUsers.size : 0,
+    });
+    if (metricsHistory.length > MAX_HISTORY) {
+      metricsHistory.shift();
+    }
+  } catch (e) {}
+}, 3000);
+
+app.get('/api/status', async (req, res) => {
+  const startTime = Date.now();
+  let dbLatencyMs = -1;
+  let dbStatus = 'disconnected';
+
+  try {
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      const dbStart = Date.now();
+      await mongoose.connection.db.admin().ping();
+      dbLatencyMs = Date.now() - dbStart;
+      dbStatus = 'connected';
+    }
+  } catch (err) {
+    dbStatus = 'error';
+  }
+
+  const memory = process.memoryUsage();
+  const uptimeSeconds = Math.floor(process.uptime());
+
+  res.json({
+    status: 'operational',
+    service: 'PriyoChat Core Backend',
+    version: '1.0.9',
+    timestamp: new Date().toISOString(),
+    apiLatencyMs: Date.now() - startTime,
+    history: metricsHistory,
+    database: {
+      status: dbStatus,
+      latencyMs: dbLatencyMs,
+      name: mongoose.connection.name || 'PriyoChat',
+    },
+    sockets: {
+      activeConnections: onlineUsers ? onlineUsers.size : 0,
+      protocol: 'WebSockets (Socket.IO v4)',
+    },
+    system: {
+      uptimeSeconds,
+      uptimeFormatted: `${Math.floor(uptimeSeconds / 3600)}h ${Math.floor((uptimeSeconds % 3600) / 60)}m ${uptimeSeconds % 60}s`,
+      memoryRssMB: Math.round(memory.rss / (1024 * 1024)),
+      memoryHeapUsedMB: Math.round(memory.heapUsed / (1024 * 1024)),
+      totalSystemMemMB: Math.round(os.totalmem() / (1024 * 1024)),
+      freeSystemMemMB: Math.round(os.freemem() / (1024 * 1024)),
+      cpuCount: os.cpus().length,
+      cpuModel: os.cpus()[0]?.model || 'Cloud vCPU',
+      platform: `${os.type()} ${os.release()} (${os.arch()})`,
+      nodeVersion: process.version,
+    },
+  });
+});
 
 // 404
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));

@@ -38,6 +38,34 @@ const setupSocket = (io) => {
     await User.findByIdAndUpdate(userId, { isOnline: true });
     io.emit('user_status', { userId, isOnline: true });
 
+    // When this user comes online / reconnects socket, any messages sent to them
+    // that were sitting in 'sent' status should now be updated to 'delivered'!
+    (async () => {
+      try {
+        const userConversations = await Conversation.find({ participants: userId }).select('_id');
+        const convoIds = userConversations.map(c => c._id);
+        const undeliveredMsgs = await Message.find({
+          conversation: { $in: convoIds },
+          sender: { $ne: userId },
+          status: 'sent',
+        }).select('_id conversation');
+
+        if (undeliveredMsgs.length > 0) {
+          const ids = undeliveredMsgs.map(m => m._id);
+          await Message.updateMany({ _id: { $in: ids } }, { status: 'delivered' });
+          undeliveredMsgs.forEach(m => {
+            io.to(m.conversation.toString()).emit('message_status_updated', {
+              messageId: m._id,
+              conversationId: m.conversation.toString(),
+              status: 'delivered',
+            });
+          });
+        }
+      } catch (e) {
+        console.warn('[socketHandler] Batch mark delivered error on connect:', e.message);
+      }
+    })();
+
     // ── Check if there are any active pending call offers for this user ──
     const now = Date.now();
     for (const [cId, activeCall] of activeCalls.entries()) {
@@ -104,18 +132,52 @@ const setupSocket = (io) => {
         // Update conversation lastMessage
         await Conversation.findByIdAndUpdate(conversationId, { lastMessage: message._id });
 
-        // Emit to all in conversation
+        // Emit to conversation room AND individually to all participants' personal rooms
+        // This ensures users receive the message instantly even if they haven't explicitly joined the conversation room yet!
         io.to(conversationId).emit('new_message', message);
+        conversation.participants.forEach((p) => {
+          const pId = p._id ? p._id.toString() : p.toString();
+          if (pId !== userId) {
+            io.to(pId).emit('new_message', message);
+          }
+        });
 
         // Send push to offline participants
         conversation.participants.forEach(async (participant) => {
           if (participant._id.toString() !== userId && !onlineUsers.has(participant._id.toString())) {
-            await sendPushNotification(
+            const pushResult = await sendPushNotification(
               participant.fcmToken,
               socket.user.name,
               text || (images.length ? '📷 Photo' : '🎤 Voice note'),
-              { type: 'new_message', conversationId }
+              {
+                type: 'message',
+                conversationId,
+                senderId: userId,
+                senderName: socket.user.name,
+                avatarUrl: socket.user.avatar || '',
+                message: JSON.stringify(message),
+              }
             );
+
+            // If push notification was successfully delivered to Google FCM / Expo APNS servers,
+            // this confirms the device has internet/data on and the push payload was dispatched.
+            // Automatically promote message status from 'sent' to 'delivered' so the sender sees double-checks!
+            if (pushResult && !pushResult.error) {
+              try {
+                const currentMsg = await Message.findById(message._id);
+                if (currentMsg && currentMsg.status === 'sent') {
+                  currentMsg.status = 'delivered';
+                  await currentMsg.save();
+                  io.to(conversationId).emit('message_status_updated', {
+                    messageId: message._id,
+                    conversationId,
+                    status: 'delivered',
+                  });
+                }
+              } catch (e) {
+                console.warn('[socketHandler] Push-delivered status update error:', e.message);
+              }
+            }
           }
         });
 
@@ -363,14 +425,15 @@ const setupSocket = (io) => {
           participants: { $all: [userId, to] }
         });
         if (convo) {
+          const isZeroDuration = Number(duration) === 0;
           const callMsg = await Message.create({
             conversation: convo._id,
             sender: userId,
             text: '',
             callData: {
               callType: callType || 'audio',
-              duration,
-              status: 'completed',
+              duration: Number(duration) || 0,
+              status: isZeroDuration ? 'rejected' : 'completed',
             },
           });
           await callMsg.populate('sender', 'name avatar');
