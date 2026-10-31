@@ -157,7 +157,11 @@ export default function CallScreen({ route, navigation }) {
   const [remoteStream, setRemoteStream] = useState(null);
   const [remoteTrackVersion, setRemoteTrackVersion] = useState(0);
   const [hasRemoteVideoState, setHasRemoteVideoState] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
+  const storeCallDuration = useCallStore((st) => st.callDuration);
+  const setStoreCallDuration = useCallStore((st) => st.setStoreCallDuration || st.setCallDuration);
+  const isMinimized = useCallStore((st) => st.isMinimized);
+  const setIsMinimized = useCallStore((st) => st.setIsMinimized);
+  const [callDuration, setCallDuration] = useState(storeCallDuration || 0);
   const [muted, setMuted] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(callType === 'video');
   const [videoOn, setVideoOn] = useState(true);
@@ -176,7 +180,7 @@ export default function CallScreen({ route, navigation }) {
     (typeof storeRemoteUser === 'string' ? storeRemoteUser : (storeRemoteUser?._id || storeRemoteUser?.id)) ||
     useCallStore.getState().remoteUserId;
 
-  // ── WebRTC ────────────────────────────────────────────────────────
+  //  WebRTC 
   const { cleanup: cleanupWebRTC, setSpeaker, connectionState, iceConnectionState, errorMessage } = useWebRTCCall({
     remoteUserId: targetUserId,
     callType,
@@ -293,17 +297,22 @@ export default function CallScreen({ route, navigation }) {
     };
   }, []);
 
-  // ── Timer when active ─────────────────────────────────────────────
+  //  Timer when active 
   useEffect(() => {
     if (callState === 'active') {
       loopRef.current?.stop();
-      setCallDuration(0);
-      timerRef.current = setInterval(() => setCallDuration((d) => d + 1), 1000);
+      timerRef.current = setInterval(() => {
+        setCallDuration((d) => {
+          const next = d + 1;
+          setStoreCallDuration?.(next);
+          return next;
+        });
+      }, 1000);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [callState]);
 
-  // ── Ringback tone (Outgoing call while waiting) ────────────────────
+  //  Ringback tone (Outgoing call while waiting) 
   useEffect(() => {
     if (isReceiver) return;
     const isDialing = callState === 'calling' || callState === 'ringing';
@@ -479,7 +488,7 @@ export default function CallScreen({ route, navigation }) {
     performFullTeardownRef.current = performFullTeardown;
   }, [performFullTeardown]);
 
-  // ── Remote party ended/rejected ──────────────────────────────────
+  //  Remote party ended/rejected 
   // Track previous callState to ONLY trigger when transitioning from an in-call state to ended/idle.
   // Never trigger on initial mount!
   const prevCallStateRef = useRef(callState);
@@ -507,8 +516,15 @@ export default function CallScreen({ route, navigation }) {
   // Screen unmount safety cleanup (only on actual unmount!)
   useEffect(() => {
     return () => {
-      console.log('[CallScreen] Component unmounting — executing unmount safety teardown');
-      performFullTeardownRef.current?.('unmount_safety');
+      const minimized = useCallStore.getState().isMinimized;
+      const cState = useCallStore.getState().callState;
+      const isStillInCall = cState === 'active' || cState === 'calling' || cState === 'connecting' || cState === 'ringing';
+      if (minimized && isStillInCall) {
+        console.log('[CallScreen] Component unmounted due to minimization  PRESERVING active call & WebRTC stream');
+      } else {
+        console.log('[CallScreen] Component unmounting  executing unmount safety teardown');
+        performFullTeardownRef.current?.('unmount_safety');
+      }
     };
   }, []);
 
@@ -521,16 +537,21 @@ export default function CallScreen({ route, navigation }) {
     performFullTeardown('user_end_button');
   }, [targetUserId, callType, callDuration, emit, performFullTeardown]);
 
-  // Prevent accidental Android hardware back button from hanging up or exiting call
+  // Hardware back button minimizes call so user can browse other screens safely!
   useEffect(() => {
     const onBackPress = () => {
-      console.log('[CallScreen] Hardware back button pressed -> ignored to protect active call');
-      // Return true to prevent React Navigation / Android from exiting the screen or hanging up
+      console.log('[CallScreen] Hardware back button pressed -> minimizing call screen to top floating bar');
+      setIsMinimized(true);
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('MainTabs');
+      }
       return true;
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, []);
+  }, [navigation, setIsMinimized]);
 
   const toggleMute = () => {
     localStream?.getAudioTracks().forEach((t) => { t.enabled = muted; });
@@ -576,11 +597,11 @@ export default function CallScreen({ route, navigation }) {
 
   const getStatusLabel = () => {
     if (iceConnectionState === 'failed' || connectionState === 'failed') {
-      return 'Connection Failed • Retrying...';
+      return 'Connection Failed  Retrying...';
     }
     if (callState === 'active') {
       if (callType === 'video' && !hasRemoteVideo) {
-        return `Voice Connected • ${formatDuration(callDuration)}`;
+        return `Voice Connected  ${formatDuration(callDuration)}`;
       }
       return formatDuration(callDuration);
     }
@@ -593,7 +614,7 @@ export default function CallScreen({ route, navigation }) {
   };
   const statusLabel = getStatusLabel();
 
-  // ── VIDEO CALL layout ─────────────────────────────────────────────
+  //  VIDEO CALL layout 
   if (callType === 'video') {
     return (
       <View style={styles.videoContainer}>
@@ -693,6 +714,20 @@ export default function CallScreen({ route, navigation }) {
             pointerEvents="box-none"
           >
             <View style={styles.topHeaderContent}>
+              <TouchableOpacity
+                style={styles.minimizeBtnVideo}
+                onPress={() => {
+                  setIsMinimized(true);
+                  if (navigation.canGoBack()) {
+                    navigation.goBack();
+                  } else {
+                    navigation.navigate('MainTabs');
+                  }
+                }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="chevron-down" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
               <View style={styles.userInfoPill}>
                 {otherUser?.avatar ? (
                   <Image source={{ uri: otherUser.avatar }} style={styles.headerAvatar} />
@@ -775,7 +810,7 @@ export default function CallScreen({ route, navigation }) {
     );
   }
 
-  // ── AUDIO CALL layout ─────────────────────────────────────────────
+  //  AUDIO CALL layout 
   return (
     <View style={{ flex: 1 }}>
       {/* On Web: dedicated unmuted audio playback for remote stream */}
@@ -783,18 +818,34 @@ export default function CallScreen({ route, navigation }) {
         <WebRemoteAudio stream={remoteStream} />
       ) : null}
 
-      {/* Full blurred background — auth theme */}
+      {/* Full blurred background  auth theme */}
       <LinearGradient
         colors={['#070B19', '#0D1A3A', '#060A17']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
 
+      {/* Top Left Minimize (Down Arrow) Button */}
+      <TouchableOpacity
+        style={styles.minimizeBtn}
+        onPress={() => {
+          setIsMinimized(true);
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('MainTabs');
+          }
+        }}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons name="chevron-down" size={28} color="#FFFFFF" />
+      </TouchableOpacity>
+
       {/* Ambient glow orbs matching auth theme */}
       <View style={styles.orbTopRight} />
       <View style={styles.orbBottomLeft} />
 
-      {/* ── TOP SECTION: avatar + name + status ── */}
+      {/*  TOP SECTION: avatar + name + status  */}
       <View style={styles.topSection}>
         {/* 3 staggered ripple rings expanding from avatar */}
         <RNAnimated.View style={[styles.rippleRing, r1Style]} />
@@ -828,7 +879,7 @@ export default function CallScreen({ route, navigation }) {
         ) : null}
       </View>
 
-      {/* ── BOTTOM SECTION: controls ── */}
+      {/*  BOTTOM SECTION: controls  */}
       <View style={styles.bottomSection}>
         {/* Row 1: secondary controls */}
         <View style={styles.secondaryRow}>
@@ -871,7 +922,29 @@ export default function CallScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // ── Audio Call ──────────────────────────────────────────────────────
+  //  Minimize Buttons 
+  minimizeBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 36 : 48,
+    left: 20,
+    zIndex: 99,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  minimizeBtnVideo: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  //  Audio Call 
   orbTopRight: {
     position: 'absolute', top: -80, right: -100,
     width: 350, height: 350, borderRadius: 175,
@@ -935,7 +1008,7 @@ const styles = StyleSheet.create({
     fontSize: 15, letterSpacing: 0.5, fontWeight: '400',
   },
 
-  // ── Controls ─────────────────────────────────────────────────────────
+  //  Controls 
   bottomSection: {
     paddingBottom: 60,
     alignItems: 'center',
@@ -970,7 +1043,7 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
 
-  // ── Video Call ───────────────────────────────────────────────────────
+  //  Video Call 
   videoContainer: { flex: 1, backgroundColor: '#000' },
   remoteVideo: { flex: 1, backgroundColor: '#000' },
   localVideoWrapper: {

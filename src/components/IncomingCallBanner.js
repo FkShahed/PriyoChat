@@ -25,22 +25,14 @@ export default function IncomingCallBanner() {
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const [currentRoute, setCurrentRoute] = useState(null);
-
-  useEffect(() => {
-    const updateRoute = () => {
-      if (navigationRef.isReady()) {
-        const route = navigationRef.getCurrentRoute()?.name;
-        setCurrentRoute(route);
-      }
-    };
-    updateRoute();
-    const interval = setInterval(updateRoute, 300);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isOnCallScreen = currentRoute === 'Call' || currentRoute === 'IncomingCall';
-  const isVisible = callState === 'incoming' && isReceiver && !!remoteUser && !isOnCallScreen;
+  let isOnCallScreen = false;
+  if (navigationRef.isReady()) {
+    try {
+      const r = navigationRef.getCurrentRoute()?.name;
+      isOnCallScreen = r === 'Call' || r === 'IncomingCall';
+    } catch (e) {}
+  }
+  const isVisible = callState === 'incoming' && isReceiver && Boolean(remoteUser) && !isOnCallScreen;
 
   // Gentle pulse animation for avatar
   useEffect(() => {

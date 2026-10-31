@@ -78,7 +78,7 @@ import useCallStore from '../store/useCallStore';
 
 // Watches callState and navigates to IncomingCall screen when a call arrives.
 // Uses navigationRef directly because these components are NOT inside a Navigator
-// screen — useNavigation() would throw/fail in this position.
+// screen  useNavigation() would throw/fail in this position.
 function CallObserver() {
   const callState = useCallStore((s) => s.callState);
   const isReceiver = useCallStore((s) => s.isReceiver);
@@ -131,6 +131,7 @@ function LogoutObserver() {
 }
 
 import IncomingCallBanner from '../components/IncomingCallBanner';
+import OngoingCallBanner from '../components/OngoingCallBanner';
 
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, user } = useAuthStore();
@@ -181,6 +182,7 @@ export default function AppNavigator() {
       <CallObserver />
       <LogoutObserver />
       <IncomingCallBanner />
+      <OngoingCallBanner />
       <NavigationContainer ref={navigationRef}>
         <Stack.Navigator 
           screenOptions={{ headerShown: false }} 
