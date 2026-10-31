@@ -18,7 +18,12 @@ import { navigationRef } from '../navigation/navigationRef';
 import { getInitials } from '../utils/helpers';
 
 export default function IncomingCallBanner() {
-  const { callState, remoteUser, callType, isReceiver, setCallAccepted, endCall } = useCallStore();
+  const callState = useCallStore((s) => s.callState);
+  const remoteUser = useCallStore((s) => s.remoteUser);
+  const callType = useCallStore((s) => s.callType);
+  const isReceiver = useCallStore((s) => s.isReceiver);
+  const setCallAccepted = useCallStore((s) => s.setCallAccepted);
+  const endCall = useCallStore((s) => s.endCall);
   const { emit } = useSocketStore();
 
   const slideAnim = useRef(new Animated.Value(-220)).current;

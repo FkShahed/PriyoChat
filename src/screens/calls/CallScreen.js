@@ -304,7 +304,7 @@ export default function CallScreen({ route, navigation }) {
       timerRef.current = setInterval(() => {
         setCallDuration((d) => {
           const next = d + 1;
-          setStoreCallDuration?.(next);
+          useCallStore.setState({ callDuration: next });
           return next;
         });
       }, 1000);
