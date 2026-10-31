@@ -7,14 +7,15 @@ import {
   Animated,
   Platform,
   SafeAreaView,
-  StatusBar,
+  Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import useCallStore from '../store/useCallStore';
 import useSocketStore from '../store/useSocketStore';
 import { navigationRef } from '../navigation/navigationRef';
 import NotificationService from '../services/NotificationService';
+import { getInitials } from '../utils/helpers';
+import useThemeStore from '../store/useThemeStore';
 
 function formatDuration(secs) {
   const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -31,9 +32,11 @@ export default function OngoingCallBanner() {
   const endCall = useCallStore((s) => s.endCall);
   const resetCall = useCallStore((s) => s.resetCall);
   const { emit } = useSocketStore();
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
+  const isDark = resolvedTheme === 'dark';
 
   const isMinimized = useCallStore((s) => s.isMinimized);
-  const slideAnim = useRef(new Animated.Value(-120)).current;
+  const slideAnim = useRef(new Animated.Value(100)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const isCallActive =
@@ -41,7 +44,7 @@ export default function OngoingCallBanner() {
     Boolean(remoteUser);
   const shouldShow = Boolean(isMinimized) && isCallActive;
 
-  // Animate slide down when minimized / outside Call screen
+  // Animate slide up from bottom when minimized / outside Call screen
   useEffect(() => {
     if (shouldShow) {
       Animated.spring(slideAnim, {
@@ -52,7 +55,7 @@ export default function OngoingCallBanner() {
       }).start();
     } else {
       Animated.timing(slideAnim, {
-        toValue: -120,
+        toValue: 100,
         duration: 200,
         useNativeDriver: Platform.OS !== 'web',
       }).start();
@@ -154,58 +157,73 @@ export default function OngoingCallBanner() {
         ]}
       >
         <TouchableOpacity
-          activeOpacity={0.9}
+          activeOpacity={0.88}
           onPress={handleReturnToCall}
-          style={styles.pillTouchable}
+          style={[
+            styles.cardTouchable,
+            isDark ? styles.cardDark : styles.cardLight,
+          ]}
         >
-          <LinearGradient
-            colors={['#10B981', '#059669']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.pillGradient}
-          >
-            {/* Live Indicator Dot */}
-            <View style={styles.indicatorContainer}>
-              <Animated.View
-                style={[
-                  styles.pulseCircle,
-                  { transform: [{ scale: pulseAnim }] },
-                ]}
-              />
+          {/* Avatar with call type mini badge */}
+          <View style={styles.avatarWrapper}>
+            {remoteUser?.avatar ? (
+              <Image source={{ uri: remoteUser.avatar }} style={styles.avatarImg} />
+            ) : (
+              <View style={[styles.avatarFallback, isDark ? styles.avatarFallbackDark : styles.avatarFallbackLight]}>
+                <Text style={[styles.initialsText, isDark ? styles.initialsDark : styles.initialsLight]}>
+                  {getInitials(callerName)}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.typeBadge}>
               <Ionicons
                 name={callType === 'video' ? 'videocam' : 'call'}
-                size={16}
+                size={9}
                 color="#FFFFFF"
               />
             </View>
+          </View>
 
-            {/* Middle Section: Name & Duration */}
-            <View style={styles.infoCol}>
-              <Text style={styles.nameText} numberOfLines={1}>
-                {callerName}
-              </Text>
-              <Text style={styles.statusText}>
-                {callType === 'video' ? 'Video Call  ' : 'Audio Call  '}
-                <Text style={styles.durationBold}>{durationText}</Text>
-                {' (Tap to return)'}
+          {/* Simple, gentle eye-pleasing text column */}
+          <View style={styles.infoCol}>
+            <Text
+              style={[styles.nameText, isDark ? styles.textLight : styles.textDark]}
+              numberOfLines={1}
+            >
+              {callerName}
+            </Text>
+            <View style={styles.statusRow}>
+              <View style={styles.indicatorContainer}>
+                <Animated.View
+                  style={[
+                    styles.pulseDot,
+                    { transform: [{ scale: pulseAnim }] },
+                  ]}
+                />
+                <View style={styles.greenDot} />
+              </View>
+              <Text style={styles.durationText}>{durationText}</Text>
+              <Text style={[styles.subText, isDark ? styles.subDark : styles.subLight]}>
+                • In call
               </Text>
             </View>
+          </View>
 
-            {/* End Call Button right in the banner */}
-            <TouchableOpacity
-              onPress={handleEndCall}
-              activeOpacity={0.8}
-              style={styles.endBtn}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <LinearGradient
-                colors={['#EF4444', '#DC2626']}
-                style={styles.endBtnGradient}
-              >
-                <Ionicons name="call" size={16} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-              </LinearGradient>
-            </TouchableOpacity>
-          </LinearGradient>
+          {/* Clean minimal red circular hangup button */}
+          <TouchableOpacity
+            onPress={handleEndCall}
+            activeOpacity={0.7}
+            style={styles.endBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name="call"
+              size={15}
+              color="#FFFFFF"
+              style={{ transform: [{ rotate: '135deg' }] }}
+            />
+          </TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>
     </SafeAreaView>
@@ -215,78 +233,147 @@ export default function OngoingCallBanner() {
 const styles = StyleSheet.create({
   safeArea: {
     position: 'absolute',
-    top: 0,
+    bottom: 66,
     left: 0,
     right: 0,
     zIndex: 99999,
   },
   container: {
-    paddingHorizontal: 12,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 6 : 8,
+    paddingHorizontal: 16,
+    paddingBottom: 2,
   },
-  pillTouchable: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  pillGradient: {
+  cardTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  indicatorContainer: {
+  cardDark: {
+    backgroundColor: '#1E232E',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: '#000',
+  },
+  cardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    shadowColor: '#000',
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  avatarImg: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    backgroundColor: '#E5E5EA',
+  },
+  avatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-    position: 'relative',
   },
-  pulseCircle: {
+  avatarFallbackLight: {
+    backgroundColor: '#EBF4FF',
+  },
+  avatarFallbackDark: {
+    backgroundColor: '#2A364F',
+  },
+  initialsText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  initialsLight: {
+    color: '#0084FF',
+  },
+  initialsDark: {
+    color: '#60A5FA',
+  },
+  typeBadge: {
     position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    bottom: -1,
+    right: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#0084FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   infoCol: {
     flex: 1,
     justifyContent: 'center',
   },
   nameText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
-  statusText: {
-    color: 'rgba(255, 255, 255, 0.92)',
-    fontSize: 11,
-    fontWeight: '500',
+  textLight: {
+    color: '#F3F4F6',
+  },
+  textDark: {
+    color: '#1F2937',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 1,
   },
-  durationBold: {
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  endBtn: {
-    marginLeft: 8,
-    borderRadius: 17,
-    overflow: 'hidden',
-  },
-  endBtnGradient: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  indicatorContainer: {
+    width: 10,
+    height: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 5,
+    position: 'relative',
+  },
+  pulseDot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(16, 185, 129, 0.35)',
+  },
+  greenDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+  },
+  durationText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#10B981',
+  },
+  subText: {
+    fontSize: 11,
+    fontWeight: '400',
+    marginLeft: 4,
+  },
+  subDark: {
+    color: '#9CA3AF',
+  },
+  subLight: {
+    color: '#6B7280',
+  },
+  endBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
 });
