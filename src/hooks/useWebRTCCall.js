@@ -8,6 +8,9 @@ import { InCallManager, webrtc } from '../utils/nativeModules';
 let RTCPeerConnection, RTCIceCandidate, RTCSessionDescription, mediaDevices;
 let webrtcAvailable = false;
 
+// Module-level persistent active call session across screen remounts
+let activeCallSession = null;
+
 try {
   if (Platform.OS === 'web') {
     RTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
@@ -486,6 +489,7 @@ export default function useWebRTCCall({
       console.log('[WebRTC] signalingState:', pc.signalingState);
     };
 
+    if (activeCallSession) { activeCallSession.pc = pc; } else { activeCallSession = { pc, localStream: null, remoteStream: null, hasVideo: false }; }
     return pc;
   }, []);
 
@@ -600,6 +604,7 @@ export default function useWebRTCCall({
     }
     console.log('[WebRTC] Got local stream, tracks:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
     localStreamRef.current = stream;
+    if (activeCallSession) activeCallSession.localStream = stream;
     onLocalStreamRef.current?.(stream);
 
     // Start InCallManager
@@ -987,6 +992,7 @@ export default function useWebRTCCall({
     iceCandidatesProcessed.current = 0;
     pendingCandidates.current = [];
     addedCandidates.current.clear();
+    activeCallSession = null;
 
     if (InCallManager) {
       try {
@@ -1019,10 +1025,23 @@ export default function useWebRTCCall({
       return;
     }
 
-    if (isReceiverRef.current) {
-      startAsReceiverAsync();
+    const cState = useCallStore.getState().callState;
+    const isOngoing = (cState === 'active' || cState === 'connecting' || cState === 'ringing') && activeCallSession && activeCallSession.pc;
+    if (isOngoing) {
+      console.log('[WebRTC] Active call session detected on remount — reusing existing peer connection!');
+      pcRef.current = activeCallSession.pc;
+      localStreamRef.current = activeCallSession.localStream;
+      remoteMediaStreamRef.current = activeCallSession.remoteStream;
+      setConnectionState(activeCallSession.pc.connectionState || 'connected');
+      setIceConnectionState(activeCallSession.pc.iceConnectionState || 'connected');
+      if (activeCallSession.localStream) onLocalStreamRef.current?.(activeCallSession.localStream);
+      if (activeCallSession.remoteStream) onRemoteStreamRef.current?.(activeCallSession.remoteStream, Date.now(), activeCallSession.hasVideo);
     } else {
-      startAsCallerAsync();
+      if (isReceiverRef.current) {
+        startAsReceiverAsync();
+      } else {
+        startAsCallerAsync();
+      }
     }
 
     return () => {
