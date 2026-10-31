@@ -146,7 +146,12 @@ function formatDuration(secs) {
 
 export default function CallScreen({ route, navigation }) {
   const { otherUser: paramOtherUser, callType: paramCallType } = route?.params || {};
-  const { remoteUser: storeRemoteUser, callType: storeCallType, callState, isReceiver, offer, resetCall } = useCallStore();
+  const storeRemoteUser = useCallStore((st) => st.remoteUser);
+  const storeCallType = useCallStore((st) => st.callType);
+  const callState = useCallStore((st) => st.callState);
+  const isReceiver = useCallStore((st) => st.isReceiver);
+  const offer = useCallStore((st) => st.offer);
+  const resetCall = useCallStore((st) => st.resetCall);
 
   const otherUser = paramOtherUser || storeRemoteUser || { name: 'PriyoChat User', avatar: null };
   const callType = paramCallType || storeCallType || 'audio';
@@ -287,7 +292,8 @@ export default function CallScreen({ route, navigation }) {
 
     a1.start(); a2.start(); a3.start();
 
-    if (!isReceiver) {
+    const isAlreadyOngoing = useCallStore.getState().callState === 'active';
+    if (!isReceiver && !isAlreadyOngoing) {
       Vibration.vibrate([0, 400, 200, 400]);
     }
 

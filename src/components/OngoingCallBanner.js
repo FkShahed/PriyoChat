@@ -23,15 +23,13 @@ function formatDuration(secs) {
 }
 
 export default function OngoingCallBanner() {
-  const {
-    callState,
-    remoteUser,
-    callType,
-    callDuration,
-    setIsMinimized,
-    endCall,
-    resetCall,
-  } = useCallStore();
+  if (Platform.OS === 'web') return null;
+  const callState = useCallStore((s) => s.callState);
+  const remoteUser = useCallStore((s) => s.remoteUser);
+  const callType = useCallStore((s) => s.callType);
+  const setIsMinimized = useCallStore((s) => s.setIsMinimized);
+  const endCall = useCallStore((s) => s.endCall);
+  const resetCall = useCallStore((s) => s.resetCall);
   const { emit } = useSocketStore();
 
   const isMinimized = useCallStore((s) => s.isMinimized);
@@ -50,13 +48,13 @@ export default function OngoingCallBanner() {
         toValue: 0,
         tension: 80,
         friction: 10,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }).start();
     } else {
       Animated.timing(slideAnim, {
         toValue: -120,
         duration: 200,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }).start();
     }
   }, [shouldShow]);
@@ -67,8 +65,8 @@ export default function OngoingCallBanner() {
     if (shouldShow) {
       loop = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.25, duration: 800, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.25, duration: 800, useNativeDriver: Platform.OS !== 'web' }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: Platform.OS !== 'web' }),
         ])
       );
       loop.start();
@@ -84,12 +82,12 @@ export default function OngoingCallBanner() {
       NotificationService.showOngoingCallNotification({
         remoteUser,
         callType: callType || 'audio',
-        duration: callDuration,
+        duration: bannerSecs,
       });
     } else {
       NotificationService.dismissOngoingCallNotification();
     }
-  }, [shouldShow, callState, remoteUser, callDuration, callType]);
+  }, [shouldShow, callState, remoteUser, bannerSecs, callType]);
 
   const handleReturnToCall = () => {
     setIsMinimized(false);
@@ -111,7 +109,7 @@ export default function OngoingCallBanner() {
       emit('call_end', {
         to: targetUserId,
         callType: callType || 'audio',
-        duration: callDuration,
+        duration: bannerSecs,
       });
     }
     NotificationService.dismissOngoingCallNotification();
@@ -119,12 +117,22 @@ export default function OngoingCallBanner() {
     resetCall();
   };
 
-  if (!shouldShow) return null;
+  const [bannerSecs, setBannerSecs] = useState(0);
+  useEffect(() => {
+    let interval = null;
+    if (shouldShow && callState === 'active') {
+      setBannerSecs(useCallStore.getState().callDuration || 0);
+      interval = setInterval(() => setBannerSecs((s) => s + 1), 1000);
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [shouldShow, callState]);
+
+  if (Platform.OS === 'web' || !shouldShow) return null;
 
   const callerName = remoteUser?.name || 'PriyoChat User';
   const durationText =
     callState === 'active'
-      ? formatDuration(callDuration)
+      ? formatDuration(bannerSecs)
       : (callState === 'calling' ? 'Calling...' : 'Connecting...');
 
   return (

@@ -388,9 +388,6 @@ export default function useWebRTCCall({
     pc.ontrack = (event) => {
       console.log('[WebRTC] ontrack event, track kind:', event.track?.kind, 'id:', event.track?.id, 'streams:', event.streams?.length);
 
-      useCallStore.getState().setCallConnected();
-      setErrorMessage('');
-
       if (event.track) {
         try { event.track.enabled = true; } catch (e) {}
       }
@@ -422,25 +419,38 @@ export default function useWebRTCCall({
 
         const hasVideo = stream.getVideoTracks?.()?.some(t => t.enabled !== false && t.readyState !== 'ended');
         console.log('[WebRTC] Emitting remote stream to UI, hasVideo:', hasVideo);
-        onRemoteStreamRef.current?.(stream, Date.now(), hasVideo);
+
+        // Defer state updates out of the current render/commit cycle to prevent
+        // "Cannot update component while rendering a different component" React error
+        setTimeout(() => {
+          useCallStore.getState().setCallConnected();
+          setErrorMessage('');
+          onRemoteStreamRef.current?.(stream, Date.now(), hasVideo);
+        }, 0);
+      } else {
+        setTimeout(() => {
+          useCallStore.getState().setCallConnected();
+          setErrorMessage('');
+        }, 0);
       }
     };
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
       console.log('[WebRTC] connectionState:', state);
-      setConnectionState(state);
+      // Defer to avoid setState-during-render React error
+      setTimeout(() => setConnectionState(state), 0);
 
       if (state === 'connected') {
         useCallStore.getState().setCallConnected();
-        setErrorMessage('');
+        setTimeout(() => setErrorMessage(''), 0);
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
       } else if (state === 'failed') {
         console.warn('[WebRTC] Connection failed, checking for recovery...');
-        setErrorMessage('Direct connection failed • Checking relay...');
+        setTimeout(() => setErrorMessage('Direct connection failed • Checking relay...'), 0);
         if (pc.restartIce) {
           try { pc.restartIce(); } catch (e) {}
         }
@@ -453,7 +463,7 @@ export default function useWebRTCCall({
         }, 30000);
       } else if (state === 'disconnected') {
         console.warn('[WebRTC] Connection disconnected, waiting for reconnect...');
-        setErrorMessage('Connection temporarily lost • Reconnecting...');
+        setTimeout(() => setErrorMessage('Connection temporarily lost • Reconnecting...'), 0);
         setTimeout(() => {
           if (pcRef.current && pcRef.current.connectionState === 'disconnected' && pcRef.current.iceConnectionState === 'disconnected') {
             console.warn('[WebRTC] Disconnected timeout — ending call');
@@ -467,18 +477,19 @@ export default function useWebRTCCall({
     pc.oniceconnectionstatechange = () => {
       const iceState = pc.iceConnectionState;
       console.log('[WebRTC] iceConnectionState:', iceState);
-      setIceConnectionState(iceState);
+      // Defer to avoid setState-during-render React error
+      setTimeout(() => setIceConnectionState(iceState), 0);
 
       if (iceState === 'connected' || iceState === 'completed') {
         useCallStore.getState().setCallConnected();
-        setErrorMessage('');
+        setTimeout(() => setErrorMessage(''), 0);
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
       } else if (iceState === 'failed') {
         console.warn('[WebRTC] ICE state failed, attempting ICE restart...');
-        setErrorMessage('Network path blocked • Retrying relay...');
+        setTimeout(() => setErrorMessage('Network path blocked • Retrying relay...'), 0);
         if (pc.restartIce) {
           try { pc.restartIce(); } catch (e) {}
         }
@@ -1032,10 +1043,13 @@ export default function useWebRTCCall({
       pcRef.current = activeCallSession.pc;
       localStreamRef.current = activeCallSession.localStream;
       remoteMediaStreamRef.current = activeCallSession.remoteStream;
-      setConnectionState(activeCallSession.pc.connectionState || 'connected');
-      setIceConnectionState(activeCallSession.pc.iceConnectionState || 'connected');
-      if (activeCallSession.localStream) onLocalStreamRef.current?.(activeCallSession.localStream);
-      if (activeCallSession.remoteStream) onRemoteStreamRef.current?.(activeCallSession.remoteStream, Date.now(), activeCallSession.hasVideo);
+      // Defer state updates to avoid "setState during render" React error
+      setTimeout(() => {
+        setConnectionState(activeCallSession?.pc?.connectionState || 'connected');
+        setIceConnectionState(activeCallSession?.pc?.iceConnectionState || 'connected');
+        if (activeCallSession?.localStream) onLocalStreamRef.current?.(activeCallSession.localStream);
+        if (activeCallSession?.remoteStream) onRemoteStreamRef.current?.(activeCallSession.remoteStream, Date.now(), activeCallSession.hasVideo);
+      }, 0);
     } else {
       if (isReceiverRef.current) {
         startAsReceiverAsync();
