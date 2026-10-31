@@ -308,11 +308,12 @@ export default function CallScreen({ route, navigation }) {
     if (callState === 'active') {
       loopRef.current?.stop();
       timerRef.current = setInterval(() => {
-        setCallDuration((d) => {
-          const next = d + 1;
-          useCallStore.setState({ callDuration: next });
-          return next;
-        });
+        // IMPORTANT: Do NOT call useCallStore.setState inside the React state
+        // updater callback — that runs during React's reconciliation phase and
+        // causes "Cannot update a component while rendering" errors.
+        // Instead, compute next value once and update both stores separately.
+        setCallDuration((d) => d + 1);
+        useCallStore.setState((st) => ({ callDuration: (st.callDuration ?? 0) + 1 }));
       }, 1000);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
