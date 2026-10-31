@@ -34,29 +34,14 @@ export default function OngoingCallBanner() {
   } = useCallStore();
   const { emit } = useSocketStore();
 
-  const [currentRoute, setCurrentRoute] = useState(null);
+  const isMinimized = useCallStore((s) => s.isMinimized);
   const slideAnim = useRef(new Animated.Value(-120)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Track active navigation route
-  useEffect(() => {
-    const updateRoute = () => {
-      if (navigationRef.isReady()) {
-        const route = navigationRef.getCurrentRoute()?.name;
-        setCurrentRoute(route);
-      }
-    };
-    updateRoute();
-    const interval = setInterval(updateRoute, 300);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isOnCallScreen = currentRoute === 'Call' || currentRoute === 'IncomingCall';
   const isCallActive =
     (callState === 'active' || callState === 'calling' || callState === 'connecting' || callState === 'ringing') &&
-    !!remoteUser;
-  // Banner is visible whenever in call and NOT on the full Call screen!
-  const shouldShow = isCallActive && !isOnCallScreen;
+    Boolean(remoteUser);
+  const shouldShow = Boolean(isMinimized) && isCallActive;
 
   // Animate slide down when minimized / outside Call screen
   useEffect(() => {
@@ -93,18 +78,18 @@ export default function OngoingCallBanner() {
     return () => loop?.stop();
   }, [shouldShow]);
 
-  // Sync ongoing notification with caller name, duration, and End Call action
+  // Sync ongoing notification ONLY when minimized
   useEffect(() => {
-    if (callState === 'active' && remoteUser) {
+    if (shouldShow && callState === 'active' && remoteUser) {
       NotificationService.showOngoingCallNotification({
         remoteUser,
         callType: callType || 'audio',
         duration: callDuration,
       });
-    } else if (callState === 'idle' || callState === 'ended') {
+    } else {
       NotificationService.dismissOngoingCallNotification();
     }
-  }, [callState, remoteUser, callDuration, callType]);
+  }, [shouldShow, callState, remoteUser, callDuration, callType]);
 
   const handleReturnToCall = () => {
     setIsMinimized(false);
