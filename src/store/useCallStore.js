@@ -19,8 +19,7 @@ const useCallStore = create(
       endReason: null, // 'rejected' | 'ended' | 'missed'
       isReceiver: false, // true if this user is receiving the call (not the initiator)
       isMinimized: false,
-      callDuration: 0,
-      setIsMinimized: (val) => set({ isMinimized: Boolean(val) }),
+      callDuration: 0,`r`n      callStartTime: null, // epoch ms when WebRTC first connected — single source of truth for timer`r`n      setIsMinimized: (val) => set({ isMinimized: Boolean(val) }),
       setCallDuration: (fnOrVal) => set((prev) => ({ callDuration: typeof fnOrVal === 'function' ? fnOrVal(prev.callDuration) : fnOrVal })),
 
       addCallToHistory: (record) => {
@@ -179,7 +178,7 @@ const useCallStore = create(
           callState === 'ringing' ||
           callState === 'incoming'
         ) {
-          set({ callState: 'active' });
+          set({ callState: 'active', callStartTime: get().callStartTime || Date.now(), callDuration: 0 });
         }
       },
 
@@ -243,9 +242,7 @@ const useCallStore = create(
           iceCandidates: [],
           isReceiver: false,
           callId: null,
-          isMinimized: false,
-          callDuration: 0,
-        });
+          isMinimized: false,`r`n          callDuration: 0,`r`n          callStartTime: null,`r`n        });
       },
 
       resetCall: () => {
@@ -261,9 +258,7 @@ const useCallStore = create(
           endReason: null,
           isReceiver: false,
           callId: null,
-          isMinimized: false,
-          callDuration: 0,
-        });
+          isMinimized: false,`r`n          callDuration: 0,`r`n          callStartTime: null,`r`n        });
       },
     }),
     {

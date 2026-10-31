@@ -121,8 +121,18 @@ export default function OngoingCallBanner() {
   useEffect(() => {
     let interval = null;
     if (shouldShow && callState === 'active') {
-      setBannerSecs(useCallStore.getState().callDuration || 0);
-      interval = setInterval(() => setBannerSecs((s) => s + 1), 1000);
+      // Sync immediately from the authoritative callStartTime so the banner
+      // shows the correct elapsed time with no delay or zero-reset.
+      const syncTime = () => {
+        const t = useCallStore.getState().callStartTime;
+        if (t) {
+          setBannerSecs(Math.floor((Date.now() - t) / 1000));
+        } else {
+          setBannerSecs((s) => s + 1);
+        }
+      };
+      syncTime(); // instant sync on show
+      interval = setInterval(syncTime, 1000);
     }
     return () => { if (interval) clearInterval(interval); };
   }, [shouldShow, callState]);

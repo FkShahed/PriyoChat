@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Animated as RNAnimated } from 'react-native';
 import { Audio } from 'expo-av';
+import { useFocusEffect } from '@react-navigation/native';
 import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import useWebRTCCall from '../../hooks/useWebRTCCall';
@@ -166,7 +167,13 @@ export default function CallScreen({ route, navigation }) {
   const setStoreCallDuration = useCallStore((st) => st.setStoreCallDuration || st.setCallDuration);
   const isMinimized = useCallStore((st) => st.isMinimized);
   const setIsMinimized = useCallStore((st) => st.setIsMinimized);
-  const [callDuration, setCallDuration] = useState(storeCallDuration || 0);
+  const callStartTime = useCallStore((st) => st.callStartTime);
+  // Initialise from elapsed time if call is already active (e.g. returning from minimize)
+  const [callDuration, setCallDuration] = useState(() => {
+    const st = useCallStore.getState();
+    if (st.callStartTime) return Math.floor((Date.now() - st.callStartTime) / 1000);
+    return st.callDuration || 0;
+  });
   const [muted, setMuted] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(callType === 'video');
   const [videoOn, setVideoOn] = useState(true);
@@ -303,19 +310,24 @@ export default function CallScreen({ route, navigation }) {
     };
   }, []);
 
-  //  Timer when active 
+  //  Timer when active — always computed from callStartTime so it stays
+  //  perfectly in sync across minimize/restore and notification tap returns.
   useEffect(() => {
-    if (callState === 'active') {
-      loopRef.current?.stop();
-      timerRef.current = setInterval(() => {
-        // IMPORTANT: Do NOT call useCallStore.setState inside the React state
-        // updater callback — that runs during React's reconciliation phase and
-        // causes "Cannot update a component while rendering" errors.
-        // Instead, compute next value once and update both stores separately.
-        setCallDuration((d) => d + 1);
-        useCallStore.setState((st) => ({ callDuration: (st.callDuration ?? 0) + 1 }));
-      }, 1000);
-    }
+    if (callState !== 'active') return;
+    loopRef.current?.stop();
+
+    // Immediately sync duration from the authoritative start timestamp
+    const syncFromStartTime = () => {
+      const t = useCallStore.getState().callStartTime;
+      if (t) {
+        const elapsed = Math.floor((Date.now() - t) / 1000);
+        setCallDuration(elapsed);
+        useCallStore.setState({ callDuration: elapsed });
+      }
+    };
+    syncFromStartTime(); // sync immediately on activation
+
+    timerRef.current = setInterval(syncFromStartTime, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [callState]);
 
@@ -543,6 +555,24 @@ export default function CallScreen({ route, navigation }) {
     }
     performFullTeardown('user_end_button');
   }, [targetUserId, callType, callDuration, emit, performFullTeardown]);
+
+  // ── Hide OngoingCallBanner whenever CallScreen is in focus ──────────
+  // This ensures the floating banner never overlaps the call screen,
+  // even when the user returns via notification tap (isMinimized could still
+  // be true from a previous minimize). Does NOT affect WebRTC or any call state.
+  useFocusEffect(
+    useCallback(() => {
+      setIsMinimized(false);
+      // Immediately resync the displayed duration from the authoritative
+      // callStartTime so there's no jump or zero-reset when returning to
+      // CallScreen via notification tap or OngoingCallBanner tap.
+      const t = useCallStore.getState().callStartTime;
+      if (t) {
+        const elapsed = Math.floor((Date.now() - t) / 1000);
+        setCallDuration(elapsed);
+      }
+    }, [setIsMinimized])
+  );
 
   // Hardware back button minimizes call so user can browse other screens safely!
   useEffect(() => {
