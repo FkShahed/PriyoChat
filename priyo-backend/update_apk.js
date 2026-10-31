@@ -1,4 +1,6 @@
-require('dotenv').config();
+const path = require('path');
+// Load from priyo-backend/.env regardless of where the script is invoked from
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const mongoose = require('mongoose');
 
 const appUpdateSchema = new mongoose.Schema(
