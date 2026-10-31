@@ -447,7 +447,7 @@ export default function useWebRTCCall({
             if (remoteUserIdRef.current) emitRef.current('call_end', { to: remoteUserIdRef.current });
             useCallStore.getState().endCall('ended');
           }
-        }, 15000);
+        }, 30000);
       } else if (state === 'disconnected') {
         console.warn('[WebRTC] Connection disconnected, waiting for reconnect...');
         setErrorMessage('Connection temporarily lost • Reconnecting...');
@@ -1026,6 +1026,13 @@ export default function useWebRTCCall({
     }
 
     return () => {
+      const minimized = useCallStore.getState().isMinimized;
+      const cState = useCallStore.getState().callState;
+      const isStillInCall = cState === 'active' || cState === 'calling' || cState === 'connecting' || cState === 'ringing';
+      if (minimized && isStillInCall) {
+        console.log('[WebRTC] Component unmounting due to minimization — KEEPING WebRTC peer connection & media streams alive!');
+        return;
+      }
       cleanup();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
