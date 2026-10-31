@@ -19,7 +19,9 @@ const useCallStore = create(
       endReason: null, // 'rejected' | 'ended' | 'missed'
       isReceiver: false, // true if this user is receiving the call (not the initiator)
       isMinimized: false,
-      callDuration: 0,`r`n      callStartTime: null, // epoch ms when WebRTC first connected � single source of truth for timer`r`n      setIsMinimized: (val) => set({ isMinimized: Boolean(val) }),
+      callDuration: 0,
+      callStartTime: null, // epoch ms when WebRTC first connected — single source of truth for timer
+      setIsMinimized: (val) => set({ isMinimized: Boolean(val) }),
       setCallDuration: (fnOrVal) => set((prev) => ({ callDuration: typeof fnOrVal === 'function' ? fnOrVal(prev.callDuration) : fnOrVal })),
 
       addCallToHistory: (record) => {
@@ -65,7 +67,7 @@ const useCallStore = create(
         }
       },
 
-      // Outgoing call  initiated by this user
+      // Outgoing call — initiated by this user
       startCall: (remoteUser, callType) => {
         let resolvedUser = remoteUser;
         let remoteUserId = null;
@@ -89,6 +91,8 @@ const useCallStore = create(
           offer: null,
           answer: null,
           callId: null,
+          callStartTime: null,
+          callDuration: 0,
         });
       },
 
@@ -96,7 +100,7 @@ const useCallStore = create(
         set((state) => (state.callState === 'calling' ? { callState: 'ringing' } : {}));
       },
 
-      // Incoming call from socket or push  this user is the receiver
+      // Incoming call from socket or push — this user is the receiver
       setIncomingCall: (data) => {
         const { callState, callId: existingCallId } = get();
         if (callState === 'active' || callState === 'connecting') {
@@ -152,11 +156,13 @@ const useCallStore = create(
           endReason: null,
           isReceiver: true,
           answer: null,
+          callStartTime: null,
+          callDuration: 0,
         });
         return true;
       },
 
-      // Receiver accepted  transitional state while WebRTC connects
+      // Receiver accepted — transitional state while WebRTC connects
       setCallAccepted: () => {
         set({ callState: 'connecting' });
       },
@@ -168,9 +174,9 @@ const useCallStore = create(
 
       // Both sides: WebRTC peer connection is actually connected
       setCallConnected: () => {
-        const { callState } = get();
+        const { callState, callStartTime } = get();
         // Only transition if we're in a valid pre-active state
-        // NOTE: 'ringing' is included because the caller goes callingringing
+        // NOTE: 'ringing' is included because the caller goes calling→ringing
         // and ICE can connect while the receiver's phone is still ringing
         if (
           callState === 'connecting' ||
@@ -178,11 +184,16 @@ const useCallStore = create(
           callState === 'ringing' ||
           callState === 'incoming'
         ) {
-          set({ callState: 'active', callStartTime: get().callStartTime || Date.now(), callDuration: 0 });
+          set({
+            callState: 'active',
+            // Only set callStartTime once — preserve it if already set (re-attach scenario)
+            callStartTime: callStartTime || Date.now(),
+            callDuration: 0,
+          });
         }
       },
 
-      // Legacy  kept for backward compat but prefer setCallConnected
+      // Legacy — kept for backward compat but prefer setCallConnected
       setCallActive: () => {
         set({ callState: 'active' });
       },
@@ -242,7 +253,10 @@ const useCallStore = create(
           iceCandidates: [],
           isReceiver: false,
           callId: null,
-          isMinimized: false,`r`n          callDuration: 0,`r`n          callStartTime: null,`r`n        });
+          isMinimized: false,
+          callDuration: 0,
+          callStartTime: null,
+        });
       },
 
       resetCall: () => {
@@ -258,7 +272,10 @@ const useCallStore = create(
           endReason: null,
           isReceiver: false,
           callId: null,
-          isMinimized: false,`r`n          callDuration: 0,`r`n          callStartTime: null,`r`n        });
+          isMinimized: false,
+          callDuration: 0,
+          callStartTime: null,
+        });
       },
     }),
     {
