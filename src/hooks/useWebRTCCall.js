@@ -360,6 +360,22 @@ export default function useWebRTCCall({
   const initialSpeakerOnRef = useRef(initialSpeakerOn);
   useEffect(() => { initialSpeakerOnRef.current = initialSpeakerOn; }, [initialSpeakerOn]);
 
+  // Helper: safely emit signaling messages, ensuring socket is connected even after cold/background start
+  const safeEmit = useCallback(async (event, payload) => {
+    try {
+      const socketStore = require('../store/useSocketStore').default;
+      let socket = socketStore.getState().socket;
+      if (!socket || !socket.connected) {
+        socket = await socketStore.getState().connect();
+      }
+      if (socket && socket.connected) {
+        socket.emit(event, payload);
+        return;
+      }
+    } catch (e) {}
+    emitRef.current?.(event, payload);
+  }, []);
+
   // ─── Build peer connection ────────────────────────────────────────
   const buildPC = useCallback(() => {
     if (!webrtcAvailable) {
@@ -415,7 +431,7 @@ export default function useWebRTCCall({
       const parsed = extractIceCandidate(cand);
       if (parsed && parsed.candidate) {
         console.log('[WebRTC] Sending clean ICE candidate to:', targetId, parsed.candidate.substring(0, 45));
-        emitRef.current('call_ice', { to: targetId, candidate: parsed });
+        safeEmit('call_ice', { to: targetId, candidate: parsed });
       }
     };
 
@@ -945,7 +961,7 @@ export default function useWebRTCCall({
       }
 
       const targetId = remoteUserIdRef.current || useCallStore.getState().remoteUserId;
-      emitRef.current('call_answer', {
+      await safeEmit('call_answer', {
         to: targetId,
         answer: answerPayload,
       });
