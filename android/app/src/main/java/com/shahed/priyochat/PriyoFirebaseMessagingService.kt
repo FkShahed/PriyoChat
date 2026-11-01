@@ -18,18 +18,6 @@ import expo.modules.notifications.service.delegates.FirebaseMessagingDelegate
 
 class PriyoFirebaseMessagingService : FirebaseMessagingService() {
 
-    companion object {
-        const val CALL_NOTIFICATION_ID = 88888
-        const val CALL_CHANNEL_ID = "priyo_incoming_calls_v2"
-
-        fun dismissIncomingCallNotification(context: Context) {
-            try {
-                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.cancel(CALL_NOTIFICATION_ID)
-            } catch (e: Exception) {}
-        }
-    }
-
     private val expoDelegate by lazy {
         FirebaseMessagingDelegate(this as Context)
     }
@@ -80,7 +68,7 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
         val callType = data["callType"] ?: "audio"
         val callId = data["callId"] ?: ("call_" + System.currentTimeMillis())
 
-        val channelId = CALL_CHANNEL_ID
+        val channelId = "priyo_incoming_calls_v1"
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // Create high-priority call notification channel with system ringtone if Android 8.0+
@@ -138,7 +126,7 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
 
         val pendingIntent = PendingIntent.getActivity(
             this as Context,
-            CALL_NOTIFICATION_ID,
+            callId.hashCode(),
             fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -155,11 +143,11 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setAutoCancel(false) // Keeps notification & continuous ringtone alive while navigating!
+            .setAutoCancel(true)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
-            .setFullScreenIntent(pendingIntent, true) // Wakes up screen & shows full call activity
+            .setFullScreenIntent(pendingIntent, true) // 👈 WAKES UP SCREEN & SHOWS FULL CALL ACTIVITY!
             .setSound(ringtoneUri)
             .setVibrate(longArrayOf(0, 1000, 1000, 1000, 1000))
 
@@ -167,6 +155,6 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
         val notification = notificationBuilder.build()
         notification.flags = notification.flags or Notification.FLAG_INSISTENT
 
-        notificationManager.notify(CALL_NOTIFICATION_ID, notification)
+        notificationManager.notify(callId.hashCode(), notification)
     }
 }
