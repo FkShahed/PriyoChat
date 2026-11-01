@@ -33,13 +33,15 @@ export default function IncomingCallScreen({ navigation }) {
     const playRingtone = async () => {
       try {
         if (isCancelled) return;
+        // On native Android, notification channel handles native ringing while app is loading/background.
+        // Once IncomingCallScreen mounts, InCallManager smoothly takes over continuous ringing
         if (InCallManager) {
-          InCallManager.startRingtone('_DEFAULT_', [500, 1000]);
+          InCallManager.startRingtone('_DEFAULT_');
           console.log('[Ringtone] InCallManager ringtone started (respects silent mode)');
           return;
         }
 
-        // Web or fallback fallback:
+        // Web or fallback:
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: false,
           staysActiveInBackground: true,
