@@ -4,16 +4,28 @@ const https = require('https');
 let firebaseApp;
 
 const initFirebase = () => {
-  if (!firebaseApp && process.env.FIREBASE_PROJECT_ID) {
+  if (!firebaseApp) {
     try {
-      firebaseApp = admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
-      console.log('✅ Firebase Admin initialized');
+      const fs = require('fs');
+      const path = require('path');
+      const keyPath = path.resolve(__dirname, '../../firebase-service-account.json');
+
+      if (fs.existsSync(keyPath)) {
+        const serviceAccount = require(keyPath);
+        firebaseApp = admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
+        console.log('✅ Firebase Admin initialized from service-account JSON file');
+      } else if (process.env.FIREBASE_PROJECT_ID) {
+        firebaseApp = admin.initializeApp({
+          credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+          }),
+        });
+        console.log('✅ Firebase Admin initialized from env vars');
+      }
     } catch (err) {
       console.warn('⚠️  Firebase init skipped:', err.message);
     }
@@ -30,31 +42,56 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
   }
 
   // Raw FCM token — use Firebase Admin SDK
+  if (!firebaseApp) initFirebase();
   if (!firebaseApp) return;
   try {
+    const isCall = data.type === 'call';
+    const channelId = isCall ? 'incoming_calls_v7' : 'messages_v2';
     const collapseKey = data.conversationId ? `conv_${data.conversationId}` : (data.senderId ? `user_${data.senderId}` : undefined);
-    const res = await admin.messaging().send({
+
+    const stringData = Object.fromEntries(
+      Object.entries({ ...data, title, body }).map(([k, v]) => [
+        k,
+        typeof v === 'object' ? JSON.stringify(v) : String(v),
+      ])
+    );
+
+    // For Call: High-Priority DATA-ONLY push (no notification payload).
+    // This wakes up Android OS and hands full execution to the client app to launch
+    // the FullScreen IncomingCallActivity and play looping ringtone directly!
+    const messagePayload = {
       token: fcmToken,
-      notification: { title, body },
-      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])),
+      data: stringData,
       android: {
         priority: 'high',
         collapseKey,
-        notification: {
-          tag: collapseKey,
-          channelId: 'messages_v2',
-          sound: 'default',
-          defaultSound: true,
-          defaultVibrateTimings: true,
-        },
+        ...(isCall ? {} : {
+          notification: {
+            tag: collapseKey,
+            channelId,
+            sound: 'default',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+          },
+        }),
       },
+      ...(!isCall && { notification: { title, body } }),
       apns: {
         headers: {
           ...(collapseKey ? { 'apns-collapse-id': collapseKey } : {}),
+          'apns-priority': '10',
         },
-        payload: { aps: { sound: 'default', badge: 1 } },
+        payload: {
+          aps: {
+            contentAvailable: true,
+            sound: isCall ? 'ringtone.wav' : 'default',
+            badge: 1,
+          },
+        },
       },
-    });
+    };
+
+    const res = await admin.messaging().send(messagePayload);
     return res;
   } catch (err) {
     console.warn('FCM push failed:', err.message);

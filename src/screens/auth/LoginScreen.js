@@ -46,6 +46,8 @@ export default function LoginScreen({ navigation }) {
     try {
       const data = await login(email.trim().toLowerCase(), password);
       connect().catch((e) => console.log('[Socket] connect error:', e?.message));
+      const NotificationService = require('../../services/NotificationService').default;
+      NotificationService.initialize();
       navigation.replace(data.user.profileSetup ? 'MainTabs' : 'ProfileSetup');
     } catch (err) {
       if (err.response?.status === 403) {

@@ -16,7 +16,28 @@ class MainActivity : ReactActivity() {
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+      setShowWhenLocked(true)
+      setTurnScreenOn(true)
+    }
+    window.addFlags(
+      android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+      android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+      android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+      android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+    )
+
     super.onCreate(null)
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+      setShowWhenLocked(true)
+      setTurnScreenOn(true)
+    }
   }
 
   /**

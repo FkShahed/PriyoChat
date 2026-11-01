@@ -6,14 +6,24 @@ import { navigationRef } from '../navigation/navigationRef';
 // Your Expo project ID from app.json
 const PROJECT_ID = 'ad727065-625e-4696-95f9-467baf61dd1a';
 
-// Configure foreground notification behavior — ALWAYS show heads-up banner with action buttons (Native only)
+// Configure foreground notification behavior:
+// For chat messages: show alert/banner.
+// For calls: suppress foreground heads-up banner when user is already active in the app,
+// because IncomingCallScreen / CallScreen handles it in-app with its own UI.
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
+    handleNotification: async (notification) => {
+      const data = notification?.request?.content?.data || {};
+      const isCallType = data.type === 'call' || data.type === 'ongoing_call';
+      const isAppActive = AppState.currentState === 'active';
+
+      // Suppress call pop-up heads-up alert if app is already active in foreground
+      return {
+        shouldShowAlert: isCallType && isAppActive ? false : true,
+        shouldPlaySound: isCallType && isAppActive ? false : true,
+        shouldSetBadge: true,
+      };
+    },
   });
 }
 
@@ -152,7 +162,7 @@ class NotificationService {
           body: `${callerName || 'Someone'} is calling you...`,
           categoryIdentifier: 'incoming_call_category',
           data: { type: 'call', callerName, callType, callId, caller, offer },
-          ...(Platform.OS === 'android' && { channelId: 'incoming_calls_v5', sticky: true }),
+          ...(Platform.OS === 'android' && { channelId: 'incoming_calls_v7', sticky: true }),
         },
         trigger: null,
       });
@@ -285,15 +295,20 @@ class NotificationService {
       sound: 'default',
     });
 
-    // Calls — MAX importance, respects Do Not Disturb / Silent Mode
-    await Notifications.setNotificationChannelAsync('incoming_calls_v5', {
+    // Calls — MAX importance, bypass DND, custom ringtone (res/raw/ringtone.wav)
+    await Notifications.setNotificationChannelAsync('incoming_calls_v7', {
       name: 'Incoming Calls Alert',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 200, 500, 200, 500],
       lightColor: '#34C759',
       enableLights: true,
       enableVibrate: true,
-      sound: 'default',
+      bypassDnd: true,
+      sound: 'ringtone',
+      audioAttributes: {
+        usage: Notifications.AndroidAudioUsage.NOTIFICATION_RINGTONE,
+        contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+      },
     });
 
     // Ongoing Active Call Notification Channel (Low sound/no vibrate so it doesn't disturb)

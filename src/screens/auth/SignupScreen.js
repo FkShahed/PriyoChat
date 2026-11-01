@@ -47,6 +47,8 @@ export default function SignupScreen({ navigation }) {
     try {
       await signup(name.trim(), email.trim().toLowerCase(), password);
       connect().catch((e) => console.log('[Socket] connect error:', e?.message));
+      const NotificationService = require('../../services/NotificationService').default;
+      NotificationService.initialize();
       navigation.replace('ProfileSetup');
     } catch (err) {
       showAlert('Signup Failed', err.response?.data?.message || err.message || 'Please try again');

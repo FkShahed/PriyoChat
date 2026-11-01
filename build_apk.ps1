@@ -277,7 +277,7 @@ try {
         } catch {}
 
         Write-Host "NOTE: To connect this Debug APK with live updates, start Metro with:" -ForegroundColor Magenta
-        Write-Host "      npx expo start --dev-client" -ForegroundColor Yellow
+        Write-Host "      npm start -- --dev-client --host lan" -ForegroundColor Yellow
         if ($detectedIp) {
             Write-Host "      Detected PC IP  : http://${detectedIp}:8081" -ForegroundColor Green
             Write-Host "      Then shake phone -> 'Change Bundle URL' -> enter: ${detectedIp}:8081" -ForegroundColor Cyan

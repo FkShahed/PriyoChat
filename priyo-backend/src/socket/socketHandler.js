@@ -292,11 +292,13 @@ const setupSocket = (io) => {
         if (receiver && receiver.fcmToken) {
           const t = receiver.fcmToken;
           const title = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call';
-          const body = `${socket.user.name} is calling you...`;
+          const callerName = socket.user.name || 'PriyoChat User';
+          const body = `${callerName} is calling you...`;
           await sendPushNotification(t, title, body, {
             type: 'call',
             callId: callId ? String(callId) : '',
-            caller: { _id: userId, name: socket.user.name, avatar: socket.user.avatar },
+            callerName,
+            caller: { _id: userId, name: callerName, avatar: socket.user.avatar },
             callType,
           });
           console.log(`[socketHandler] Sent Call Push Notification with payload to ${to}`);

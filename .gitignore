@@ -80,3 +80,5 @@ scratch/
 *.apk
 *.zip
 dist/
+*service-account*.json
+
