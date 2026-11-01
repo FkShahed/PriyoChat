@@ -271,6 +271,7 @@ const setupSocket = (io) => {
         callType,
         to,
         createdAt: Date.now(),
+        iceCandidates: [],
       };
 
       if (callId) {
@@ -328,6 +329,7 @@ const setupSocket = (io) => {
           from: callObj.from,
           caller: callObj.caller,
           callType: callObj.callType,
+          iceCandidates: callObj.iceCandidates || [],
         });
         socket.emit('incoming_call', callObj);
       } else {
@@ -352,7 +354,14 @@ const setupSocket = (io) => {
       io.to(to).emit('call_answered', { from: userId, answer });
     });
 
-    socket.on('call_ice', ({ to, candidate }) => {
+    socket.on('call_ice', ({ to, candidate, callId }) => {
+      for (const [cId, activeCall] of activeCalls.entries()) {
+        if ((callId && cleanId(callId) === cId) || activeCall.to === to || activeCall.from === to) {
+          if (!activeCall.iceCandidates) activeCall.iceCandidates = [];
+          activeCall.iceCandidates.push({ from: userId, candidate });
+          break;
+        }
+      }
       io.to(to).emit('call_ice', { from: userId, candidate });
     });
 
