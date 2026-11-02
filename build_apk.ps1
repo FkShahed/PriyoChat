@@ -140,6 +140,25 @@ try {
         Log-Warn "debug.keystore not found at '$debugKeystore'. Ensure your build.gradle signingConfig is configured."
     }
 
+    # 1.5 Auto-sync version from app.json to android/app/build.gradle
+    if (Test-Path "app.json") {
+        try {
+            $appJsonContent = Get-Content "app.json" -Raw | ConvertFrom-Json
+            $targetVer = $appJsonContent.expo.version
+            if ($targetVer) {
+                $gradleFile = Join-Path $ANDROID_DIR "app\build.gradle"
+                if (Test-Path $gradleFile) {
+                    $gContent = Get-Content $gradleFile -Raw
+                    if ($gContent -match 'versionName\s+"[^"]+"') {
+                        $gContent = $gContent -replace 'versionName\s+"[^"]+"', "versionName `"$targetVer`""
+                        Set-Content -Path $gradleFile -Value $gContent -NoNewline
+                        Log-Info "Synchronized build.gradle versionName to '$targetVer'"
+                    }
+                }
+            }
+        } catch {}
+    }
+
     # --------------------------------------------------------------------------
     # 2. TARGET APK & FAULTY ASSET CLEANUP (SMART INCREMENTAL CLEANUP)
     # --------------------------------------------------------------------------
@@ -235,13 +254,25 @@ try {
     $apkItem = Get-Item $destinationPath
     $apkSizeMB = [math]::Round($apkItem.Length / 1MB, 2)
 
-    # In Full mode only: trigger backend sync if script exists
-    if ($Mode -eq "full" -and (Test-Path $POST_BUILD_SYNC_SCRIPT)) {
-        try {
-            Log-Info "Running post-build sync script: $POST_BUILD_SYNC_SCRIPT"
-            & node $POST_BUILD_SYNC_SCRIPT
-        } catch {
-            Log-Warn "Post-build sync script encountered an issue: $_"
+    # In Full mode only: upload to PriyoChat Cloud Engine & sync backend database
+    if ($Mode -eq "full") {
+        $sshKey = "C:\\Users\\LOQ\\.ssh\\priyo_server.pem"
+        if (Test-Path $sshKey) {
+            try {
+                Log-Info "Uploading $OUTPUT_APK_NAME to PriyoChat Cloud Engine (138.2.92.182)..."
+                & scp -i $sshKey -o ServerAliveInterval=15 -o ServerAliveCountMax=3 $destinationPath "ubuntu@138.2.92.182:/var/www/html/apk/$OUTPUT_APK_NAME"
+                Log-Success "Uploaded to https://138.2.92.182.nip.io/apk/$OUTPUT_APK_NAME"
+            } catch {
+                Log-Warn "Cloud upload failed: $_"
+            }
+        }
+        if (Test-Path $POST_BUILD_SYNC_SCRIPT) {
+            try {
+                Log-Info "Running post-build sync script: $POST_BUILD_SYNC_SCRIPT"
+                & node $POST_BUILD_SYNC_SCRIPT
+            } catch {
+                Log-Warn "Post-build sync script encountered an issue: $_"
+            }
         }
     }
 

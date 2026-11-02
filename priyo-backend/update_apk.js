@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 // Load from priyo-backend/.env regardless of where the script is invoked from
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const mongoose = require('mongoose');
@@ -19,9 +20,17 @@ async function updateApk() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log('Connected to MongoDB successfully!');
 
-  const version = "1.0.9";
-  const apkUrl = "https://138.2.92.182.nip.io/apk/PriyoChat-v1.0.8.apk";
-  const releaseNotes = "Version 1.0.9 (STABLE). Oracle Cloud VPS migration, silent mode ringer respect, call speaker & echo cancellation fixes, ghost call cleanup.";
+  let version = '3.7.0';
+  try {
+    const appJsonPath = path.resolve(__dirname, '../app.json');
+    if (fs.existsSync(appJsonPath)) {
+      const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+      if (appJson.expo?.version) version = appJson.expo.version;
+    }
+  } catch (e) {}
+
+  const apkUrl = 'https://138.2.92.182.nip.io/apk/PriyoChat-latest.apk';
+  const releaseNotes = `Version ${version} (STABLE). PriyoChat Cloud Engine release.`;
 
   const update = await AppUpdate.create({
     version,
@@ -38,7 +47,7 @@ async function updateApk() {
   await mongoose.disconnect();
 }
 
-updateApk().catch(err => {
+updateApk().catch((err) => {
   console.error('Error updating AppUpdate:', err);
   process.exit(1);
 });
