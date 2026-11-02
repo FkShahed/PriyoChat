@@ -29,11 +29,32 @@ class MainActivity : ReactActivity() {
     )
 
     super.onCreate(null)
+    cancelCallNotificationIfNeeded(intent)
+  }
+
+  /**
+   * When the user taps Answer / Decline on the native incoming-call notification, remove that
+   * notification right away so the looping ringtone stops instantly (JS handles the rest).
+   */
+  private fun cancelCallNotificationIfNeeded(intent: android.content.Intent?) {
+    try {
+      val callAction = intent?.getStringExtra("callAction")
+      if (callAction == "accept" || callAction == "decline") {
+        val notifId = intent?.getIntExtra("notifId", 0) ?: 0
+        if (notifId != 0) {
+          val nm = getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+          nm.cancel(notifId)
+        }
+      }
+    } catch (e: Exception) {
+      // ignore
+    }
   }
 
   override fun onNewIntent(intent: android.content.Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
+    cancelCallNotificationIfNeeded(intent)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
       setShowWhenLocked(true)
       setTurnScreenOn(true)

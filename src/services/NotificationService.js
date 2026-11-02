@@ -392,6 +392,10 @@ class NotificationService {
           const callerName = callerObj?.name || data.callerName || 'PriyoChat User';
           const fromId = callerObj?._id || callerObj?.id || data.from;
 
+          // Call already answered (connecting/active): never push the ringing screen over it
+          const stateBefore = useCallStore.getState().callState;
+          if (stateBefore === 'connecting' || stateBefore === 'active') return;
+
           const accepted = useCallStore.getState().setIncomingCall({
             from: fromId,
             callId: data.callId,
@@ -400,7 +404,7 @@ class NotificationService {
             offer: data.offer,
             callType: data.callType || 'audio',
           });
-          if (accepted) {
+          if (accepted && useCallStore.getState().callState === 'incoming') {
             CallKeepService.displayIncomingCall(callUuid, callerName, 'PriyoChat', data.callType || 'audio');
             if (navigationRef.isReady()) {
               navigationRef.navigate('IncomingCall');

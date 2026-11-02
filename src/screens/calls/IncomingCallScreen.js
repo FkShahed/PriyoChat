@@ -11,8 +11,11 @@ import { InCallManager } from '../../utils/nativeModules';
 import useCallStore from '../../store/useCallStore';
 import useSocketStore from '../../store/useSocketStore';
 import { getInitials } from '../../utils/helpers';
+import { hasPendingAutoAccept, consumePendingAutoAccept } from '../../utils/callActionFlag';
 
-export default function IncomingCallScreen({ navigation }) {
+export default function IncomingCallScreen({ navigation, route }) {
+  // Set when the user pressed "Answer" on the native notification: accept straight away.
+  const autoAccept = !!route?.params?.autoAccept || hasPendingAutoAccept();
   const { remoteUser, callType, callState, setCallAccepted, resetCall } = useCallStore();
   console.log('[IncomingCallScreen] remoteUser:', remoteUser?._id, remoteUser?.name);
   const { emit } = useSocketStore();
@@ -21,6 +24,11 @@ export default function IncomingCallScreen({ navigation }) {
   const soundRef = useRef(null);
   const hasActed = useRef(false); // prevent double-navigation
   const isAccepted = useRef(false);
+  // If this screen is opened for a call that is ALREADY answered (connecting/active), it must not
+  // ring or ask again: it just hands control back to the call screen.
+  const alreadyAnsweredOnOpen = useRef(
+    useCallStore.getState().callState === 'connecting' || useCallStore.getState().callState === 'active'
+  );
 
   useEffect(() => {
     RNAnimated.parallel([
@@ -34,6 +42,8 @@ export default function IncomingCallScreen({ navigation }) {
     const playRingtone = async () => {
       try {
         if (isCancelled) return;
+        if (autoAccept) return; // already answered from the notification: no in-app ringtone
+        if (alreadyAnsweredOnOpen.current) return; // call already answered: never ring again
         if (InCallManager) {
           InCallManager.startRingtone('_DEFAULT_', [500, 1000]);
           console.log('[Ringtone] InCallManager ringtone started (respects silent mode)');
@@ -118,6 +128,29 @@ export default function IncomingCallScreen({ navigation }) {
     }
   };
 
+  // The call got answered (e.g. from the notification) while/before this screen showed up:
+  // do not ring or ask again, return to the existing call screen (or open it if missing).
+  useEffect(() => {
+    if (hasActed.current) return;
+    if (callState !== 'connecting' && callState !== 'active') return;
+    hasActed.current = true;
+    isAccepted.current = true; // keep the audio session for the call screen
+    if (InCallManager) {
+      try { InCallManager.stopRingtone(); } catch (e) {}
+    }
+    try {
+      const routes = navigation.getState?.()?.routes || [];
+      const hasCallRoute = routes.some((r) => r.name === 'Call');
+      if (hasCallRoute && navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.replace('Call', { otherUser: remoteUser, callType });
+      }
+    } catch (e) {
+      console.warn('[IncomingCallScreen] redirect to call screen failed:', e.message);
+    }
+  }, [callState]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // If caller hung up or call expired before we answered → auto dismiss
   useEffect(() => {
     if ((callState === 'ended' || callState === 'idle') && !hasActed.current) {
@@ -169,6 +202,17 @@ export default function IncomingCallScreen({ navigation }) {
     setCallAccepted();
     navigation.replace('Call', { otherUser: remoteUser, callType });
   };
+
+  // "Answer" tapped on the notification: run the normal accept flow once the call data is in the store
+  // Re-checks when the call data (remoteUser/callState) arrives, so it works whichever happens first.
+  useEffect(() => {
+    if (hasActed.current) return;
+    const wanted = !!route?.params?.autoAccept || hasPendingAutoAccept();
+    if (!wanted || !remoteUser || callState !== 'incoming') return;
+    consumePendingAutoAccept();
+    const t = setTimeout(() => handleAccept(), 0);
+    return () => clearTimeout(t);
+  }, [remoteUser, callState, route?.params?.autoAccept]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleReject = () => {
     if (hasActed.current) return;

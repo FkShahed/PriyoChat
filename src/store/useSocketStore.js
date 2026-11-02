@@ -132,6 +132,15 @@ const useSocketStore = create((set, get) => ({
 
     // ── Call events ──────────────────────────────────────────────────
     newSocket.on('incoming_call', (data) => {
+      // Replay of a call this device already answered / ended (e.g. after a socket reconnect):
+      // ignore it completely so the phone never rings again for the same call.
+      {
+        const cs = useCallStore.getState();
+        if (data?.callId && cs.isCallHandled(data.callId) && (cs.callState === 'idle' || cs.callState === 'ended')) {
+          console.log('[Socket] Ignoring replayed incoming_call already handled:', data.callId);
+          return;
+        }
+      }
       let callerObj = data.caller;
       if (typeof callerObj === 'string') {
         try { callerObj = JSON.parse(callerObj); } catch (e) {}
@@ -264,6 +273,25 @@ const useSocketStore = create((set, get) => ({
     });
 
     set({ socket: newSocket });
+
+        // Keep `connectPromise` alive until this socket is really connected (max ~8s).
+        // Other connect() calls made in the meantime (App start, navigator, call screen, ...) then
+        // REUSE this in-flight socket instead of tearing it down and starting a new handshake each
+        // time — repeated teardown made notification-answered calls sit on "Connecting..." for ages.
+        await new Promise((resolve) => {
+          if (newSocket.connected) return resolve();
+          let timer = null;
+          const finish = () => {
+            if (timer) { clearTimeout(timer); timer = null; }
+            try { newSocket.off('connect', finish); } catch (e) {}
+            try { newSocket.off('connect_error', finish); } catch (e) {}
+            resolve();
+          };
+          timer = setTimeout(finish, 8000);
+          newSocket.on('connect', finish);
+          newSocket.on('connect_error', finish);
+        });
+
         return newSocket;
       } finally {
         connectPromise = null;

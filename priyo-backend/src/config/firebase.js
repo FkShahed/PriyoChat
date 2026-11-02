@@ -36,7 +36,11 @@ const initFirebase = () => {
 const sendPushNotification = async (fcmToken, title, body, data = {}) => {
   if (!fcmToken) return;
 
+  const isCallCancel = data.type === 'call_cancel';
+
   // Expo Push Token (ExponentPushToken[...])
+  // A call_cancel is a silent data message handled natively; never show it as a visible notification.
+  if (isCallCancel && (fcmToken.startsWith('ExponentPushToken') || fcmToken.startsWith('ExpoPushToken'))) return;
   if (fcmToken.startsWith('ExponentPushToken') || fcmToken.startsWith('ExpoPushToken')) {
     return sendExpoNotification(fcmToken, title, body, data);
   }
@@ -45,7 +49,7 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
   if (!firebaseApp) initFirebase();
   if (!firebaseApp) return;
   try {
-    const isCall = data.type === 'call';
+    const isCall = data.type === 'call' || isCallCancel;
     const channelId = isCall ? 'incoming_calls_v7' : 'messages_v2';
     const collapseKey = data.conversationId ? `conv_${data.conversationId}` : (data.senderId ? `user_${data.senderId}` : (isCall ? `call_${data.callId || Date.now()}` : undefined));
 

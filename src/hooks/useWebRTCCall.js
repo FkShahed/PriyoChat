@@ -74,7 +74,48 @@ function getIceServers() {
   ];
 }
 
-const CONNECTION_TIMEOUT_MS = 45000; // 45 seconds ring timeout
+/**
+ * Turn a raw technical call error into a short message a normal user understands.
+ * Returns null when no alert should be shown (an alert was already shown elsewhere).
+ */
+function friendlyCallError(err, role) {
+  const raw = String(err?.message || err || '');
+  const msg = raw.toLowerCase();
+
+  if (msg.includes('no offer received') || msg.includes('offer not found') || msg.includes('expired')) {
+    return {
+      title: 'Call ended',
+      message: 'The caller hung up before the call could connect.',
+    };
+  }
+  if (msg.includes('permissions denied')) {
+    return null; // the permission prompt/alert was already shown
+  }
+  if (msg.includes('notallowed') || msg.includes('permission') || msg.includes('microphone') || msg.includes('camera')) {
+    return {
+      title: 'Microphone or camera unavailable',
+      message: 'Please allow microphone (and camera for video calls) access in Settings and try again.',
+    };
+  }
+  if (msg.includes('network') || msg.includes('timeout') || msg.includes('timed out') || msg.includes('socket')) {
+    return {
+      title: 'Connection problem',
+      message: 'We could not reach the other person. Please check your internet connection and try again.',
+    };
+  }
+  if (msg.includes('invalid or missing sdp')) {
+    return {
+      title: 'Call could not start',
+      message: 'The call data was incomplete. Please ask the caller to try again.',
+    };
+  }
+  return {
+    title: role === 'caller' ? 'Could not start the call' : 'Could not connect the call',
+    message: 'Something went wrong while connecting. Please try again in a moment.',
+  };
+}
+
+const CONNECTION_TIMEOUT_MS =45000; // 45 seconds ring timeout
 
 // High-quality audio constraints with echo cancellation & noise suppression
 const AUDIO_CONSTRAINTS = {
@@ -822,7 +863,8 @@ export default function useWebRTCCall({
       if (err.message && (err.message.includes('closed') || err.message.includes('wrong state'))) {
         console.warn('[WebRTC] Caller init aborted due to closed connection');
       } else {
-        Alert.alert('Call Error', err.message || 'Failed to start call');
+        const friendly = friendlyCallError(err, 'caller');
+        if (friendly) Alert.alert(friendly.title, friendly.message);
       }
       useCallStore.getState().endCall('ended');
     }
@@ -895,6 +937,11 @@ export default function useWebRTCCall({
             });
           }
         }
+      }
+
+      // The offer may have reached the store (socket replay) while we were waiting
+      if (!currentOffer) {
+        currentOffer = useCallStore.getState().offer;
       }
 
       if (!currentOffer) {
@@ -1010,10 +1057,22 @@ export default function useWebRTCCall({
       }, CONNECTION_TIMEOUT_MS);
     } catch (err) {
       console.error('[WebRTC] Receiver init error:', err);
+      const stateNow = useCallStore.getState().callState;
+      const alreadyEnded = stateNow === 'ended' || stateNow === 'idle';
+      // A duplicate/stale receiver instance failed while the real one already connected the call:
+      // never tear down or alert on a live call.
+      if (stateNow === 'active') {
+        console.warn('[WebRTC] Stale receiver init failed but call is already active — ignoring');
+        return;
+      }
       if (err.message && (err.message.includes('closed') || err.message.includes('wrong state'))) {
         console.warn('[WebRTC] Receiver init aborted due to closed connection');
+      } else if (alreadyEnded) {
+        // The caller already hung up (call_ended arrived first): nothing to tell the user.
+        console.log('[WebRTC] Receiver init failed but call already ended — no alert');
       } else {
-        Alert.alert('Call Error', err.message || 'Failed to answer call');
+        const friendly = friendlyCallError(err, 'receiver');
+        if (friendly) Alert.alert(friendly.title, friendly.message);
       }
       useCallStore.getState().endCall('ended');
     }

@@ -311,8 +311,22 @@ const setupSocket = (io) => {
           const title = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call';
           const callerName = socket.user.name || 'PriyoChat User';
           const body = `${callerName} is calling you...`;
+          // Short-lived signed token + URL so the phone's native "Decline" button can reject this
+          // call over plain HTTPS without opening the app (see callController.declineFromPush).
+          let declineToken = '';
+          try {
+            declineToken = jwt.sign(
+              { purpose: 'decline_call', callId: String(callId), receiverId: String(targetRoom) },
+              process.env.JWT_SECRET,
+              { expiresIn: '3m' }
+            );
+          } catch (e) {}
+          const declineUrl = `${process.env.PUBLIC_API_URL || 'https://138.2.92.182.nip.io'}/api/calls/decline-from-push`;
+
           await sendPushNotification(t, title, body, {
             type: 'call',
+            declineToken,
+            declineUrl,
             callId: callId ? String(callId) : '',
             callerName,
             caller: { _id: userId, name: callerName, avatar: socket.user.avatar },
@@ -452,6 +466,25 @@ const setupSocket = (io) => {
       }
       io.to(to).emit('call_ended', { from: userId });
 
+      // If the call never connected (caller cancelled while ringing), silently tell the other
+      // phone's native service to remove its incoming-call notification / ringtone.
+      // Fire-and-forget: never blocks or alters the normal call_end flow.
+      if (Number(duration) === 0) {
+        (async () => {
+          try {
+            const other = await User.findById(cleanId(to) || to).select('fcmToken');
+            if (other && other.fcmToken) {
+              await sendPushNotification(other.fcmToken, '', '', {
+                type: 'call_cancel',
+                callId: callId ? String(callId) : '',
+              });
+            }
+          } catch (e) {
+            console.warn('[socketHandler] call_cancel push error:', e.message);
+          }
+        })();
+      }
+
       // ── Create call message in conversation ──
       try {
         const convo = await Conversation.findOne({
@@ -496,4 +529,59 @@ const setupSocket = (io) => {
   });
 };
 
-module.exports = { setupSocket, onlineUsers };
+/**
+ * Decline an incoming call WITHOUT a socket connection (used by the native "Decline" button on the
+ * incoming-call notification, which works even when the app is completely closed).
+ * Mirrors the behaviour of the socket 'call_reject' handler: caller gets 'call_rejected' and a
+ * rejected-call message is added to the conversation.
+ */
+const declineCallByReceiver = async (io, { callId, receiverId, callType = 'audio' }) => {
+  const isObjId = (v) => typeof v === 'string' && /^[0-9a-fA-F]{24}$/.test(v);
+  if (!isObjId(callId) || !isObjId(receiverId)) return { ok: false, reason: 'bad_ids' };
+
+  // Find caller: in-memory active call first, DB record as fallback
+  const active = activeCalls.get(callId);
+  let callerId = active ? String(active.from) : null;
+  let dbCall = null;
+  try {
+    dbCall = await Call.findById(callId);
+  } catch (e) {}
+  if (!callerId && dbCall) callerId = String(dbCall.caller);
+  if (!callerId) return { ok: false, reason: 'call_not_found' };
+
+  // Only the receiver of this call may decline it, and only while it is still pending
+  if (active && String(active.to) !== String(receiverId)) return { ok: false, reason: 'not_receiver' };
+  if (dbCall && String(dbCall.receiver) !== String(receiverId)) return { ok: false, reason: 'not_receiver' };
+  if (dbCall && dbCall.status !== 'pending') return { ok: false, reason: 'not_pending' };
+
+  activeCalls.delete(callId);
+  try {
+    await Call.findByIdAndUpdate(callId, { status: 'rejected', endedAt: new Date() });
+  } catch (e) {
+    console.error('[socketHandler] declineCallByReceiver update error:', e.message);
+  }
+
+  io.to(callerId).emit('call_rejected', { from: receiverId, reason: 'declined' });
+
+  try {
+    const convo = await Conversation.findOne({ participants: { $all: [receiverId, callerId] } });
+    if (convo) {
+      const callMsg = await Message.create({
+        conversation: convo._id,
+        sender: callerId,
+        text: '',
+        callData: { callType: callType || 'audio', duration: 0, status: 'rejected' },
+      });
+      await callMsg.populate('sender', 'name avatar');
+      await Conversation.findByIdAndUpdate(convo._id, { lastMessage: callMsg._id });
+      const payload = { ...callMsg.toObject(), conversationId: convo._id.toString() };
+      io.to(receiverId).emit('new_message', payload);
+      io.to(callerId).emit('new_message', payload);
+    }
+  } catch (e) {
+    console.error('[socketHandler] declineCallByReceiver message error:', e.message);
+  }
+  return { ok: true };
+};
+
+module.exports = { setupSocket, onlineUsers, declineCallByReceiver };

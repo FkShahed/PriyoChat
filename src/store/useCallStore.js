@@ -2,6 +2,25 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Calls (by callId) that were already answered / ended on this device. A late or repeated
+// `incoming_call` for the same callId (socket reconnect replay, duplicate push, ...) must never
+// make the phone ring again for a call the user already handled.
+const HANDLED_CALL_TTL_MS = 2 * 60 * 1000;
+const handledCalls = new Map();
+const markCallHandled = (callId) => {
+  if (!callId) return;
+  const now = Date.now();
+  handledCalls.set(String(callId), now);
+  for (const [id, t] of handledCalls.entries()) {
+    if (now - t > HANDLED_CALL_TTL_MS) handledCalls.delete(id);
+  }
+};
+const wasCallHandled = (callId) => {
+  if (!callId) return false;
+  const t = handledCalls.get(String(callId));
+  return !!t && Date.now() - t <= HANDLED_CALL_TTL_MS;
+};
+
 const useCallStore = create(
   persist(
     (set, get) => ({
@@ -151,6 +170,12 @@ const useCallStore = create(
           return false;
         }
 
+        // This exact call was already answered/ended here: ignore the stale repeat (no re-ring).
+        if (data.callId && wasCallHandled(data.callId) && (callState === 'idle' || callState === 'ended')) {
+          console.log('[useCallStore] Ignoring stale incoming call already handled:', data.callId);
+          return false;
+        }
+
         console.log('[useCallStore] setIncomingCall, callId:', data.callId, 'from:', callerId);
 
         const callSessionId = data.callSessionId || (Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6));
@@ -179,8 +204,12 @@ const useCallStore = create(
 
       // Receiver accepted — transitional state while WebRTC connects
       setCallAccepted: () => {
+        markCallHandled(get().callId);
         set({ callState: 'connecting' });
       },
+
+      // True if this callId was already answered/ended on this device (used to ignore replays)
+      isCallHandled: (callId) => wasCallHandled(callId),
 
       // Caller received SDP answer from receiver
       setCallAnswered: (answer) => {
@@ -223,6 +252,7 @@ const useCallStore = create(
 
       endCall: (reason = 'ended') => {
         const state = get();
+        markCallHandled(state.callId);
         console.log('[useCallStore] endCall, state:', state.callState, 'remoteUser:', state.remoteUser?.name, 'isReceiver:', state.isReceiver);
 
         // Immediately dismiss all system notifications & stop native CallKeep ringing
@@ -275,6 +305,7 @@ const useCallStore = create(
       },
 
       resetCall: () => {
+        markCallHandled(get().callId);
         set({
           callState: 'idle',
           callType: null,

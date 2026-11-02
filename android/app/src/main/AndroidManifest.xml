@@ -54,6 +54,10 @@
       </intent-filter>
     </activity>
 
+    <receiver
+      android:name=".DeclineCallReceiver"
+      android:exported="false" />
+
     <service
       android:name=".PriyoFirebaseMessagingService"
       android:exported="false">

@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import expo.modules.notifications.service.delegates.FirebaseMessagingDelegate
@@ -45,6 +46,21 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
                 return
             }
             handleIncomingCall(dataMap)
+            return
+        }
+
+        // Caller hung up / cancelled while this phone was ringing: remove the native call
+        // notification (this also stops the looping ringtone).
+        if (type == "call_cancel") {
+            val cancelCallId = dataMap["callId"]
+            if (!cancelCallId.isNullOrEmpty()) {
+                try {
+                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    nm.cancel(cancelCallId.hashCode())
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
             return
         }
 
@@ -142,56 +158,94 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
         } catch (e: Exception) {
             "PriyoChat+User"
         }
-        val uriString = "priyochat://call?callId=$callId&callerName=$encodedCallerName&callType=$callType&from=$fromId"
+        val notificationId = callId.hashCode()
+        val baseUri = "priyochat://call?callId=$callId&callerName=$encodedCallerName&callType=$callType&from=$fromId"
 
-        // Intent to launch MainActivity in full screen
-        val fullScreenIntent = Intent(this as Context, MainActivity::class.java).apply {
-            action = Intent.ACTION_VIEW
-            setData(Uri.parse(uriString))
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("type", "call")
-            putExtra("callId", callId)
-            putExtra("callerName", callerName)
-            putExtra("callType", callType)
-            putExtra("from", fromId)
-            for (entry in data.entries) {
-                putExtra(entry.key, entry.value)
+        // Builds an Intent that opens MainActivity with the call deep link.
+        // callAction: "" (open the incoming-call screen), "accept" or "decline".
+        fun buildCallIntent(callAction: String): Intent {
+            val uri = if (callAction.isEmpty()) baseUri else "$baseUri&action=$callAction"
+            return Intent(this as Context, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                setData(Uri.parse(uri))
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("type", "call")
+                putExtra("callId", callId)
+                putExtra("callerName", callerName)
+                putExtra("callType", callType)
+                putExtra("from", fromId)
+                for (entry in data.entries) {
+                    putExtra(entry.key, entry.value)
+                }
+                // Read by MainActivity to cancel the notification instantly (stops the ringtone)
+                putExtra("callAction", callAction)
+                putExtra("notifId", notificationId)
             }
         }
 
-        val pendingIntent = PendingIntent.getActivity(
-            this as Context,
-            callId.hashCode(),
-            fullScreenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
-        val title = if (callType == "video") "📹 Incoming Video Call" else "📞 Incoming Call"
-        val body = "$callerName is calling you..."
+        // Tapping the notification body / full-screen intent: original behaviour (incoming call screen)
+        val pendingIntent = PendingIntent.getActivity(
+            this as Context, notificationId, buildCallIntent(""), pendingFlags
+        )
+        // Answer button
+        val answerIntent = PendingIntent.getActivity(
+            this as Context, notificationId + 1, buildCallIntent("accept"), pendingFlags
+        )
+        // Decline button: rejects the call in the background (no app UI) via DeclineCallReceiver.
+        // Falls back to opening the app only if the server did not send a decline token.
+        val declineToken = data["declineToken"]
+        val declineUrl = data["declineUrl"]
+        val declineIntent = if (!declineToken.isNullOrEmpty() && !declineUrl.isNullOrEmpty()) {
+            val declineBroadcast = Intent(this as Context, DeclineCallReceiver::class.java).apply {
+                putExtra("notifId", notificationId)
+                putExtra("declineToken", declineToken)
+                putExtra("declineUrl", declineUrl)
+                putExtra("callType", callType)
+            }
+            PendingIntent.getBroadcast(this as Context, notificationId + 2, declineBroadcast, pendingFlags)
+        } else {
+            PendingIntent.getActivity(
+                this as Context, notificationId + 2, buildCallIntent("decline"), pendingFlags
+            )
+        }
+
+        val subtitle = if (callType == "video") "PriyoChat video call" else "PriyoChat audio call"
 
         val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
+        val caller = Person.Builder()
+            .setName(callerName)
+            .setImportant(true)
+            .build()
+
         val notificationBuilder = NotificationCompat.Builder(this as Context, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(body)
+            .setSmallIcon(R.drawable.notification_icon)
+            .setColor(0xFF0084FF.toInt())
+            .setContentTitle(callerName)
+            .setContentText(subtitle)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setAutoCancel(true)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
-            .setFullScreenIntent(pendingIntent, true) // 👈 WAKES UP SCREEN & SHOWS FULL CALL ACTIVITY!
+            .setFullScreenIntent(pendingIntent, true) // WAKES UP SCREEN & SHOWS FULL CALL ACTIVITY
             .setSound(ringtoneUri)
             .setVibrate(longArrayOf(0, 1000, 1000, 1000, 1000))
+            .setTimeoutAfter(45000) // auto-clear if the call is never answered
+            // Professional call layout with green Answer / red Decline buttons. Android 12+ renders
+            // it natively; older versions fall back to two standard action buttons.
+            .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declineIntent, answerIntent))
 
         // Loop the ringtone until user answers or rejects
         val notification = notificationBuilder.build()
         notification.flags = notification.flags or Notification.FLAG_INSISTENT
 
-        notificationManager.notify(callId.hashCode(), notification)
+        notificationManager.notify(notificationId, notification)
     }
 }
