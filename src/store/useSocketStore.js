@@ -163,7 +163,13 @@ const useSocketStore = create((set, get) => ({
       newSocket.emit('call_ringing', { to: data.from });
 
       // When app is in background, show ONE single call notification with Answer/Decline buttons
-      if (AppState.currentState !== 'active') {
+      const { navigationRef } = require('../navigation/navigationRef');
+      const currentRoute = navigationRef?.isReady?.() ? navigationRef.getCurrentRoute()?.name : null;
+      const isAlreadyOnCallScreen = currentRoute === 'IncomingCall' || currentRoute === 'Call';
+      const existingCallState = useCallStore.getState().callState;
+      const isAlreadyActiveOrConnecting = existingCallState === 'active' || existingCallState === 'connecting';
+
+      if (AppState.currentState !== 'active' && !isAlreadyOnCallScreen && !isAlreadyActiveOrConnecting) {
         try {
           const CallKeepService = require('../services/CallKeepService').default;
           const callUuid = data.callId || ('call-' + Date.now());

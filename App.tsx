@@ -18,14 +18,40 @@ export default function App() {
 
   // Deep linking listener for full-screen incoming call intent
   useEffect(() => {
-    const handleUrl = (url) => {
+    const handleUrl = (url: string | null) => {
       if (!url) return;
       if (url.includes('call')) {
+        try {
+          const queryString = url.split('?')[1] || '';
+          const params = new URLSearchParams(queryString);
+          const callId = params.get('callId') || '';
+          const callerName = params.get('callerName') || 'PriyoChat User';
+          const callType = (params.get('callType') || 'audio') as 'audio' | 'video';
+          const from = params.get('from') || '';
+
+          if (callId || from) {
+            useCallStore.getState().setIncomingCall({
+              callId,
+              from,
+              callerName,
+              caller: { _id: from, name: callerName },
+              callType,
+            });
+          }
+        } catch (e: any) {
+          console.warn('[App] Error parsing deep link call url:', e.message);
+        }
+
+        // Proactively trigger socket connection immediately so socket is ready when CallScreen mounts
+        try {
+          useSocketStore.getState().connect();
+        } catch (e) {}
+
         const navigateToCall = () => {
           if (navigationRef.isReady()) {
-            navigationRef.navigate('IncomingCall');
+            (navigationRef as any).navigate('IncomingCall');
           } else {
-            setTimeout(navigateToCall, 300);
+            setTimeout(navigateToCall, 200);
           }
         };
         navigateToCall();

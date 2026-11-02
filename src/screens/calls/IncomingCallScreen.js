@@ -20,6 +20,7 @@ export default function IncomingCallScreen({ navigation }) {
   const opacityAnim = useRef(new RNAnimated.Value(0)).current;
   const soundRef = useRef(null);
   const hasActed = useRef(false); // prevent double-navigation
+  const isAccepted = useRef(false);
 
   useEffect(() => {
     RNAnimated.parallel([
@@ -80,28 +81,29 @@ export default function IncomingCallScreen({ navigation }) {
 
     return () => {
       isCancelled = true;
-      if (InCallManager) {
+      // Only stop ringtone & reset audio if call was NOT accepted (e.g. dismissed/rejected)
+      // When accepted, CallScreen takes over the audio session so we must NOT clobber it!
+      if (!isAccepted.current && InCallManager) {
         try {
           InCallManager.stopRingtone();
         } catch (e) {}
       }
-      // Stop ringing and unload if screen is unmounted
       if (soundRef.current) {
         const s = soundRef.current;
         soundRef.current = null;
         s.stopAsync().catch(() => {});
         s.unloadAsync().catch(() => {});
       }
-      if (Platform.OS !== 'web') {
-      try {
-        Audio.setAudioModeAsync({
-          playsInSilentModeIOS: false,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: false,
-          playThroughEarpieceAndroid: false,
-        }).catch(() => {});
-      } catch (e) {}
-    }
+      if (!isAccepted.current && Platform.OS !== 'web') {
+        try {
+          Audio.setAudioModeAsync({
+            playsInSilentModeIOS: false,
+            staysActiveInBackground: false,
+            shouldDuckAndroid: false,
+            playThroughEarpieceAndroid: false,
+          }).catch(() => {});
+        } catch (e) {}
+      }
     };
   }, []);
 
@@ -120,6 +122,7 @@ export default function IncomingCallScreen({ navigation }) {
   useEffect(() => {
     if ((callState === 'ended' || callState === 'idle') && !hasActed.current) {
       hasActed.current = true;
+    isAccepted.current = true;
       dismissScreen();
     }
   }, [callState]);
@@ -127,6 +130,7 @@ export default function IncomingCallScreen({ navigation }) {
   const handleAccept = () => {
     if (hasActed.current) return;
     hasActed.current = true;
+    isAccepted.current = true;
     if (InCallManager) {
       try {
         InCallManager.stopRingtone();
@@ -158,16 +162,7 @@ export default function IncomingCallScreen({ navigation }) {
       s.stopAsync().catch(() => {});
       s.unloadAsync().catch(() => {});
     }
-    if (Platform.OS !== 'web') {
-      try {
-      Audio.setAudioModeAsync({
-        playsInSilentModeIOS: false,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
-      }).catch(() => {});
-    } catch (e) {}
-    }
+    // Audio session will be managed exclusively by CallScreen / InCallManager
     // Don't emit call_answer here — useWebRTCCall hook in CallScreen
     // will create the real SDP answer and emit it after setting up media.
     // Mark as 'connecting' — the hook will set 'active' when WebRTC connects.
@@ -178,6 +173,7 @@ export default function IncomingCallScreen({ navigation }) {
   const handleReject = () => {
     if (hasActed.current) return;
     hasActed.current = true;
+    isAccepted.current = true;
     if (InCallManager) {
       try { InCallManager.stopRingtone(); } catch (e) {}
     }

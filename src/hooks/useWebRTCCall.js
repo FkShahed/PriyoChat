@@ -57,24 +57,19 @@ function getIceServers() {
       credential: '123456'
     },
     {
-      urls: 'turn:global.relay.metered.ca:80',
-      username: '4b74ef2aa4a495db0843cb49',
-      credential: '2AnGhj58qOqAlS1N'
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     },
     {
-      urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-      username: '4b74ef2aa4a495db0843cb49',
-      credential: '2AnGhj58qOqAlS1N'
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     },
     {
-      urls: 'turn:global.relay.metered.ca:443',
-      username: '4b74ef2aa4a495db0843cb49',
-      credential: '2AnGhj58qOqAlS1N'
-    },
-    {
-      urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-      username: '4b74ef2aa4a495db0843cb49',
-      credential: '2AnGhj58qOqAlS1N'
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     }
   ];
 }
@@ -253,12 +248,6 @@ function extractIceCandidate(raw) {
 
   if (!candStr) return null;
 
-  // Unmask mDNS .local hostnames so Android libwebrtc can reach Web directly over LAN
-  const lanHost = getLanHost();
-  if (lanHost && candStr.includes('.local')) {
-    candStr = candStr.replace(/[a-zA-Z0-9-]+\.local/g, lanHost);
-  }
-
   const rawMLine = obj.sdpMLineIndex != null ? obj.sdpMLineIndex : obj._sdpMLineIndex;
   const rawMid = obj.sdpMid != null ? obj.sdpMid : obj._sdpMid;
 
@@ -426,12 +415,14 @@ export default function useWebRTCCall({
 
     pc.onicecandidate = (event) => {
       const cand = event?.candidate;
-      const targetId = remoteUserIdRef.current || remoteUserId || useCallStore.getState().remoteUserId || useCallStore.getState().remoteUser?._id;
+      const storeState = useCallStore.getState();
+      const rawTarget = remoteUserIdRef.current || remoteUserId || storeState.remoteUserId || storeState.remoteUser?._id || storeState.remoteUser?.id;
+      const targetId = typeof rawTarget === 'object' && rawTarget !== null ? (rawTarget._id || rawTarget.id) : String(rawTarget || '').trim();
       if (!cand || !targetId) return;
       const parsed = extractIceCandidate(cand);
       if (parsed && parsed.candidate) {
         console.log('[WebRTC] Sending clean ICE candidate to:', targetId, parsed.candidate.substring(0, 45));
-        safeEmit('call_ice', { to: targetId, candidate: parsed });
+        safeEmit('call_ice', { to: targetId, candidate: parsed, callId: storeState.callId });
       }
     };
 
@@ -470,16 +461,14 @@ export default function useWebRTCCall({
         const hasVideo = stream.getVideoTracks?.()?.some(t => t.enabled !== false && t.readyState !== 'ended');
         console.log('[WebRTC] Emitting remote stream to UI, hasVideo:', hasVideo);
 
-        // Defer state updates out of the current render/commit cycle to prevent
-        // "Cannot update component while rendering a different component" React error
+        // Defer stream emit to avoid setState-during-render React error.
+        // NOTE: setCallConnected() is strictly driven by onconnectionstatechange/oniceconnectionstatechange.
         setTimeout(() => {
-          useCallStore.getState().setCallConnected();
           setErrorMessage('');
           onRemoteStreamRef.current?.(stream, Date.now(), hasVideo);
         }, 0);
       } else {
         setTimeout(() => {
-          useCallStore.getState().setCallConnected();
           setErrorMessage('');
         }, 0);
       }
@@ -497,6 +486,17 @@ export default function useWebRTCCall({
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
+        }
+        try {
+          if (localStreamRef.current) {
+            localStreamRef.current.getAudioTracks().forEach((t) => { t.enabled = true; });
+          }
+        } catch (e) {}
+        if (InCallManager) {
+          try {
+            const isVideo = callTypeRef.current === 'video';
+            InCallManager.start({ media: isVideo ? 'video' : 'audio', auto: false, ringback: '' });
+          } catch (e) {}
         }
       } else if (state === 'failed') {
         console.warn('[WebRTC] Connection failed, checking for recovery...');
@@ -801,7 +801,9 @@ export default function useWebRTCCall({
         return;
       }
 
-      const targetId = remoteUserIdRef.current || remoteUserId || useCallStore.getState().remoteUserId || useCallStore.getState().remoteUser?._id;
+      const storeState = useCallStore.getState();
+      const rawTarget = remoteUserIdRef.current || remoteUserId || storeState.remoteUserId || storeState.remoteUser?._id || storeState.remoteUser?.id;
+      const targetId = typeof rawTarget === 'object' && rawTarget !== null ? (rawTarget._id || rawTarget.id) : String(rawTarget || '').trim();
       emitRef.current('call_offer', {
         to: targetId,
         offer: offerPayload,
@@ -837,31 +839,61 @@ export default function useWebRTCCall({
         console.log('[WebRTC] Offer not found in memory, requesting from socket server...');
         const callId = useCallStore.getState().callId;
         const offerResponse = await new Promise((resolve) => {
+          let timer = null;
+          let done = false;
+          const finish = (val) => {
+            if (!done) {
+              done = true;
+              if (timer) clearTimeout(timer);
+              resolve(val);
+            }
+          };
+
+          // Give up to 15 seconds for cellular cold-start handshake
+          timer = setTimeout(() => {
+            console.warn('[WebRTC] Timeout waiting for call offer from socket');
+            finish(null);
+          }, 15000);
+
           try {
             const socketStore = require('../store/useSocketStore').default;
+            const tryFetch = (socket) => {
+              if (socket && socket.connected) {
+                socket.emit('get_call_offer', { callId }, (res) => {
+                  finish(res);
+                });
+                return true;
+              }
+              return false;
+            };
+
             let socket = socketStore.getState().socket;
-            if (!socket || !socket.connected) {
-              socketStore.getState().connect().then((s) => {
-                socket = s || socketStore.getState().socket;
-                if (socket) {
-                  socket.emit('get_call_offer', { callId }, (res) => resolve(res));
-                } else {
-                  resolve(null);
-                }
-              }).catch(() => resolve(null));
-            } else {
-              socket.emit('get_call_offer', { callId }, (res) => resolve(res));
-            }
+            if (tryFetch(socket)) return;
+
+            socketStore.getState().connect().then((s) => {
+              const connectedSocket = s || socketStore.getState().socket;
+              if (!tryFetch(connectedSocket) && connectedSocket) {
+                connectedSocket.once('connect', () => {
+                  tryFetch(connectedSocket);
+                });
+              }
+            }).catch(() => {});
           } catch (e) {
-            resolve(null);
+            finish(null);
           }
-          setTimeout(() => resolve(null), 3500);
         });
 
         if (offerResponse?.offer) {
           console.log('[WebRTC] Obtained offer from socket server successfully!');
           currentOffer = offerResponse.offer;
           useCallStore.setState({ offer: currentOffer });
+          if (Array.isArray(offerResponse.iceCandidates) && offerResponse.iceCandidates.length > 0) {
+            console.log('[WebRTC] Applying', offerResponse.iceCandidates.length, 'buffered early ICE candidates from server');
+            offerResponse.iceCandidates.forEach((item) => {
+              const cand = item.candidate || item;
+              useCallStore.getState().addIceCandidate(cand);
+            });
+          }
         }
       }
 
@@ -960,10 +992,13 @@ export default function useWebRTCCall({
         return;
       }
 
-      const targetId = remoteUserIdRef.current || useCallStore.getState().remoteUserId;
+      const storeState = useCallStore.getState();
+      const rawTarget = remoteUserIdRef.current || remoteUserId || storeState.remoteUserId || storeState.remoteUser?._id || storeState.remoteUser?.id;
+      const targetId = typeof rawTarget === 'object' && rawTarget !== null ? (rawTarget._id || rawTarget.id) : String(rawTarget || '').trim();
       await safeEmit('call_answer', {
         to: targetId,
         answer: answerPayload,
+        callId: storeState.callId,
       });
       console.log('[WebRTC] Answer sent to:', targetId);
 

@@ -82,6 +82,12 @@ const setupSocket = (io) => {
       if (activeCall.to === userId) {
         console.log(`[socketHandler] User ${userId} connected with VALID pending call ${cId}. Emitting incoming_call.`);
         socket.emit('incoming_call', activeCall);
+        if (Array.isArray(activeCall.iceCandidates) && activeCall.iceCandidates.length > 0) {
+          console.log(`[socketHandler] Forwarding ${activeCall.iceCandidates.length} buffered early ICE candidates to connected user ${userId}`);
+          activeCall.iceCandidates.forEach((candObj) => {
+            socket.emit('call_ice', candObj);
+          });
+        }
       }
     }
 
@@ -237,6 +243,9 @@ const setupSocket = (io) => {
     // Helper to sanitize Mongoose ObjectIds coming from stringified payloads
     const cleanId = (id) => {
       if (!id) return null;
+      if (typeof id === 'object' && id !== null) {
+        id = id._id || id.id || id.userId || id;
+      }
       let str = String(id).trim();
       while ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
         str = str.slice(1, -1).trim();
@@ -245,51 +254,58 @@ const setupSocket = (io) => {
     };
 
     // ─── WebRTC Signaling ──────────────────────────────────────────
-    socket.on('call_offer', async ({ to, offer, callType }) => {
-      console.log(`📞 Call Offer from ${socket.user.name} (${userId}) to ${to}`);
+    socket.on('call_offer', async ({ to, offer, callType }, callback) => {
+      const targetRoom = cleanId(to) || to;
+      console.log(`📞 Call Offer from ${socket.user?.name} (${userId}) to ${targetRoom}`);
       
-      let callId = null;
-      try {
-        // Create database record
-        const call = await Call.create({
-          caller: userId,
-          receiver: to,
-          type: callType,
-          status: 'pending'
-        });
-        callId = call._id.toString();
-        console.log(`[socketHandler] Call record created: ${callId}`);
-      } catch (err) {
-        console.error('[socketHandler] Error creating call record:', err.message);
-      }
+      // Generate callId synchronously so activeCalls is populated IMMEDIATELY
+      // without losing any early ICE candidates to DB latency!
+      const mongoose = require('mongoose');
+      const callObjectId = new mongoose.Types.ObjectId();
+      const callId = callObjectId.toString();
 
       const activePayload = {
         from: userId,
         callId,
-        caller: { _id: userId, name: socket.user.name, avatar: socket.user.avatar },
+        caller: { _id: userId, name: socket.user?.name, avatar: socket.user?.avatar },
         offer,
         callType,
-        to,
+        to: targetRoom,
         createdAt: Date.now(),
         iceCandidates: [],
       };
 
-      if (callId) {
-        activeCalls.set(callId, activePayload);
-        setTimeout(() => {
-          if (activeCalls.has(callId)) {
-            console.log(`[socketHandler] Call ${callId} timed out after 45s — removing from activeCalls`);
-            activeCalls.delete(callId);
-          }
-        }, 45000);
-      }
+      // 1. Immediately store in activeCalls map
+      activeCalls.set(callId, activePayload);
+      setTimeout(() => {
+        if (activeCalls.has(callId)) {
+          console.log(`[socketHandler] Call ${callId} timed out after 45s — removing from activeCalls`);
+          activeCalls.delete(callId);
+        }
+      }, 45000);
 
-      // emit to receiver's personal room (more reliable than raw socketId)
-      io.to(to).emit('incoming_call', activePayload);
+      // 2. Return callId immediately to caller
+      callback?.({ callId });
+
+      // 3. Emit incoming_call to receiver synchronously
+      io.to(targetRoom).emit('incoming_call', activePayload);
+
+      // 4. Asynchronously persist Call record in MongoDB without blocking signaling
+      Call.create({
+        _id: callObjectId,
+        caller: userId,
+        receiver: targetRoom,
+        type: callType,
+        status: 'pending'
+      }).then(() => {
+        console.log(`[socketHandler] Call record created in DB: ${callId}`);
+      }).catch((err) => {
+        console.error('[socketHandler] Error creating call record:', err.message);
+      });
 
       // ── Send Push Notification to wake up the device if app is backgrounded/killed ──
       try {
-        const receiver = await User.findById(to).select('fcmToken');
+        const receiver = await User.findById(targetRoom).select('fcmToken');
         if (receiver && receiver.fcmToken) {
           const t = receiver.fcmToken;
           const title = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Call';
@@ -301,8 +317,10 @@ const setupSocket = (io) => {
             callerName,
             caller: { _id: userId, name: callerName, avatar: socket.user.avatar },
             callType,
+            callerId: userId,
+            senderId: userId,
           });
-          console.log(`[socketHandler] Sent Call Push Notification with payload to ${to}`);
+          console.log(`[socketHandler] Sent Call Push Notification with payload to ${targetRoom}`);
         }
       } catch (e) {
         console.error('[socketHandler] Error sending call push notification:', e.message);
@@ -331,38 +349,42 @@ const setupSocket = (io) => {
           callType: callObj.callType,
           iceCandidates: callObj.iceCandidates || [],
         });
-        socket.emit('incoming_call', callObj);
       } else {
         callback?.({ error: 'Call offer not found or expired' });
       }
     });
 
     socket.on('call_ringing', ({ to }) => {
-      io.to(to).emit('call_ringing', { from: userId });
+      const targetRoom = cleanId(to) || to;
+      io.to(targetRoom).emit('call_ringing', { from: userId });
     });
 
     socket.on('call_answer', async ({ to, answer, callId }) => {
+      const targetRoom = cleanId(to) || to;
+      console.log(`📞 Call Answer received from ${socket.user?.name} (${userId}) to ${targetRoom}, callId: ${callId}`);
       try {
         const validId = cleanId(callId);
         if (validId) {
-          activeCalls.delete(validId);
-          await Call.findByIdAndUpdate(validId, { status: 'completed' });
+          // Keep activeCalls entry for 60s so late-arriving ICE candidates or renegotiations succeed
+          setTimeout(() => { activeCalls.delete(validId); }, 60000);
+          await Call.findByIdAndUpdate(validId, { status: 'in-progress' });
         }
       } catch (err) {
         console.error('[socketHandler] call_answer error:', err.message);
       }
-      io.to(to).emit('call_answered', { from: userId, answer });
+      io.to(targetRoom).emit('call_answered', { from: userId, answer, callId });
     });
 
     socket.on('call_ice', ({ to, candidate, callId }) => {
+      const targetRoom = cleanId(to) || to;
       for (const [cId, activeCall] of activeCalls.entries()) {
-        if ((callId && cleanId(callId) === cId) || activeCall.to === to || activeCall.from === to) {
+        if ((callId && cleanId(callId) === cId) || activeCall.to === targetRoom || activeCall.from === targetRoom) {
           if (!activeCall.iceCandidates) activeCall.iceCandidates = [];
           activeCall.iceCandidates.push({ from: userId, candidate });
           break;
         }
       }
-      io.to(to).emit('call_ice', { from: userId, candidate });
+      io.to(targetRoom).emit('call_ice', { from: userId, candidate, callId });
     });
 
     socket.on('call_reject', async ({ to, callId, callType = 'audio', reason }) => {

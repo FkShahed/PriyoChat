@@ -95,6 +95,13 @@ function WebRemoteAudio({ stream }) {
     if (Platform.OS !== 'web' || !stream || !audioRef.current) return;
     const audioEl = audioRef.current;
 
+    const tryResume = () => {
+      if (audioEl) {
+        audioEl.muted = false;
+        audioEl.play().catch(() => {});
+      }
+    };
+
     try {
       audioEl.srcObject = stream;
       audioEl.volume = 1.0;
@@ -108,23 +115,23 @@ function WebRemoteAudio({ stream }) {
           })
           .catch((err) => {
             console.warn('[WebRemoteAudio] Autoplay blocked, waiting for interaction:', err?.message);
-            const resumeAudio = () => {
-              if (audioEl) {
-                audioEl.muted = false;
-                audioEl.play().catch(() => {});
-              }
-              window.removeEventListener('click', resumeAudio);
-              window.removeEventListener('touchstart', resumeAudio);
-              window.removeEventListener('keydown', resumeAudio);
-            };
-            window.addEventListener('click', resumeAudio, { once: true });
-            window.addEventListener('touchstart', resumeAudio, { once: true });
-            window.addEventListener('keydown', resumeAudio, { once: true });
           });
       }
     } catch (e) {
       console.warn('[WebRemoteAudio] setup error:', e);
     }
+
+    window.addEventListener('click', tryResume);
+    window.addEventListener('pointerdown', tryResume);
+    window.addEventListener('keydown', tryResume);
+    window.addEventListener('mousemove', tryResume, { once: true });
+
+    return () => {
+      window.removeEventListener('click', tryResume);
+      window.removeEventListener('pointerdown', tryResume);
+      window.removeEventListener('keydown', tryResume);
+      window.removeEventListener('mousemove', tryResume);
+    };
   }, [stream]);
 
   if (Platform.OS !== 'web' || !stream) return null;

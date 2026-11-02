@@ -47,26 +47,35 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
   try {
     const isCall = data.type === 'call';
     const channelId = isCall ? 'incoming_calls_v7' : 'messages_v2';
-    const collapseKey = data.conversationId ? `conv_${data.conversationId}` : (data.senderId ? `user_${data.senderId}` : undefined);
+    const collapseKey = data.conversationId ? `conv_${data.conversationId}` : (data.senderId ? `user_${data.senderId}` : (isCall ? `call_${data.callId || Date.now()}` : undefined));
 
-    const stringData = Object.fromEntries(
-      Object.entries({ ...data, title, body }).map(([k, v]) => [
-        k,
-        typeof v === 'object' ? JSON.stringify(v) : String(v),
-      ])
-    );
+    // Filter out reserved FCM data keys ('from', 'notification', 'message_type')
+    const RESERVED_KEYS = new Set(['from', 'notification', 'message_type']);
+    const safeData = {};
+    for (const [k, v] of Object.entries({ ...data, title, body })) {
+      const valStr = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      if (k === 'from') {
+        safeData['senderId'] = valStr;
+        safeData['callerId'] = valStr;
+      } else if (!RESERVED_KEYS.has(k)) {
+        safeData[k] = valStr;
+      }
+    }
 
-    // For Call: High-Priority DATA-ONLY push (no notification payload).
-    // This wakes up Android OS and hands full execution to the client app to launch
-    // the FullScreen IncomingCallActivity and play looping ringtone directly!
+    // For Call: High-Priority DATA-ONLY push. This allows PriyoFirebaseMessagingService.kt
+    // on the Android device to construct the notification with Notification.FLAG_INSISTENT (continuous looping ringtone)
+    // and fullScreenIntent to wake up the screen.
+    // For chat messages: include system notification payload for normal message chimes.
     const messagePayload = {
       token: fcmToken,
-      data: stringData,
+      data: safeData,
       android: {
         priority: 'high',
         collapseKey,
         ...(isCall ? {} : {
           notification: {
+            title,
+            body,
             tag: collapseKey,
             channelId,
             sound: 'default',

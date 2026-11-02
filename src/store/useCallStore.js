@@ -102,17 +102,8 @@ const useCallStore = create(
 
       // Incoming call from socket or push — this user is the receiver
       setIncomingCall: (data) => {
-        const { callState, callId: existingCallId } = get();
-        if (callState === 'active' || callState === 'connecting') {
-          // If it's the exact same call (duplicate notification/socket event), treat as accepted so we don't auto-reject
-          if (existingCallId && String(existingCallId) === String(data.callId)) {
-            console.log('[useCallStore] Duplicate incoming call event received for active callId:', data.callId);
-            return true;
-          }
-          console.warn('[useCallStore] Device busy (state:', callState, '), ignoring incoming call');
-          return false;
-        }
-        console.log('[useCallStore] setIncomingCall, callId:', data.callId, 'from:', data.from);
+        const state = get();
+        const { callState, callId: existingCallId } = state;
 
         let callerObj = data.caller;
         if (typeof callerObj === 'string') {
@@ -127,9 +118,9 @@ const useCallStore = create(
           try { offerObj = JSON.parse(offerObj); } catch (e) {}
         }
 
-        const callerId = callerObj._id || callerObj.id || data.from || data.callerId;
-        const callerName = callerObj.name || data.callerName || data.name || 'PriyoChat User';
-        const callerAvatar = callerObj.avatar || data.avatar || null;
+        const callerId = callerObj._id || callerObj.id || data.from || data.callerId || state.remoteUserId;
+        const callerName = callerObj.name || data.callerName || data.name || state.remoteUser?.name || 'PriyoChat User';
+        const callerAvatar = callerObj.avatar || data.avatar || state.remoteUser?.avatar || null;
 
         const resolvedRemoteUser = {
           ...callerObj,
@@ -139,20 +130,44 @@ const useCallStore = create(
           avatar: callerAvatar,
         };
 
-        console.log('[useCallStore] setIncomingCall resolved remoteUser name:', resolvedRemoteUser.name, 'id:', callerId);
+        // If already connecting or active in a call:
+        if (callState === 'active' || callState === 'connecting') {
+          const isSameCall =
+            (existingCallId && data.callId && String(existingCallId) === String(data.callId)) ||
+            (callerId && String(state.remoteUserId) === String(callerId)) ||
+            (!existingCallId && data.callId);
+
+          if (isSameCall) {
+            console.log('[useCallStore] Preserving connecting/active call, attaching offer/metadata:', data.callId);
+            set((s) => ({
+              callId: s.callId || data.callId,
+              offer: s.offer || offerObj || data.offer,
+              remoteUserId: s.remoteUserId || callerId,
+              remoteUser: s.remoteUser || resolvedRemoteUser,
+            }));
+            return true;
+          }
+          console.warn('[useCallStore] Device busy (state:', callState, '), ignoring different incoming call');
+          return false;
+        }
+
+        console.log('[useCallStore] setIncomingCall, callId:', data.callId, 'from:', callerId);
 
         const callSessionId = data.callSessionId || (Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6));
-        console.log('[useCallStore] setIncomingCall session:', callSessionId, 'from:', callerId);
+
+        // If an incoming call from the same session/caller is updated or candidates arrived early,
+        // PRESERVE the existing iceCandidates array instead of resetting it to []!
+        const preservedCandidates = Array.isArray(state.iceCandidates) ? state.iceCandidates : [];
 
         set({
           callState: 'incoming',
-          callType: data.callType || 'audio',
-          callId: data.callId,
-          callSessionId,
+          callType: data.callType || state.callType || 'audio',
+          callId: data.callId || state.callId,
+          callSessionId: state.callSessionId || callSessionId,
           remoteUser: resolvedRemoteUser,
-          offer: offerObj || data.offer,
+          offer: offerObj || data.offer || state.offer,
           remoteUserId: callerId,
-          iceCandidates: [],
+          iceCandidates: preservedCandidates,
           endReason: null,
           isReceiver: true,
           answer: null,
@@ -201,8 +216,8 @@ const useCallStore = create(
       addIceCandidate: (candidate) => {
         if (!candidate) return;
         const { callState } = get();
-        // Ignore candidates only when completely idle
-        if (callState === 'idle') return;
+        // Do not drop early candidates when idle (they arrive before setIncomingCall)
+        if (callState === 'ended') return;
         set((state) => ({ iceCandidates: [...state.iceCandidates, candidate] }));
       },
 

@@ -1,5 +1,6 @@
 package com.shahed.priyochat
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -38,6 +39,11 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
 
         // If incoming call, launch native full-screen incoming call notification with continuous ringtone!
         if (type == "call") {
+            if (isAppInForeground()) {
+                // User is actively in the app! In-app IncomingCallScreen handles ringing & answering.
+                // Avoid starting a duplicate native insistent ringtone over the in-app sound.
+                return
+            }
             handleIncomingCall(dataMap)
             return
         }
@@ -50,25 +56,48 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
+    private fun isAppInForeground(): Boolean {
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+            val appProcesses = activityManager.runningAppProcesses ?: return false
+            val pkgName = packageName
+            for (appProcess in appProcesses) {
+                if (appProcess.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
+                    appProcess.processName == pkgName) {
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            // Default to false on any exception
+        }
+        return false
+    }
+
     private fun handleIncomingCall(data: Map<String, String>) {
+        var fromId = data["from"] ?: data["callerId"] ?: data["senderId"] ?: ""
         var callerName = data["callerName"]
-        if (callerName.isNullOrEmpty()) {
+        if (callerName.isNullOrEmpty() || fromId.isEmpty()) {
             val callerRaw = data["caller"]
             if (!callerRaw.isNullOrEmpty()) {
                 try {
                     val jsonObj = org.json.JSONObject(callerRaw)
-                    callerName = jsonObj.optString("name", "PriyoChat User")
+                    if (callerName.isNullOrEmpty()) {
+                        callerName = jsonObj.optString("name", "PriyoChat User")
+                    }
+                    if (fromId.isEmpty()) {
+                        fromId = jsonObj.optString("_id", jsonObj.optString("id", ""))
+                    }
                 } catch (e: Exception) {
-                    callerName = "PriyoChat User"
+                    if (callerName.isNullOrEmpty()) callerName = "PriyoChat User"
                 }
             } else {
-                callerName = "PriyoChat User"
+                if (callerName.isNullOrEmpty()) callerName = "PriyoChat User"
             }
         }
         val callType = data["callType"] ?: "audio"
         val callId = data["callId"] ?: ("call_" + System.currentTimeMillis())
 
-        val channelId = "priyo_incoming_calls_v1"
+        val channelId = "priyo_incoming_calls_v8"
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // Create high-priority call notification channel with system ringtone if Android 8.0+
@@ -108,10 +137,17 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
             // Ignore if wakelock fails
         }
 
+        val encodedCallerName = try {
+            java.net.URLEncoder.encode(callerName, "UTF-8")
+        } catch (e: Exception) {
+            "PriyoChat+User"
+        }
+        val uriString = "priyochat://call?callId=$callId&callerName=$encodedCallerName&callType=$callType&from=$fromId"
+
         // Intent to launch MainActivity in full screen
         val fullScreenIntent = Intent(this as Context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
-            setData(Uri.parse("priyochat://call?callId=$callId"))
+            setData(Uri.parse(uriString))
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -119,6 +155,7 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
             putExtra("callId", callId)
             putExtra("callerName", callerName)
             putExtra("callType", callType)
+            putExtra("from", fromId)
             for (entry in data.entries) {
                 putExtra(entry.key, entry.value)
             }
