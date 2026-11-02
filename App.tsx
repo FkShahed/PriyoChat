@@ -66,6 +66,20 @@ export default function App() {
           const callType = (params.get('callType') || 'audio') as 'audio' | 'video';
           const from = params.get('from') || '';
           const callAction = params.get('action') || '';
+          // SDP offer shipped inside the push by the server (small audio offers only). Optional:
+          // when missing, the call flow fetches the offer over the socket exactly as before.
+          let pushedOffer: any = undefined;
+          try {
+            const rawOffer = params.get('offer');
+            if (rawOffer) {
+              const parsedOffer = JSON.parse(rawOffer);
+              if (parsedOffer && typeof parsedOffer.sdp === 'string' && parsedOffer.sdp.length > 0) {
+                pushedOffer = parsedOffer;
+              }
+            }
+          } catch (e) {
+            pushedOffer = undefined;
+          }
 
           // ── Decline button on the native incoming-call notification ──
           // Reject the call over the socket (so the caller's call ends too), then close the app UI.
@@ -91,6 +105,7 @@ export default function App() {
               callerName,
               caller: { _id: from, name: callerName },
               callType,
+              ...(pushedOffer ? { offer: pushedOffer } : {}),
             });
             // "Answer" button: go straight into the call (same as the proven in-app accept) without
             // showing the ringing screen, so there is no second ringtone or flicker.

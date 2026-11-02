@@ -11,6 +11,8 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -89,6 +91,28 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
         return false
     }
 
+    /**
+     * Starts loading the React Native JS bundle in the background (no UI, no socket, no call
+     * logic). The user typically takes a few seconds to answer; by then the runtime is already
+     * loaded, so the call screen appears much faster. Completely best-effort: any failure is
+     * ignored and the app then starts normally exactly as before. Skipped in debug builds.
+     */
+    private fun prewarmReactRuntime() {
+        if (BuildConfig.DEBUG) return
+        try {
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    val app = applicationContext as? com.facebook.react.ReactApplication ?: return@post
+                    app.reactHost?.start()
+                } catch (t: Throwable) {
+                    // ignore: pre-warm is optional
+                }
+            }
+        } catch (t: Throwable) {
+            // ignore
+        }
+    }
+
     private fun handleIncomingCall(data: Map<String, String>) {
         var fromId = data["from"] ?: data["callerId"] ?: data["senderId"] ?: ""
         var callerName = data["callerName"]
@@ -159,7 +183,18 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
             "PriyoChat+User"
         }
         val notificationId = callId.hashCode()
-        val baseUri = "priyochat://call?callId=$callId&callerName=$encodedCallerName&callType=$callType&from=$fromId"
+        // Optional: the caller's SDP offer shipped inside the push (small audio offers only).
+        // Handed to the app through the deep link so the call can start without first having to
+        // fetch the offer over a freshly-opened socket.
+        val offerParam = try {
+            val rawOffer = data["offer"]
+            if (!rawOffer.isNullOrEmpty() && rawOffer.length <= 3000) {
+                "&offer=" + java.net.URLEncoder.encode(rawOffer, "UTF-8")
+            } else ""
+        } catch (e: Exception) {
+            ""
+        }
+        val baseUri = "priyochat://call?callId=$callId&callerName=$encodedCallerName&callType=$callType&from=$fromId$offerParam"
 
         // Builds an Intent that opens MainActivity with the call deep link.
         // callAction: "" (open the incoming-call screen), "accept" or "decline".
@@ -247,5 +282,8 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
         notification.flags = notification.flags or Notification.FLAG_INSISTENT
 
         notificationManager.notify(notificationId, notification)
+
+        // Warm up the JS runtime while the phone is ringing so that "Answer" starts quickly.
+        prewarmReactRuntime()
     }
 }

@@ -115,6 +115,11 @@ function friendlyCallError(err, role) {
   };
 }
 
+// Answer arriving later than this after dialling = caller's network paths may be stale → if not
+// connected LATE_ANSWER_CHECK_DELAY_MS after applying the answer, the caller restarts ICE.
+const LATE_ANSWER_MS = 15000;
+const LATE_ANSWER_CHECK_DELAY_MS = 4000;
+
 const CONNECTION_TIMEOUT_MS =45000; // 45 seconds ring timeout
 
 // High-quality audio constraints with echo cancellation & noise suppression
@@ -357,7 +362,7 @@ export default function useWebRTCCall({
   onLocalStream,
 }) {
   const { emit } = useSocketStore();
-  const { iceCandidates, answer } = useCallStore();
+  const { iceCandidates, answer, renegotiateOffer, renegotiateAnswer } = useCallStore();
 
   const [connectionState, setConnectionState] = useState('new');
   const [iceConnectionState, setIceConnectionState] = useState('new');
@@ -373,6 +378,17 @@ export default function useWebRTCCall({
   const pendingCandidates = useRef([]);
   const addedCandidates = useRef(new Set());
   const timeoutRef = useRef(null);
+  // ── ICE restart (caller side) ──
+  // Used only when the first connection attempt cannot work: answer arrived late (caller's network
+  // paths went stale while ringing) or ICE failed. The normal fast path never touches this.
+  const offerSentAtRef = useRef(0);
+  const iceRestartAttemptsRef = useRef(0);
+  const iceRestartPendingRef = useRef(false);
+  const iceRestartTimerRef = useRef(null);
+  const lateAnswerCheckTimerRef = useRef(null);
+  const handledRenegotiateOfferRef = useRef(0);
+  const handledRenegotiateAnswerRef = useRef(0);
+  const performIceRestartRef = useRef(null);
 
   const onRemoteStreamRef = useRef(onRemoteStream);
   const onLocalStreamRef = useRef(onLocalStream);
@@ -545,6 +561,8 @@ export default function useWebRTCCall({
         if (pc.restartIce) {
           try { pc.restartIce(); } catch (e) {}
         }
+        // Caller: real ICE restart with fresh network paths (no-op on the receiver)
+        try { performIceRestartRef.current?.('connection_failed'); } catch (e) {}
         setTimeout(() => {
           if (pcRef.current && pcRef.current.connectionState === 'failed' && pcRef.current.iceConnectionState === 'failed') {
             console.warn('[WebRTC] Connection failed after grace period, ending call');
@@ -584,6 +602,8 @@ export default function useWebRTCCall({
         if (pc.restartIce) {
           try { pc.restartIce(); } catch (e) {}
         }
+        // Caller: real ICE restart with fresh network paths (no-op on the receiver)
+        try { performIceRestartRef.current?.('ice_failed'); } catch (e) {}
       }
     };
 
@@ -851,6 +871,7 @@ export default function useWebRTCCall({
         callType: callTypeRef.current,
       });
       console.log('[WebRTC] Offer sent to:', targetId);
+      offerSentAtRef.current = Date.now();
 
       // Connection timeout
       timeoutRef.current = setTimeout(() => {
@@ -1147,6 +1168,11 @@ export default function useWebRTCCall({
     iceCandidatesProcessed.current = 0;
     pendingCandidates.current = [];
     addedCandidates.current.clear();
+    if (iceRestartTimerRef.current) { clearTimeout(iceRestartTimerRef.current); iceRestartTimerRef.current = null; }
+    if (lateAnswerCheckTimerRef.current) { clearTimeout(lateAnswerCheckTimerRef.current); lateAnswerCheckTimerRef.current = null; }
+    iceRestartPendingRef.current = false;
+    iceRestartAttemptsRef.current = 0;
+    offerSentAtRef.current = 0;
     activeCallSession = null;
 
     if (InCallManager) {
@@ -1247,12 +1273,166 @@ export default function useWebRTCCall({
         console.log('[WebRTC] Remote answer applied successfully');
         remoteDescReady.current = true;
         flushCandidates(pc);
+
+        // The ring timeout started when we dialled. Now that the other side has answered, give
+        // the connection its own full window instead of whatever was left of the ring time
+        // (a late answer used to leave only a few seconds to connect).
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = setTimeout(() => {
+            console.warn('[WebRTC] Connection timeout after answer — ending call');
+            if (remoteUserIdRef.current) emitRef.current('call_end', { to: remoteUserIdRef.current });
+            useCallStore.getState().endCall('ended');
+          }, CONNECTION_TIMEOUT_MS);
+        }
+
+        // Answered late: our network paths (gathered when we dialled) may have gone stale while
+        // ringing. If we are not connected shortly, restart ICE with fresh paths.
+        const ringMs = offerSentAtRef.current ? Date.now() - offerSentAtRef.current : 0;
+        if (ringMs > LATE_ANSWER_MS) {
+          console.log('[WebRTC] Late answer after', Math.round(ringMs / 1000), 's — will restart ICE if not connected soon');
+          if (lateAnswerCheckTimerRef.current) clearTimeout(lateAnswerCheckTimerRef.current);
+          lateAnswerCheckTimerRef.current = setTimeout(() => {
+            lateAnswerCheckTimerRef.current = null;
+            try { performIceRestartRef.current?.('late_answer'); } catch (err) {}
+          }, LATE_ANSWER_CHECK_DELAY_MS);
+        }
       } catch (e) {
         answerAppliedRef.current = false;
         console.warn('[WebRTC] setRemoteDescription answer error:', e.message);
       }
     })();
   }, [answer, isReceiver, flushCandidates]);
+
+  // ─── Caller: ICE restart (fresh network paths) ──────────────────────
+  // Only ever runs when the connection is NOT up (late answer / ICE failed). Max 2 attempts.
+  // If the other side never answers the restart, it rolls back after 10s → same as before.
+  const performIceRestart = useCallback(async (reason) => {
+    const pc = pcRef.current;
+    if (!pc || isReceiverRef.current) return;
+    if (pc.signalingState !== 'stable') return;
+    const st = pc.iceConnectionState;
+    if (st === 'connected' || st === 'completed') return;
+    if (iceRestartPendingRef.current || iceRestartAttemptsRef.current >= 2) return;
+
+    iceRestartAttemptsRef.current += 1;
+    iceRestartPendingRef.current = true;
+    console.log('[WebRTC] ICE restart #' + iceRestartAttemptsRef.current, 'reason:', reason);
+    try {
+      let restartOffer = await pc.createOffer({ iceRestart: true });
+      if (restartOffer?.sdp) {
+        restartOffer = { type: restartOffer.type, sdp: preferCodec(restartOffer.sdp, 'VP8') };
+      }
+      if (pcRef.current !== pc || pc.signalingState !== 'stable') {
+        iceRestartPendingRef.current = false;
+        return;
+      }
+      // Candidates of the new ICE generation must wait until the restart answer is applied
+      remoteDescReady.current = false;
+      await pc.setLocalDescription(restartOffer);
+      const ld = pc.localDescription || restartOffer;
+      const storeState = useCallStore.getState();
+      const rawTarget = remoteUserIdRef.current || storeState.remoteUserId || storeState.remoteUser?._id || storeState.remoteUser?.id;
+      const targetId = typeof rawTarget === 'object' && rawTarget !== null ? (rawTarget._id || rawTarget.id) : String(rawTarget || '').trim();
+      await safeEmit('call_renegotiate', {
+        to: targetId,
+        offer: { type: ld?.type || ld?._type || 'offer', sdp: ld?.sdp || ld?._sdp || restartOffer.sdp },
+        callId: storeState.callId,
+      });
+
+      // Safety net: other side did not answer the restart → roll back to the previous state
+      if (iceRestartTimerRef.current) clearTimeout(iceRestartTimerRef.current);
+      iceRestartTimerRef.current = setTimeout(async () => {
+        iceRestartTimerRef.current = null;
+        if (pcRef.current === pc && iceRestartPendingRef.current && pc.signalingState === 'have-local-offer') {
+          console.warn('[WebRTC] ICE restart not answered — rolling back');
+          try { await pc.setLocalDescription({ type: 'rollback' }); } catch (e) {}
+          iceRestartPendingRef.current = false;
+          remoteDescReady.current = true;
+          flushCandidates(pc);
+        }
+      }, 10000);
+    } catch (e) {
+      console.warn('[WebRTC] ICE restart error:', e?.message);
+      iceRestartPendingRef.current = false;
+      if (pcRef.current === pc && pc.signalingState === 'stable') {
+        remoteDescReady.current = true;
+        flushCandidates(pc);
+      }
+    }
+  }, [safeEmit, flushCandidates]);
+
+  useEffect(() => { performIceRestartRef.current = performIceRestart; }, [performIceRestart]);
+
+  // ─── Caller: apply the ICE-restart answer ────────────────────────────
+  useEffect(() => {
+    if (!renegotiateAnswer || isReceiver) return;
+    if (handledRenegotiateAnswerRef.current === renegotiateAnswer.at) return;
+    handledRenegotiateAnswerRef.current = renegotiateAnswer.at;
+    const pc = pcRef.current;
+    if (!pc || pc.signalingState !== 'have-local-offer' || !iceRestartPendingRef.current) return;
+
+    (async () => {
+      try {
+        const { type, sdp } = extractSdpAndType(renegotiateAnswer.sdp, 'answer');
+        if (!sdp) return;
+        const desc = (RTCSessionDescription && typeof RTCSessionDescription === 'function')
+          ? new RTCSessionDescription({ type, sdp })
+          : { type, sdp };
+        await pc.setRemoteDescription(desc);
+        console.log('[WebRTC] ICE restart answer applied');
+        if (iceRestartTimerRef.current) { clearTimeout(iceRestartTimerRef.current); iceRestartTimerRef.current = null; }
+        iceRestartPendingRef.current = false;
+        remoteDescReady.current = true;
+        flushCandidates(pc);
+      } catch (e) {
+        console.warn('[WebRTC] ICE restart answer error:', e?.message);
+      }
+    })();
+  }, [renegotiateAnswer, isReceiver, flushCandidates]);
+
+  // ─── Receiver: answer an ICE-restart offer from the caller ───────────
+  // (declared BEFORE the ICE-candidate effect so new-generation candidates get buffered first)
+  useEffect(() => {
+    if (!renegotiateOffer || !isReceiver) return;
+    if (handledRenegotiateOfferRef.current === renegotiateOffer.at) return;
+    handledRenegotiateOfferRef.current = renegotiateOffer.at;
+    const pc = pcRef.current;
+    if (!pc || pc.signalingState !== 'stable' || !answerAppliedRef.current) return;
+
+    remoteDescReady.current = false; // buffer candidates until the new offer is applied
+    (async () => {
+      try {
+        const { type, sdp } = extractSdpAndType(renegotiateOffer.sdp, 'offer');
+        if (!sdp) { remoteDescReady.current = true; return; }
+        const desc = (RTCSessionDescription && typeof RTCSessionDescription === 'function')
+          ? new RTCSessionDescription({ type, sdp })
+          : { type, sdp };
+        await pc.setRemoteDescription(desc);
+        remoteDescReady.current = true;
+        let restartAnswer = await pc.createAnswer();
+        if (restartAnswer?.sdp) {
+          restartAnswer = { type: restartAnswer.type, sdp: preferCodec(restartAnswer.sdp, 'VP8') };
+        }
+        await pc.setLocalDescription(restartAnswer);
+        flushCandidates(pc);
+        const la = pc.localDescription || restartAnswer;
+        const storeState = useCallStore.getState();
+        const rawTarget = remoteUserIdRef.current || storeState.remoteUserId || storeState.remoteUser?._id || storeState.remoteUser?.id;
+        const targetId = typeof rawTarget === 'object' && rawTarget !== null ? (rawTarget._id || rawTarget.id) : String(rawTarget || '').trim();
+        await safeEmit('call_renegotiate_answer', {
+          to: targetId,
+          answer: { type: la?.type || la?._type || 'answer', sdp: la?.sdp || la?._sdp || restartAnswer.sdp },
+          callId: storeState.callId,
+        });
+        console.log('[WebRTC] ICE restart answer sent');
+      } catch (e) {
+        console.warn('[WebRTC] ICE restart (receiver) error:', e?.message);
+        remoteDescReady.current = true;
+        try { flushCandidates(pc); } catch (err) {}
+      }
+    })();
+  }, [renegotiateOffer, isReceiver, flushCandidates, safeEmit]);
 
   // ─── Both sides: add incoming ICE candidates ─────────────────────
   useEffect(() => {

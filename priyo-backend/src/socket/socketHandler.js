@@ -323,7 +323,7 @@ const setupSocket = (io) => {
           } catch (e) {}
           const declineUrl = `${process.env.PUBLIC_API_URL || 'https://138.2.92.182.nip.io'}/api/calls/decline-from-push`;
 
-          await sendPushNotification(t, title, body, {
+          const pushData = {
             type: 'call',
             declineToken,
             declineUrl,
@@ -333,7 +333,23 @@ const setupSocket = (io) => {
             callType,
             callerId: userId,
             senderId: userId,
-          });
+          };
+
+          // Fast answer from the notification: ship the (small) SDP offer inside the push so the
+          // phone does not have to wait for a socket connection just to fetch it. FCM data limit is
+          // 4 KB in total, so only attach it when there is plenty of room (audio offers; video
+          // offers are usually too big and keep using the normal socket fetch).
+          try {
+            if (offer && callId) {
+              const withOffer = { ...pushData, offer };
+              const approxBytes = Buffer.byteLength(JSON.stringify({ ...withOffer, title, body }), 'utf8');
+              if (approxBytes <= 3300) {
+                pushData.offer = offer;
+              }
+            }
+          } catch (e) {}
+
+          await sendPushNotification(t, title, body, pushData);
           console.log(`[socketHandler] Sent Call Push Notification with payload to ${targetRoom}`);
         }
       } catch (e) {
@@ -399,6 +415,20 @@ const setupSocket = (io) => {
         }
       }
       io.to(targetRoom).emit('call_ice', { from: userId, candidate, callId });
+    });
+
+    // ICE restart relay: forwards a fresh offer/answer between the two peers of an ongoing call.
+    // Pure relay — no DB writes, no ringing, no call records (unlike call_offer).
+    socket.on('call_renegotiate', ({ to, offer, callId } = {}) => {
+      const targetRoom = cleanId(to) || to;
+      if (!targetRoom || !offer) return;
+      io.to(targetRoom).emit('call_renegotiate', { from: userId, offer, callId });
+    });
+
+    socket.on('call_renegotiate_answer', ({ to, answer, callId } = {}) => {
+      const targetRoom = cleanId(to) || to;
+      if (!targetRoom || !answer) return;
+      io.to(targetRoom).emit('call_renegotiate_answer', { from: userId, answer, callId });
     });
 
     socket.on('call_reject', async ({ to, callId, callType = 'audio', reason }) => {

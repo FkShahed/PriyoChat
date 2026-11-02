@@ -209,6 +209,16 @@ const useSocketStore = create((set, get) => ({
       useCallStore.getState().addIceCandidate(candidate);
     });
 
+    // ICE restart signalling (only used when a call could not connect on the first attempt,
+    // e.g. answered late after the caller's network paths went stale)
+    newSocket.on('call_renegotiate', (data) => {
+      if (data?.offer) useCallStore.getState().setRenegotiateOffer(data.offer);
+    });
+
+    newSocket.on('call_renegotiate_answer', (data) => {
+      if (data?.answer) useCallStore.getState().setRenegotiateAnswer(data.answer);
+    });
+
     newSocket.on('call_rejected', (data) => {
       console.log('[Socket] Received call_rejected from server:', data);
       useCallStore.getState().endCall('rejected');

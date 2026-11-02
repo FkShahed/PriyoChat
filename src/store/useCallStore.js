@@ -35,6 +35,8 @@ const useCallStore = create(
       offer: null,
       answer: null,
       iceCandidates: [],
+          renegotiateOffer: null, // ICE-restart offer from the caller (receiver side)
+          renegotiateAnswer: null, // ICE-restart answer from the receiver (caller side)
       endReason: null, // 'rejected' | 'ended' | 'missed'
       isReceiver: false, // true if this user is receiving the call (not the initiator)
       isMinimized: false,
@@ -105,6 +107,8 @@ const useCallStore = create(
           callType,
           callSessionId,
           iceCandidates: [],
+          renegotiateOffer: null, // ICE-restart offer from the caller (receiver side)
+          renegotiateAnswer: null, // ICE-restart answer from the receiver (caller side)
           endReason: null,
           isReceiver: false,
           offer: null,
@@ -242,6 +246,19 @@ const useCallStore = create(
         set({ callState: 'active' });
       },
 
+      // ICE restart (fresh network paths) during an ongoing call setup. Stored with a timestamp so
+      // every new offer/answer is a new object and triggers the hook's effect exactly once.
+      setRenegotiateOffer: (offer) => {
+        const { callState } = get();
+        if (!offer || callState === 'idle' || callState === 'ended') return;
+        set({ renegotiateOffer: { sdp: offer, at: Date.now() } });
+      },
+      setRenegotiateAnswer: (answer) => {
+        const { callState } = get();
+        if (!answer || callState === 'idle' || callState === 'ended') return;
+        set({ renegotiateAnswer: { sdp: answer, at: Date.now() } });
+      },
+
       addIceCandidate: (candidate) => {
         if (!candidate) return;
         const { callState } = get();
@@ -296,6 +313,8 @@ const useCallStore = create(
           callSessionId: null,
           callType: null,
           iceCandidates: [],
+          renegotiateOffer: null, // ICE-restart offer from the caller (receiver side)
+          renegotiateAnswer: null, // ICE-restart answer from the receiver (caller side)
           isReceiver: false,
           callId: null,
           isMinimized: false,
@@ -315,6 +334,8 @@ const useCallStore = create(
           offer: null,
           answer: null,
           iceCandidates: [],
+          renegotiateOffer: null, // ICE-restart offer from the caller (receiver side)
+          renegotiateAnswer: null, // ICE-restart answer from the receiver (caller side)
           endReason: null,
           isReceiver: false,
           callId: null,
