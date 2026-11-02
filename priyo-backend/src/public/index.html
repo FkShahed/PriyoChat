@@ -709,7 +709,7 @@
         <div class="brand-logo">⚡</div>
         <div class="brand-text">
           <h1>PriyoChat Cloud Engine</h1>
-          <p><span class="terminal-tag">ORACLE_VM</span> :: Ashburn [US-EAST] · TLS_1.3_ACTIVE · PROTO_v1.0.9</p>
+          <p><span class="terminal-tag">ORACLE_VM</span> :: Ashburn [US-EAST] · TLS_1.3_ACTIVE · <span id="header-proto">PROTO_v3.7.0</span></p>
         </div>
       </div>
       <div class="server-badge operational" id="server-badge-wrap">
@@ -721,11 +721,11 @@
     <!-- Download APK Banner -->
     <div class="download-banner">
       <div class="download-text">
-        <h3>📲 DOWNLOAD RELEASE APK :: v1.0.9</h3>
-        <p>Production binaries with WebRTC audio/video fixes and high-throughput cloud sockets.</p>
+        <h3 id="apk-banner-title">📲 DOWNLOAD RELEASE APK :: v3.7.0</h3>
+        <p id="apk-banner-desc">Production binaries with WebRTC audio/video fixes, optimized cloud sockets, and PriyoChat Cloud Engine.</p>
       </div>
-      <a href="/apk/PriyoChat-v1.0.8.apk" class="btn-download" download>
-        <span>📥 DEPLOY_APK (151 MB)</span>
+      <a id="apk-download-btn" href="/apk/PriyoChat-latest.apk" class="btn-download" download>
+        <span id="apk-btn-text">📥 DEPLOY_APK (152 MB)</span>
       </a>
     </div>
 
@@ -824,7 +824,7 @@
           </div>
           <div class="metric-item">
             <span class="metric-name">📦 RELEASE_BUILD</span>
-            <span class="metric-val" style="color: var(--neon-cyan);">v1.0.9 Production</span>
+            <span class="metric-val" id="release-build-val" style="color: var(--neon-cyan);">v3.7.0 Production</span>
           </div>
         </div>
       </div>
@@ -1066,6 +1066,25 @@
           : `${data.system.memoryRssMB} MB (Heap: ${data.system.memoryHeapUsedMB} MB)`;
         document.getElementById('system-ram').textContent = `${data.system.freeSystemMemMB} / ${data.system.totalSystemMemMB} MB`;
         document.getElementById('last-updated').textContent = 'POLL: ' + timeNow;
+
+        // Auto-sync Release Banner with latest Server/MongoDB Release
+        const rel = data.release || (data.version ? { version: data.version } : null);
+        if (rel && rel.version) {
+          const bannerTitle = document.getElementById('apk-banner-title');
+          if (bannerTitle) bannerTitle.textContent = `📲 DOWNLOAD RELEASE APK :: v${rel.version}`;
+
+          const headerProto = document.getElementById('header-proto');
+          if (headerProto) headerProto.textContent = `PROTO_v${rel.version}`;
+
+          const releaseBuild = document.getElementById('release-build-val');
+          if (releaseBuild) releaseBuild.textContent = `v${rel.version} Production`;
+
+          const downloadBtn = document.getElementById('apk-download-btn');
+          if (downloadBtn && rel.apkUrl) downloadBtn.href = rel.apkUrl;
+
+          const bannerDesc = document.getElementById('apk-banner-desc');
+          if (bannerDesc && rel.releaseNotes) bannerDesc.textContent = rel.releaseNotes;
+        }
 
         // Update Top Server Health Status Badge
         const badgeWrap = document.getElementById('server-badge-wrap');

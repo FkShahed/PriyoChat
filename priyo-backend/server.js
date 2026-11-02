@@ -91,6 +91,30 @@ app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 // ─── Live Telemetry & Status API ───────────────────────────────────────────────
 const os = require('os');
 const mongoose = require('mongoose');
+const AppUpdate = require('./src/models/AppUpdate');
+
+// Cached latest release
+let cachedRelease = {
+  version: '3.7.0',
+  apkUrl: 'https://138.2.92.182.nip.io/apk/PriyoChat-latest.apk',
+  releaseNotes: 'Version 3.7.0 (STABLE). PriyoChat Cloud Engine release.',
+};
+
+let syncCounter = 0;
+async function refreshRelease() {
+  try {
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      const latest = await AppUpdate.findOne().sort('-createdAt').lean();
+      if (latest && latest.version) {
+        cachedRelease = {
+          version: latest.version,
+          apkUrl: latest.apkUrl,
+          releaseNotes: latest.releaseNotes || 'Production binaries with high-throughput cloud sockets and WebRTC calls.',
+        };
+      }
+    }
+  } catch (err) {}
+}
 
 // Rolling in-memory metrics history (last 20 sample points, stored on server)
 const metricsHistory = [];
@@ -114,8 +138,15 @@ setInterval(async () => {
     if (metricsHistory.length > MAX_HISTORY) {
       metricsHistory.shift();
     }
+
+    syncCounter++;
+    if (syncCounter % 5 === 0) {
+      await refreshRelease();
+    }
   } catch (e) {}
 }, 3000);
+
+app.get('/api/app-update', (req, res) => res.json(cachedRelease));
 
 app.get('/api/status', async (req, res) => {
   const startTime = Date.now();
@@ -139,7 +170,8 @@ app.get('/api/status', async (req, res) => {
   res.json({
     status: 'operational',
     service: 'PriyoChat Core Backend',
-    version: '1.0.9',
+    version: cachedRelease.version,
+    release: cachedRelease,
     timestamp: new Date().toISOString(),
     apiLatencyMs: Date.now() - startTime,
     history: metricsHistory,

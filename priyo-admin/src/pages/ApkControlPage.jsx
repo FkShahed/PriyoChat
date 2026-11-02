@@ -213,9 +213,9 @@ export default function ApkControlPage() {
             <button
               type="button"
               onClick={() => {
-                setVersion('1.0.2');
-                setApkUrl('https://github.com/FkShahed/PriyoChat/releases/download/v1.0.2/PriyoChat-v1.0.2.apk');
-                setReleaseNotes('WebRTC multi-call stability, continuous video stream re-rendering, and bidirectional audio on Web and APK (STABLE2 Release). Standalone release APK.');
+                setVersion('3.7.0');
+                setApkUrl('https://138.2.92.182.nip.io/apk/PriyoChat-latest.apk');
+                setReleaseNotes('Version 3.7.0 (STABLE). PriyoChat Cloud Engine release with high-throughput cloud sockets and WebRTC calls.');
               }}
               style={{
                 fontSize: '12px',
@@ -227,7 +227,7 @@ export default function ApkControlPage() {
                 cursor: 'pointer'
               }}
             >
-              Fill STABLE2 (v1.0.2)
+              Fill Latest (v3.7.0)
             </button>
           </h3>
           
