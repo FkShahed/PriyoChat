@@ -79,6 +79,9 @@ const setupSocket = (io) => {
         continue;
       }
 
+      // Already answered (ongoing or just ended): never replay it as a new incoming call
+      if (activeCall.answered) continue;
+
       if (activeCall.to === userId) {
         console.log(`[socketHandler] User ${userId} connected with VALID pending call ${cId}. Emitting incoming_call.`);
         socket.emit('incoming_call', activeCall);
@@ -275,6 +278,18 @@ const setupSocket = (io) => {
         iceCandidates: [],
       };
 
+      // A new call between these two users supersedes any older one still cached (e.g. the app
+      // was swiped away mid-call and its call_end never arrived). Otherwise the old, already
+      // answered call gets replayed to the receiver on reconnect and the new call fails.
+      // Only entries between this exact pair are touched: other users' calls are never affected.
+      for (const [cId, c] of activeCalls.entries()) {
+        const pair = [String(c.from), String(c.to)];
+        if (pair.includes(String(userId)) && pair.includes(String(targetRoom))) {
+          console.log(`[socketHandler] New call supersedes older call ${cId} between same users`);
+          activeCalls.delete(cId);
+        }
+      }
+
       // 1. Immediately store in activeCalls map
       activeCalls.set(callId, activePayload);
       setTimeout(() => {
@@ -395,6 +410,9 @@ const setupSocket = (io) => {
       try {
         const validId = cleanId(callId);
         if (validId) {
+          // Answered: it must never be replayed as a new incoming_call on reconnect
+          const answeredCall = activeCalls.get(validId);
+          if (answeredCall) answeredCall.answered = true;
           // Keep activeCalls entry for 60s so late-arriving ICE candidates or renegotiations succeed
           setTimeout(() => { activeCalls.delete(validId); }, 60000);
           await Call.findByIdAndUpdate(validId, { status: 'in-progress' });
@@ -407,12 +425,20 @@ const setupSocket = (io) => {
 
     socket.on('call_ice', ({ to, candidate, callId }) => {
       const targetRoom = cleanId(to) || to;
-      for (const [cId, activeCall] of activeCalls.entries()) {
-        if ((callId && cleanId(callId) === cId) || activeCall.to === targetRoom || activeCall.from === targetRoom) {
-          if (!activeCall.iceCandidates) activeCall.iceCandidates = [];
-          activeCall.iceCandidates.push({ from: userId, candidate });
-          break;
+      // Buffer into the RIGHT call: exact callId first; otherwise (early candidates sent before the
+      // caller knows its callId) the NEWEST call between these two users — never an older one.
+      let bufferCall = callId ? activeCalls.get(cleanId(callId)) : null;
+      if (!bufferCall) {
+        for (const activeCall of activeCalls.values()) {
+          const pair = [String(activeCall.from), String(activeCall.to)];
+          if (pair.includes(String(userId)) && pair.includes(String(targetRoom))) {
+            if (!bufferCall || (activeCall.createdAt || 0) > (bufferCall.createdAt || 0)) bufferCall = activeCall;
+          }
         }
+      }
+      if (bufferCall) {
+        if (!bufferCall.iceCandidates) bufferCall.iceCandidates = [];
+        bufferCall.iceCandidates.push({ from: userId, candidate, callId: bufferCall.callId });
       }
       io.to(targetRoom).emit('call_ice', { from: userId, candidate, callId });
     });
@@ -545,6 +571,17 @@ const setupSocket = (io) => {
 
     // ─── Disconnect ────────────────────────────────────────────────
     socket.on('disconnect', async () => {
+      // The same user can briefly have 2 sockets (reconnect, app relaunch, second browser tab).
+      // When an OLD socket finally drops, the user is still online on the new one: do NOT mark
+      // them offline and do NOT purge their just-started call (that silently broke new calls —
+      // the receiver never got the caller's ICE candidates).
+      const remaining = io.sockets.adapter.rooms.get(userId);
+      if (remaining && remaining.size > 0) {
+        const stillThere = [...remaining][0];
+        if (onlineUsers.get(userId) === socket.id) onlineUsers.set(userId, stillThere);
+        console.log(`🔌 Old socket closed for ${socket.user.name} (still online on another socket)`);
+        return;
+      }
       onlineUsers.delete(userId);
       // Purge any pending call originated from this disconnected user
       for (const [cId, activeCall] of activeCalls.entries()) {

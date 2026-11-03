@@ -21,6 +21,15 @@ const wasCallHandled = (callId) => {
   return !!t && Date.now() - t <= HANDLED_CALL_TTL_MS;
 };
 
+// Stop the Android "call keep-alive" foreground service (mic stays on with screen off).
+// Called on every way a call can end — including ending a MINIMIZED call from the floating
+// banner, where the call screen's cleanup() never runs. Safe no-op if it is not running.
+const stopCallKeepAlive = () => {
+  try {
+    require('../utils/nativeModules').CallForegroundService.stop();
+  } catch (e) {}
+};
+
 const useCallStore = create(
   persist(
     (set, get) => ({
@@ -270,6 +279,7 @@ const useCallStore = create(
       endCall: (reason = 'ended') => {
         const state = get();
         markCallHandled(state.callId);
+        stopCallKeepAlive();
         console.log('[useCallStore] endCall, state:', state.callState, 'remoteUser:', state.remoteUser?.name, 'isReceiver:', state.isReceiver);
 
         // Immediately dismiss all system notifications & stop native CallKeep ringing
@@ -325,6 +335,7 @@ const useCallStore = create(
 
       resetCall: () => {
         markCallHandled(get().callId);
+        stopCallKeepAlive();
         set({
           callState: 'idle',
           callType: null,

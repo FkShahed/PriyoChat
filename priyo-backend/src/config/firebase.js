@@ -75,7 +75,11 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
       data: safeData,
       android: {
         priority: 'high',
-        collapseKey,
+        // Call pushes: NO collapse key (collapsible messages are throttled by FCM after a burst of
+        // ~20 per device — rapid repeated calls then stopped ringing and arrived minutes later),
+        // and a short TTL so a call that could not be delivered in time is dropped by FCM instead
+        // of ringing long after the caller has hung up (caller rings for max 45s).
+        ...(isCall ? { ttl: 45 * 1000 } : { collapseKey }),
         ...(isCall ? {} : {
           notification: {
             title,

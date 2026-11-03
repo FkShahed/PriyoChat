@@ -42,6 +42,11 @@ class PriyoFirebaseMessagingService : FirebaseMessagingService() {
 
         // If incoming call, launch native full-screen incoming call notification with continuous ringtone!
         if (type == "call") {
+            // Stale call push (delivered late, caller stopped ringing after 45s): never ring for it.
+            val sentAt = remoteMessage.sentTime
+            if (sentAt > 0 && System.currentTimeMillis() - sentAt > 50_000L) {
+                return
+            }
             if (isAppInForeground()) {
                 // User is actively in the app! In-app IncomingCallScreen handles ringing & answering.
                 // Avoid starting a duplicate native insistent ringtone over the in-app sound.

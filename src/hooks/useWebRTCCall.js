@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { Platform, PermissionsAndroid, Alert } from 'react-native';
 import useCallStore from '../store/useCallStore';
 import useSocketStore from '../store/useSocketStore';
-import { InCallManager, webrtc } from '../utils/nativeModules';
+import { InCallManager, webrtc, CallForegroundService } from '../utils/nativeModules';
 
 // Conditionally load WebRTC based on platform
 let RTCPeerConnection, RTCIceCandidate, RTCSessionDescription, mediaDevices;
@@ -763,6 +763,8 @@ export default function useWebRTCCall({
         console.warn('[InCallManager] start error:', e);
       }
     }
+    // Keep mic (and camera) capture alive if the user presses the power button during the call
+    CallForegroundService.start(currentCallType === 'video');
 
     return stream;
   }, []);
@@ -1189,6 +1191,7 @@ export default function useWebRTCCall({
         console.warn('[InCallManager] stop error:', e);
       }
     }
+    CallForegroundService.stop();
   }, []);
 
   // ─── Initialize (once per mount) ──────────────────────────────────
