@@ -2,12 +2,15 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { Text, View, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import useAuthStore from '../store/useAuthStore';
 import useThemeStore, { useColors } from '../store/useThemeStore';
 import { navigationRef } from './navigationRef';
 
 import { Ionicons } from '@expo/vector-icons';
+// Warm up all icon fonts in the background at app start so icons never pop in late
+import '../utils/preloadIcons';
 
 // Auth Screens
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -33,37 +36,126 @@ import CallErrorBoundary from '../components/CallErrorBoundary';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import WarningDetailsScreen from '../screens/settings/WarningDetailsScreen';
 import ReportBugScreen from '../screens/settings/ReportBugScreen';
+import InfoScreen from '../screens/settings/InfoScreen';
 
 const Stack = createStackNavigator();
+
+// App-wide page transition: a soft fade with a very slight zoom, instead of the old
+// side-slide. Visual only — navigation behaviour/gestures are unchanged.
+const forSoftFadeScale = ({ current, next }) => {
+  const progress = current.progress;
+  const opacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' });
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1], extrapolate: 'clamp' });
+  // Screen being covered: fade back slightly so the incoming one feels layered on top
+  const coveredOpacity = next
+    ? next.progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.85], extrapolate: 'clamp' })
+    : 1;
+  return {
+    cardStyle: {
+      opacity: next ? coveredOpacity : opacity,
+      transform: [{ scale }],
+    },
+  };
+};
+
+const softTransitionSpec = {
+  animation: 'timing',
+  config: { duration: 220 },
+};
+
+const STACK_TRANSITION = {
+  cardStyleInterpolator: forSoftFadeScale,
+  transitionSpec: { open: softTransitionSpec, close: softTransitionSpec },
+};
 const Tab = createBottomTabNavigator();
 
-function TabIcon({ name, focused, C }) {
+function TabIcon({ name, focused, C, isDark }) {
   let iconName;
   if (name === 'Chats') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
   else if (name === 'Calls') iconName = focused ? 'call' : 'call-outline';
   else if (name === 'Friends') iconName = focused ? 'people' : 'people-outline';
   else if (name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
 
-  return <Ionicons name={iconName} size={24} color={focused ? '#0084FF' : C.textSecondary} />;
+  return (
+    <View
+      style={{
+        width: 42,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: focused ? (isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,132,255,0.16)') : 'transparent',
+      }}
+    >
+      <Ionicons name={iconName} size={21} color={focused ? (isDark ? '#FFFFFF' : '#0084FF') : (isDark ? '#7C7C82' : C.textSecondary)} />
+    </View>
+  );
+}
+
+function GlossyTabBarBackground({ isDark }) {
+  return (
+    // Shadow lives HERE (on the solid, rounded pill), not on the outer transparent tab-bar
+    // container — Android draws elevation/shadow as a square when the elevated view itself has a
+    // transparent background, which is what made the bar look like it was touching the edges.
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 24,
+        backgroundColor: isDark ? 'rgba(20,20,22,0.94)' : 'rgba(255,255,255,0.88)',
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.7)',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: isDark ? 0.5 : 0.12,
+        shadowRadius: 14,
+      }}
+    >
+      <View style={{ flex: 1, borderRadius: 24, overflow: 'hidden' }}>
+        {/* Glossy sheen highlight across the top of the pill (light mode only; none in dark mode) */}
+        {!isDark && (
+          <LinearGradient
+            colors={['rgba(255,255,255,0.75)', 'rgba(255,255,255,0)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '55%' }}
+          />
+        )}
+      </View>
+    </View>
+  );
 }
 
 function MainTabs() {
   const C = useColors();
+  const isDark = useThemeStore((s) => s.resolvedTheme === 'dark');
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} C={C} />,
+        tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} C={C} isDark={isDark} />,
         tabBarActiveTintColor: '#0084FF',
         tabBarInactiveTintColor: C.textSecondary,
         tabBarStyle: {
-          backgroundColor: C.surface,
-          borderTopWidth: 0.5,
-          borderTopColor: C.border,
-          paddingBottom: 8,
-          height: 60,
+          position: 'absolute',
+          // react-navigation's own base style sets start/end: 0 (RTL-aware), which otherwise wins
+          // over left/right after RN flattens the style array and pins the bar to the screen
+          // edges. Override start/end directly (left/right kept too, for safety).
+          start: 14,
+          end: 14,
+          left: 14,
+          right: 14,
+          bottom: Platform.OS === 'ios' ? 22 : 14,
+          height: 58,
+          borderRadius: 24,
+          borderTopWidth: 0,
+          backgroundColor: 'transparent',
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarBackground: () => <GlossyTabBarBackground isDark={isDark} />,
+        tabBarItemStyle: { paddingTop: 4 },
+        tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600', marginTop: 1 },
       })}
     >
       <Tab.Screen name="Chats" component={ChatListScreen} />
@@ -185,7 +277,7 @@ export default function AppNavigator() {
       <OngoingCallBanner />
       <NavigationContainer ref={navigationRef}>
         <Stack.Navigator 
-          screenOptions={{ headerShown: false }} 
+          screenOptions={{ headerShown: false, ...STACK_TRANSITION }}
           initialRouteName={initialRoute}
         >
           {/* Auth Flow */}
@@ -208,6 +300,7 @@ export default function AppNavigator() {
           <Stack.Screen name="IncomingCall" component={IncomingCallScreen} options={{ gestureEnabled: false }} />
           <Stack.Screen name="WarningDetails" component={WarningDetailsScreen} />
           <Stack.Screen name="ReportBug" component={ReportBugScreen} />
+          <Stack.Screen name="Info" component={InfoScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

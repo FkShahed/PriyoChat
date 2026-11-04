@@ -12,6 +12,7 @@ import useAuthStore from '../../store/useAuthStore';
 import { formatTime, getInitials } from '../../utils/helpers';
 import { useColors } from '../../store/useThemeStore';
 import LogoSVG from '../../components/common/LogoSVG';
+import Avatar from '../../components/common/Avatar';
 import SwipeableChatRow from '../../components/chat/SwipeableChatRow';
 
 const AVATAR_COLORS = [
@@ -107,24 +108,36 @@ export default function ChatListScreen({ navigation }) {
     });
   }, [conversations, archivedConversationIds, deletedConversationIds, search, user]);
 
-  // Extract online friends for top "Active Now" bar
+  // Top bar next to "Your Note": everyone who is online comes FIRST (priority); the remaining
+  // slots are filled with the people you were most recently active with, so the bar is never empty.
+  const ACTIVE_BAR_SIZE = 4; // never show more than 4 people in the bar
   const onlineFriends = useMemo(() => {
-    const list = [];
+    const online = [];
+    const recent = [];
     const seenIds = new Set();
     const listConvos = Array.isArray(conversations) ? conversations : [];
-    listConvos.forEach((c) => {
+    const activityOf = (c) => {
+      const t = new Date(c?.lastMessage?.createdAt || c?.updatedAt || 0).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+    // Most recently active conversations first
+    const sorted = [...listConvos].sort((a, b) => activityOf(b) - activityOf(a));
+    sorted.forEach((c) => {
       if (!c || !c.participants || !Array.isArray(c.participants)) return;
+      if (deletedConversationIds?.includes(c._id)) return;
       const other = c.participants?.find((p) => p?._id?.toString() !== user?._id?.toString());
       if (other && other._id && !seenIds.has(other._id)) {
         seenIds.add(other._id);
-        const isOnline = onlineUsers?.[other._id] ?? other.isOnline;
-        if (isOnline) {
-          list.push({ ...other, conversation: c });
-        }
+        const isOnline = !!(onlineUsers?.[other._id] ?? other.isOnline);
+        const entry = { ...other, conversation: c, isOnlineNow: isOnline };
+        if (isOnline) online.push(entry);
+        else if (!archivedConversationIds.includes(c._id)) recent.push(entry);
       }
     });
-    return list;
-  }, [conversations, onlineUsers, user]);
+    const fill = Math.max(0, ACTIVE_BAR_SIZE - online.length);
+    // Online people first; cap the whole bar at ACTIVE_BAR_SIZE
+    return [...online, ...recent.slice(0, fill)].slice(0, ACTIVE_BAR_SIZE);
+  }, [conversations, onlineUsers, user, archivedConversationIds, deletedConversationIds]);
 
   const handleDelete = (item, otherName) => {
     setChatToDelete({ item, otherName });
@@ -199,6 +212,9 @@ export default function ChatListScreen({ navigation }) {
     }
 
     const gradColors = avatarGradient(other?.name || '');
+    const cardBg = isUnread
+      ? (isDark ? '#14233A' : '#F0F7FF')
+      : (isDark ? '#161B22' : '#FFFFFF');
 
     let statusIcon = null;
     if (isMine && lastMsg) {
@@ -219,19 +235,27 @@ export default function ChatListScreen({ navigation }) {
         <View
           style={[
             styles.itemCard,
-            { backgroundColor: isDark ? '#161B22' : '#FFFFFF' }
+            {
+              backgroundColor: cardBg,
+              borderColor: isUnread
+                ? (isDark ? 'rgba(0,132,255,0.35)' : 'rgba(0,132,255,0.22)')
+                : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'),
+            }
           ]}
         >
-          <View style={styles.avatarContainer}>
-            {other?.avatar ? (
-              <Image source={{ uri: other.avatar }} style={styles.avatarImage} />
-            ) : (
-              <LinearGradient colors={gradColors} style={styles.avatarImage}>
-                <Text style={styles.avatarInitials}>{getInitials(other?.name)}</Text>
-              </LinearGradient>
-            )}
-            {isOnline && <View style={[styles.onlineBadge, { borderColor: isDark ? '#0D1117' : '#FFFFFF' }]} />}
-          </View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.avatarContainer}
+            onPress={() => navigation.navigate('UserProfile', {
+              user: other,
+              isOnline,
+              lastSeen: other?.lastSeen || other?.updatedAt,
+              conversationId: item._id,
+            })}
+          >
+            <Avatar uri={other?.avatar} style={styles.avatarImage} />
+            {isOnline && <View style={[styles.onlineBadge, { borderColor: cardBg }]} />}
+          </TouchableOpacity>
 
           <View style={styles.infoContainer}>
             <View style={styles.nameRow}>
@@ -412,15 +436,9 @@ export default function ChatListScreen({ navigation }) {
                 onPress={() => navigation.navigate('Chat', { conversation: friend.conversation, otherUser: friend })}
                 activeOpacity={0.8}
               >
-                <View style={styles.activeAvatarWrapper}>
-                  {friend.avatar ? (
-                    <Image source={{ uri: friend.avatar }} style={styles.activeAvatar} />
-                  ) : (
-                    <LinearGradient colors={avatarGradient(friend.name)} style={styles.activeAvatar}>
-                      <Text style={styles.activeInitials}>{getInitials(friend.name)}</Text>
-                    </LinearGradient>
-                  )}
-                  <View style={[styles.activeOnlineDot, { borderColor: pageBg }]} />
+                <View style={[styles.activeAvatarWrapper, friend.isOnlineNow && styles.activeAvatarWrapperOnline]}>
+                  <Avatar uri={friend.avatar} style={styles.activeAvatar} />
+                  {friend.isOnlineNow && <View style={[styles.activeOnlineDot, { borderColor: pageBg }]} />}
                 </View>
                 <Text style={[styles.activeItemName, { color: isDark ? '#E4E6EB' : '#1C1E21' }]} numberOfLines={1}>
                   {friend.name?.split(' ')[0] || 'User'}
@@ -469,7 +487,7 @@ export default function ChatListScreen({ navigation }) {
               colors={['#0084FF']}
             />
           }
-          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 24, paddingTop: 4 }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 120, paddingTop: 4 }}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -562,7 +580,14 @@ const styles = StyleSheet.create({
   headerContainer: {
     paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 8 : 48,
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 14,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
   headerRow: {
     flexDirection: 'row',
@@ -627,9 +652,9 @@ const styles = StyleSheet.create({
   searchPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    height: 40,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    height: 44,
   },
   searchInput: {
     flex: 1,
@@ -668,6 +693,13 @@ const styles = StyleSheet.create({
   activeAvatarWrapper: {
     position: 'relative',
     marginBottom: 4,
+    padding: 2,
+    borderRadius: 31,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  activeAvatarWrapperOnline: {
+    borderColor: '#0084FF',
   },
   activeAvatar: {
     width: 54,
@@ -683,8 +715,8 @@ const styles = StyleSheet.create({
   },
   activeOnlineDot: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
+    bottom: 3,
+    right: 3,
     width: 14,
     height: 14,
     borderRadius: 7,
@@ -692,12 +724,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   createStoryRing: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,132,255,0.55)',
   },
   activeItemName: {
     fontSize: 12,
@@ -710,17 +745,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 16,
+    paddingVertical: 11,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: 12,
+    marginRight: 14,
   },
   avatarImage: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -731,11 +767,11 @@ const styles = StyleSheet.create({
   },
   onlineBadge: {
     position: 'absolute',
-    bottom: 1,
-    right: 1,
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
+    bottom: 0,
+    right: 0,
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
     backgroundColor: '#31A24C',
     borderWidth: 2.5,
   },
@@ -750,14 +786,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   userName: {
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: '600',
+    letterSpacing: -0.2,
     flex: 1,
     marginRight: 8,
   },
   timeText: {
-    fontSize: 12,
-    fontWeight: '400',
+    fontSize: 11.5,
+    fontWeight: '500',
   },
   messageRow: {
     flexDirection: 'row',
@@ -778,9 +815,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   unreadBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
@@ -793,7 +830,7 @@ const styles = StyleSheet.create({
   },
   unreadBadgeText: {
     color: '#FFFFFF',
-    fontSize: 10.5,
+    fontSize: 11.5,
     fontWeight: '800',
     includeFontPadding: false,
     textAlign: 'center',

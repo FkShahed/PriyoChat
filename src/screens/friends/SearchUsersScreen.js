@@ -7,6 +7,7 @@ import { requestApi, userApi } from '../../api/services';
 import useAuthStore from '../../store/useAuthStore';
 import useChatStore from '../../store/useChatStore';
 import { getInitials } from '../../utils/helpers';
+import Avatar from '../../components/common/Avatar';
 import { useColors } from '../../store/useThemeStore';
 
 export default function SearchUsersScreen({ navigation }) {
@@ -113,13 +114,7 @@ export default function SearchUsersScreen({ navigation }) {
               onPress={() => navigation.navigate('UserProfile', { user: item, isOnline: item.isOnline, lastSeen: item.lastSeen })}
               activeOpacity={0.75}
             >
-              {item.avatar ? (
-                <Image source={{ uri: item.avatar }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Text style={styles.initials}>{getInitials(item.name)}</Text>
-                </View>
-              )}
+              <Avatar uri={item.avatar} style={styles.avatar} />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.name, { color: C.text }]}>{item.name}</Text>
                 <Text style={[styles.status, { color: C.textSecondary }]} numberOfLines={1}>{item.status}</Text>

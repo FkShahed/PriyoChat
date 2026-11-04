@@ -17,6 +17,8 @@ import useThemeStore, { useColors } from '../../store/useThemeStore';
 import { userApi, configApi } from '../../api/services';
 import { getInitials } from '../../utils/helpers';
 import { navigationRef } from '../../navigation/navigationRef';
+import { CHANGELOG } from '../../constants/changelog';
+import Avatar from '../../components/common/Avatar';
 
 const THEME_OPTIONS = [
   { key: 'light', label: 'Light', desc: 'Always light', icon: 'sunny-outline' },
@@ -36,13 +38,13 @@ export default function SettingsScreen({ navigation }) {
   // Override colors for Settings to match Auth theme with Glassmorphism only if Dark Mode
   const C = isDark ? {
     ...baseC,
-    bg: '#070B19',
-    surface: 'rgba(255, 255, 255, 0.05)',
-    surfaceAlt: 'rgba(255, 255, 255, 0.08)',
-    text: '#FFFFFF',
-    textSecondary: 'rgba(255, 255, 255, 0.6)',
-    border: 'rgba(255, 255, 255, 0.1)'
-  } : baseC;
+    bg: '#0C0D10',
+    surface: '#16181D',
+    surfaceAlt: '#20232A',
+    text: '#F2F2F5',
+    textSecondary: '#8E9099',
+    border: 'rgba(255, 255, 255, 0.08)'
+  } : { ...baseC, surface: '#FFFFFF', border: 'rgba(60,60,67,0.18)' };
 
   const [name, setName] = useState(user?.name || '');
   const [status, setStatus] = useState(user?.status || '');
@@ -56,6 +58,7 @@ export default function SettingsScreen({ navigation }) {
     storage: false,
   });
 
+  const [showChangelog, setShowChangelog] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(true);
   const [updateInfo, setUpdateInfo] = useState({ apkUrl: null, latestVersion: null, isLatest: true });
   
@@ -389,46 +392,74 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
+  // ── UI helpers (presentation only) ──────────────────────────────────
+  const ACCENT = '#0084FF';
+
+  const renderSection = (title, children, headerRight) => (
+    <View style={styles.sectionWrap}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>{title}</Text>
+        {headerRight || null}
+      </View>
+      <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+        {children}
+      </View>
+    </View>
+  );
+
+  const renderIcon = (icon, color) => (
+    <View style={[styles.iconBox, { backgroundColor: color + '22' }]}>
+      <Ionicons name={icon} size={18} color={color} />
+    </View>
+  );
+
+  const renderRow = ({ icon, color, label, value, right, onPress, last, valueLines = 1 }) => {
+    const content = (
+      <View style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+        {icon ? renderIcon(icon, color || ACCENT) : null}
+        <View style={styles.rowTextWrap}>
+          <Text style={[styles.rowLabel, { color: C.text }]}>{label}</Text>
+          {value ? (
+            <Text style={[styles.rowValue, { color: C.textSecondary }]} numberOfLines={valueLines}>{value}</Text>
+          ) : null}
+        </View>
+        {right || null}
+      </View>
+    );
+    return onPress ? (
+      <TouchableOpacity activeOpacity={0.6} onPress={onPress}>{content}</TouchableOpacity>
+    ) : content;
+  };
+
+  const chevron = <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />;
+
+  const permItems = [
+    { key: 'notifications', label: 'Notifications', icon: 'notifications', color: '#FF9500' },
+    { key: 'camera', label: 'Camera', icon: 'camera', color: '#5856D6' },
+    { key: 'microphone', label: 'Microphone', icon: 'mic', color: '#FF2D55' },
+    { key: 'storage', label: 'Photos & Videos', icon: 'images', color: '#34C759' },
+  ];
+
   return (
     <View style={[styles.container, { backgroundColor: C.bg }]}>
-      {isDark && (
-        <>
-          <LinearGradient
-            colors={['#070B19', '#0D1A3A', '#060A17']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-          <View style={styles.orbTopRight} />
-          <View style={styles.orbBottomLeft} />
-        </>
-      )}
-
-      <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 130 }} showsVerticalScrollIndicator={false}>
         {/* ── Profile header ──────────────────────────────────────── */}
-        <View style={isDark ? styles.headerGradDark : styles.headerGradLight}>
-          <TouchableOpacity onPress={pickAvatar} style={styles.avatarWrapper}>
-            {user?.avatar ? (
-              <Image source={{ uri: user.avatar }} style={styles.avatar} />
-            ) : (
-              <LinearGradient colors={['#0084FF', '#00C6FF']} style={[styles.avatar, { alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 36 }}>{getInitials(user?.name)}</Text>
-              </LinearGradient>
-            )}
-            <View style={styles.cameraOverlay}>
-              {loading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="camera" size={16} color="#FFF" />}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={pickAvatar} activeOpacity={0.85} style={styles.avatarWrapper}>
+            <View style={[styles.avatarRing, { borderColor: isDark ? 'rgba(0,132,255,0.55)' : 'rgba(0,132,255,0.35)' }]}>
+              <Avatar uri={user?.avatar} style={styles.avatar} />
+            </View>
+            <View style={[styles.cameraOverlay, { borderColor: C.bg }]}>
+              {loading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="camera" size={14} color="#FFF" />}
             </View>
           </TouchableOpacity>
-          <Text style={[styles.headerName, { color: C.text }]}>{user?.name}</Text>
-          <Text style={[styles.headerEmail, { color: C.textSecondary }]}>{user?.email}</Text>
+          <Text style={[styles.headerName, { color: C.text }]} numberOfLines={1}>{user?.name}</Text>
+          <Text style={[styles.headerEmail, { color: C.textSecondary }]} numberOfLines={1}>{user?.email}</Text>
         </View>
 
-      {/* ── Profile section ─────────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <Text style={[styles.sectionTitle, { color: C.textSecondary, marginBottom: -4 }]}>Profile</Text>
-
-        {editing ? (
-          <>
-            {/* Name input */}
+        {/* ── Profile section ─────────────────────────────────────── */}
+        {renderSection('Profile', editing ? (
+          <View style={{ padding: 16, gap: 12 }}>
             <View style={[styles.inputWrap, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
               <Ionicons name="person-outline" size={18} color={C.textSecondary} style={{ marginRight: 10 }} />
               <TextInput
@@ -439,7 +470,6 @@ export default function SettingsScreen({ navigation }) {
                 placeholderTextColor={C.textSecondary}
               />
             </View>
-            {/* Status input */}
             <View style={[styles.inputWrap, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
               <Ionicons name="chatbubble-ellipses-outline" size={18} color={C.textSecondary} style={{ marginRight: 10 }} />
               <TextInput
@@ -462,259 +492,257 @@ export default function SettingsScreen({ navigation }) {
                 <Text style={[styles.actionBtnText, { color: C.text }]}>Cancel</Text>
               </TouchableOpacity>
             </View>
-          </>
+          </View>
         ) : (
           <>
-            <View style={[styles.permRow, { borderBottomColor: C.border }]}>
-              <View style={styles.permInfo}>
-                <View style={[styles.iconBox, { backgroundColor: 'rgba(0,132,255,0.1)' }]}>
-                  <Ionicons name="person" size={18} color="#0084FF" />
-                </View>
-                <View>
-                  <Text style={[styles.permLabel, { color: C.text }]}>Display Name</Text>
-                  <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }}>{user?.name}</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={[styles.permRow, { borderBottomWidth: 0 }]}>
-              <View style={styles.permInfo}>
-                <View style={[styles.iconBox, { backgroundColor: 'rgba(52,199,89,0.1)' }]}>
-                  <Ionicons name="chatbubble-ellipses" size={18} color="#34C759" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.permLabel, { color: C.text }]}>Status</Text>
-                  <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }} numberOfLines={2}>
-                    {user?.status || 'No status set'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 12, backgroundColor: 'rgba(0,132,255,0.1)' }}
-              onPress={() => setEditing(true)}
-            >
-              <Ionicons name="create-outline" size={17} color="#0084FF" />
-              <Text style={{ color: '#0084FF', fontSize: 14, fontWeight: '600' }}>Edit Profile</Text>
-            </TouchableOpacity>
+            {renderRow({ icon: 'person', color: ACCENT, label: 'Display Name', value: user?.name })}
+            {renderRow({
+              icon: 'chatbubble-ellipses', color: '#34C759', label: 'Status',
+              value: user?.status || 'No status set', valueLines: 2,
+            })}
+            {renderRow({
+              icon: 'create', color: ACCENT, label: 'Edit Profile', last: true,
+              onPress: () => setEditing(true), right: chevron,
+            })}
           </>
-        )}
-      </View>
+        ))}
 
-      {/* ── Appearance section ──────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Appearance</Text>
-        <View style={styles.themeRow}>
-          {THEME_OPTIONS.map((opt) => (
-            <TouchableOpacity
-              key={opt.key}
-              style={[
-                styles.themeBtn,
-                { borderColor: C.border, backgroundColor: C.surfaceAlt },
-                appTheme === opt.key && styles.themeBtnActive,
-              ]}
-              onPress={() => setAppTheme(opt.key)}
-            >
-              <Ionicons
-                name={opt.icon}
-                size={20}
-                color={appTheme === opt.key ? '#0084FF' : C.textSecondary}
-              />
-              <Text style={[styles.themeBtnLabel, { color: appTheme === opt.key ? '#0084FF' : C.text }]}>{opt.label}</Text>
-              <Text style={[styles.themeBtnDesc, { color: C.textSecondary }]}>{opt.desc}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* ── Permissions section ──────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Permissions</Text>
-          <TouchableOpacity onPress={grantAllPermissions}>
-            <Text style={{ color: '#0084FF', fontSize: 13, fontWeight: '600' }}>Grant All</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={{ color: C.text, fontSize: 13, marginBottom: 12, lineHeight: 18, opacity: 0.8 }}>
-          Manage access to ensure all app features work properly.
-        </Text>
-        
-        {[
-          { key: 'notifications', label: 'Notifications', icon: 'notifications-outline' },
-          { key: 'camera', label: 'Camera', icon: 'camera-outline' },
-          { key: 'microphone', label: 'Microphone', icon: 'mic-outline' },
-          { key: 'storage', label: 'Photos & Videos', icon: 'images-outline' },
-        ].map((p) => (
-          <View style={styles.permRow} key={p.key}>
-            <View style={styles.permInfo}>
-              <Ionicons name={p.icon} size={20} color={C.text} />
-              <Text style={[styles.permLabel, { color: C.text }]}>{p.label}</Text>
+        {/* ── Appearance section ──────────────────────────────────── */}
+        {renderSection('Appearance', (
+          <View style={{ padding: 12 }}>
+            <View style={[styles.segment, { backgroundColor: C.surfaceAlt }]}>
+              {THEME_OPTIONS.map((opt) => {
+                const active = appTheme === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.segmentBtn,
+                      active && { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#FFFFFF' },
+                      active && styles.segmentBtnActive,
+                    ]}
+                    onPress={() => setAppTheme(opt.key)}
+                  >
+                    <Ionicons name={opt.icon} size={16} color={active ? ACCENT : C.textSecondary} />
+                    <Text style={[styles.segmentLabel, { color: active ? C.text : C.textSecondary }]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <Switch
-              value={perms[p.key]}
-              onValueChange={() => togglePermission(p.key)}
-              trackColor={{ true: '#34C759', false: C.border }}
-            />
+            <Text style={[styles.caption, { color: C.textSecondary, marginTop: 10 }]}>
+              {THEME_OPTIONS.find((o) => o.key === appTheme)?.desc}
+            </Text>
           </View>
         ))}
-      </View>
 
-      {/* ── Call Settings section ───────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Call Settings</Text>
-        <Text style={{ color: C.text, fontSize: 13, marginBottom: 12, lineHeight: 18, opacity: 0.8 }}>
-          Choose a custom sound to play when receiving an audio or video call.
-        </Text>
-        
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoLabel, { color: C.textSecondary }]}>Ringtone</Text>
-          <Text style={[styles.infoValue, { color: C.text }]} numberOfLines={1}>
-            {customRingtoneName || 'Default'}
-          </Text>
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
-          {curatedRingtones.length > 0 && (
-            <TouchableOpacity
-              style={[styles.updateBtn, { flex: 1, marginTop: 0, backgroundColor: 'rgba(0,132,255,0.1)' }]}
-              onPress={() => setShowCuratedModal(true)}
-            >
-              <Ionicons name="library-outline" size={18} color="#0084FF" />
-              <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>Library</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.updateBtn, { flex: 1, marginTop: 0 }]}
-            onPress={handlePickRingtone}
-          >
-            <Ionicons name="folder-open-outline" size={18} color="#0084FF" />
-            <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>Files</Text>
+        {/* ── Permissions section ──────────────────────────────────── */}
+        {renderSection('Permissions', (
+          <>
+            {permItems.map((p, i) => (
+              <React.Fragment key={p.key}>
+                {renderRow({
+                  icon: p.icon, color: p.color, label: p.label,
+                  last: i === permItems.length - 1,
+                  right: (
+                    <Switch
+                      value={perms[p.key]}
+                      onValueChange={() => togglePermission(p.key)}
+                      trackColor={{ true: '#34C759', false: C.border }}
+                    />
+                  ),
+                })}
+              </React.Fragment>
+            ))}
+          </>
+        ), (
+          <TouchableOpacity onPress={grantAllPermissions} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={{ color: ACCENT, fontSize: 13, fontWeight: '600' }}>Grant All</Text>
           </TouchableOpacity>
-          
-          {customRingtoneName && (
-            <TouchableOpacity
-              style={[styles.updateBtn, { flex: 1, marginTop: 0, borderColor: '#FF3B30', backgroundColor: 'rgba(255,59,48,0.1)' }]}
-              onPress={handleResetRingtone}
-            >
-              <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-              <Text style={[styles.updateBtnText, { color: '#FF3B30' }]}>Reset</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+        ))}
 
-      {/* ── Account section ─────────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <Text style={[styles.sectionTitle, { color: C.textSecondary, marginBottom: -4 }]}>Account & App Info</Text>
-        
-        <View style={[styles.permRow, { borderBottomColor: C.border }]}>
-          <View style={styles.permInfo}>
-            <View style={[styles.iconBox, { backgroundColor: 'rgba(0,132,255,0.1)' }]}>
-              <Ionicons name="mail" size={18} color="#0084FF" />
-            </View>
-            <View>
-              <Text style={[styles.permLabel, { color: C.text }]}>Email Address</Text>
-              <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }}>{user?.email}</Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity style={[styles.permRow, { borderBottomWidth: 0 }]} onPress={checkVersion} activeOpacity={0.7}>
-          <View style={styles.permInfo}>
-            <View style={[styles.iconBox, { backgroundColor: updateInfo.isLatest ? 'rgba(52,199,89,0.1)' : 'rgba(255,149,0,0.1)' }]}>
-              {checkingUpdate ? (
-                <ActivityIndicator size="small" color="#0084FF" />
-              ) : (
-                <Ionicons name={updateInfo.isLatest ? "checkmark-circle" : "alert-circle"} size={18} color={updateInfo.isLatest ? "#34C759" : "#FF9500"} />
+        {/* ── Call Settings section ───────────────────────────────── */}
+        {renderSection('Call Settings', (
+          <>
+            {renderRow({
+              icon: 'musical-notes', color: '#AF52DE', label: 'Ringtone',
+              value: customRingtoneName || 'Default', last: true,
+            })}
+            <View style={[styles.chipRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border }]}>
+              {curatedRingtones.length > 0 && (
+                <TouchableOpacity
+                  style={[styles.chip, { backgroundColor: 'rgba(0,132,255,0.12)' }]}
+                  onPress={() => setShowCuratedModal(true)}
+                >
+                  <Ionicons name="library-outline" size={16} color={ACCENT} />
+                  <Text style={[styles.chipText, { color: ACCENT }]}>Library</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.chip, { backgroundColor: 'rgba(0,132,255,0.12)' }]}
+                onPress={handlePickRingtone}
+              >
+                <Ionicons name="folder-open-outline" size={16} color={ACCENT} />
+                <Text style={[styles.chipText, { color: ACCENT }]}>Files</Text>
+              </TouchableOpacity>
+              {customRingtoneName && (
+                <TouchableOpacity
+                  style={[styles.chip, { backgroundColor: 'rgba(255,59,48,0.12)' }]}
+                  onPress={handleResetRingtone}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+                  <Text style={[styles.chipText, { color: '#FF3B30' }]}>Reset</Text>
+                </TouchableOpacity>
               )}
             </View>
-            <View>
-              <Text style={[styles.permLabel, { color: C.text }]}>App Version</Text>
-              <Text style={{ color: C.textSecondary, fontSize: 13, marginTop: 2 }}>
-                PriyoChat v{currentVersion} {updateInfo.isLatest && !checkingUpdate && '(Latest)'}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
+          </>
+        ))}
 
-        {(!updateInfo.isLatest || checkingUpdate) && (
-          <TouchableOpacity
-            style={[
-              styles.updateBtn,
-              {
-                backgroundColor: checkingUpdate ? C.surfaceAlt : 'rgba(0,132,255,0.1)',
-                borderWidth: 0,
-              }
-            ]}
-            onPress={handleDownloadUpdate}
-            disabled={checkingUpdate || !updateInfo.apkUrl || downloading}
-          >
-            {checkingUpdate || downloading ? (
-              <ActivityIndicator color={C.textSecondary} size="small" />
-            ) : (
-              <>
-                <Ionicons name="cloud-download-outline" size={18} color="#0084FF" />
-                <Text style={[styles.updateBtnText, { color: '#0084FF' }]}>
-                  Download v{updateInfo.latestVersion}
-                </Text>
-              </>
+        {/* ── Account & app info ──────────────────────────────────── */}
+        {renderSection('Account & App Info', (
+          <>
+            {renderRow({ icon: 'mail', color: ACCENT, label: 'Email Address', value: user?.email })}
+            {renderRow({
+              icon: updateInfo.isLatest ? 'checkmark-circle' : 'alert-circle',
+              color: updateInfo.isLatest ? '#34C759' : '#FF9500',
+              label: 'App Version',
+              value: `PriyoChat v${currentVersion}${updateInfo.isLatest && !checkingUpdate ? '  •  Latest' : ''}`,
+              last: updateInfo.isLatest && !checkingUpdate,
+              onPress: () => { checkVersion(); setShowChangelog(true); },
+              right: checkingUpdate ? <ActivityIndicator size="small" color={ACCENT} /> : chevron,
+            })}
+            {(!updateInfo.isLatest || checkingUpdate) && (
+              <View style={{ padding: 12, paddingTop: 4 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.updateBtn,
+                    { backgroundColor: checkingUpdate ? C.surfaceAlt : ACCENT },
+                  ]}
+                  onPress={handleDownloadUpdate}
+                  disabled={checkingUpdate || !updateInfo.apkUrl || downloading}
+                >
+                  {checkingUpdate || downloading ? (
+                    <ActivityIndicator color={C.textSecondary} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-download-outline" size={18} color="#FFF" />
+                      <Text style={[styles.updateBtnText, { color: '#FFF' }]}>
+                        Download v{updateInfo.latestVersion}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             )}
+          </>
+        ))}
+
+        {/* ── Support section ─────────────────────────────────────── */}
+        {renderSection('Support', renderRow({
+          icon: 'bug', color: '#FF9500', label: 'Report a Bug', last: true,
+          onPress: () => navigation.navigate('ReportBug'), right: chevron,
+        }))}
+
+        {/* ── About & legal ───────────────────────────────────────── */}
+        {renderSection('About & Legal', (
+          <>
+            {renderRow({
+              icon: 'information-circle', color: ACCENT, label: 'About PriyoChat',
+              onPress: () => navigation.navigate('Info', { type: 'about' }), right: chevron,
+            })}
+            {renderRow({
+              icon: 'document-text', color: '#5856D6', label: 'Terms & Conditions',
+              onPress: () => navigation.navigate('Info', { type: 'terms' }), right: chevron,
+            })}
+            {renderRow({
+              icon: 'shield-checkmark', color: '#34C759', label: 'Privacy Policy', last: true,
+              onPress: () => navigation.navigate('Info', { type: 'privacy' }), right: chevron,
+            })}
+          </>
+        ))}
+
+        {/* ── Logout ──────────────────────────────────────────────── */}
+        <View style={styles.sectionWrap}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={[styles.logoutBtn, { backgroundColor: C.surface, borderColor: C.border }]}
+            onPress={handleLogout}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+            <Text style={styles.dangerBtnText}>Logout</Text>
           </TouchableOpacity>
-        )}
-      </View>
-
-
-      {/* ── Support section ─────────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <Text style={[styles.sectionTitle, { color: C.textSecondary }]}>Support</Text>
-        <TouchableOpacity 
-          style={[styles.updateBtn, { backgroundColor: C.surfaceAlt, borderColor: 'transparent' }]} 
-          onPress={() => navigation.navigate('ReportBug')}
-        >
-          <Ionicons name="bug-outline" size={18} color="#FF9500" />
-          <Text style={[styles.updateBtnText, { color: C.text }]}>Report a Bug</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Logout ──────────────────────────────────────────────── */}
-      <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border }]}>
-        <TouchableOpacity style={[styles.dangerBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={19} color="#FF3B30" />
-          <Text style={styles.dangerBtnText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ height: 40 }} />
-
-      {/* Curated Ringtones Modal */}
-      <Modal visible={showCuratedModal} transparent animationType="slide" onRequestClose={() => { stopPreview(); setShowCuratedModal(false); }}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: C.surface }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>Curated Ringtones</Text>
-              <TouchableOpacity onPress={() => { stopPreview(); setShowCuratedModal(false); }}>
-                <Ionicons name="close" size={24} color={C.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 400 }}>
-              {curatedRingtones.map((r, idx) => (
-                <View key={idx} style={styles.ringtoneItem}>
-                  <TouchableOpacity style={styles.ringtonePlayBtn} onPress={() => handlePreviewRingtone(r, idx)}>
-                    <Ionicons name={playingIndex === idx ? "stop" : "play"} size={20} color="#FFF" />
-                  </TouchableOpacity>
-                  <Text style={[styles.ringtoneName, { color: C.text }]} numberOfLines={1}>{r.name}</Text>
-                  <TouchableOpacity style={styles.ringtoneSelectBtn} onPress={() => handleSelectCuratedRingtone(r)}>
-                    <Text style={styles.ringtoneSelectText}>Select</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
         </View>
-      </Modal>
 
+        <Text style={[styles.footer, { color: C.textSecondary }]}>PriyoChat v{currentVersion}</Text>
+
+        {/* What's new popup (App Version) */}
+        <Modal visible={showChangelog} transparent animationType="fade" onRequestClose={() => setShowChangelog(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.popupOverlay} onPress={() => setShowChangelog(false)}>
+            <TouchableOpacity activeOpacity={1} style={[styles.popupCard, { backgroundColor: C.surface, borderColor: C.border }]}>
+              <View style={styles.popupHeader}>
+                <View style={[styles.iconBox, { backgroundColor: 'rgba(0,132,255,0.15)' }]}>
+                  <Ionicons name="sparkles" size={18} color={ACCENT} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.popupTitle, { color: C.text }]}>What's new</Text>
+                  <Text style={{ color: C.textSecondary, fontSize: 12 }}>
+                    You're on v{currentVersion}
+                    {!updateInfo.isLatest && updateInfo.latestVersion ? `  •  v${updateInfo.latestVersion} available` : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowChangelog(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close" size={22} color={C.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                {CHANGELOG.map((rel) => (
+                  <View key={rel.version} style={styles.relBlock}>
+                    <View style={styles.relHead}>
+                      <Text style={[styles.relVersion, { color: C.text }]}>v{rel.version}</Text>
+                      {rel.version === currentVersion && (
+                        <View style={styles.currentBadge}><Text style={styles.currentBadgeText}>Current</Text></View>
+                      )}
+                    </View>
+                    <Text style={[styles.relTitle, { color: C.textSecondary }]}>{rel.title}</Text>
+                    {rel.items.map((it, i) => (
+                      <View key={i} style={styles.relItem}>
+                        <Ionicons name="checkmark-circle" size={16} color="#34C759" style={{ marginTop: 2 }} />
+                        <Text style={[styles.relItemText, { color: C.text }]}>{it}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Curated Ringtones Modal */}
+        <Modal visible={showCuratedModal} transparent animationType="slide" onRequestClose={() => { stopPreview(); setShowCuratedModal(false); }}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: C.surface }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>Curated Ringtones</Text>
+                <TouchableOpacity onPress={() => { stopPreview(); setShowCuratedModal(false); }}>
+                  <Ionicons name="close" size={24} color={C.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 400 }}>
+                {curatedRingtones.map((r, idx) => (
+                  <View key={idx} style={styles.ringtoneItem}>
+                    <TouchableOpacity style={styles.ringtonePlayBtn} onPress={() => handlePreviewRingtone(r, idx)}>
+                      <Ionicons name={playingIndex === idx ? "stop" : "play"} size={20} color="#FFF" />
+                    </TouchableOpacity>
+                    <Text style={[styles.ringtoneName, { color: C.text }]} numberOfLines={1}>{r.name}</Text>
+                    <TouchableOpacity style={styles.ringtoneSelectBtn} onPress={() => handleSelectCuratedRingtone(r)}>
+                      <Text style={styles.ringtoneSelectText}>Select</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </View>
   );
@@ -722,110 +750,95 @@ export default function SettingsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  orbTopRight: {
-    position: 'absolute', top: -100, right: -100,
-    width: 350, height: 350, borderRadius: 175,
-    backgroundColor: 'rgba(0, 132, 255, 0.12)',
-  },
-  orbBottomLeft: {
-    position: 'absolute', bottom: -100, left: -120,
-    width: 400, height: 400, borderRadius: 200,
-    backgroundColor: 'rgba(0, 198, 255, 0.08)',
-  },
-  headerGradDark: { alignItems: 'center', paddingTop: 64, paddingBottom: 24 },
-  headerGradLight: { alignItems: 'center', paddingTop: 64, paddingBottom: 24, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
-  avatarWrapper: { position: 'relative', marginBottom: 12 },
-  avatar: { width: 94, height: 94, borderRadius: 47, borderWidth: 3, borderColor: 'rgba(255,255,255,0.5)' },
+  // Header
+  header: { alignItems: 'center', paddingTop: 64, paddingBottom: 20, paddingHorizontal: 24 },
+  avatarWrapper: { position: 'relative', marginBottom: 14 },
+  avatarRing: { padding: 4, borderRadius: 56, borderWidth: 2 },
+  avatar: { width: 92, height: 92, borderRadius: 46 },
   cameraOverlay: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 30, height: 30, backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 15, alignItems: 'center', justifyContent: 'center',
+    position: 'absolute', bottom: 2, right: 2,
+    width: 30, height: 30, backgroundColor: '#0084FF',
+    borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 3,
   },
-  headerName: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
-  headerEmail: { fontSize: 13 },
-  section: { margin: 16, borderRadius: 20, padding: 20, gap: 16, marginBottom: 0, borderWidth: 1 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  infoLabel: { fontSize: 15, fontWeight: '500' },
-  infoValue: { fontSize: 15, fontWeight: '600', flex: 1, textAlign: 'right', marginLeft: 12 },
+  headerName: { fontSize: 22, fontWeight: '700', marginBottom: 2, maxWidth: '90%' },
+  headerEmail: { fontSize: 13, maxWidth: '90%' },
+  // Sections (grouped cards)
+  sectionWrap: { marginHorizontal: 16, marginTop: 20 },
+  sectionHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 6, marginBottom: 8,
+  },
+  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  card: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  // Rows
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, gap: 12 },
+  rowTextWrap: { flex: 1 },
+  rowLabel: { fontSize: 15, fontWeight: '600' },
+  rowValue: { fontSize: 13, marginTop: 2 },
+  iconBox: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  caption: { fontSize: 12, textAlign: 'center' },
+  // Inputs / buttons
   inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 4, borderWidth: 1,
   },
-  editInput: {
-    fontSize: 15,
-    paddingVertical: 10,
-  },
+  editInput: { fontSize: 15, paddingVertical: 10 },
   actionBtn: { backgroundColor: '#0084FF', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   actionBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
-  // Theme picker
-  themeRow: { flexDirection: 'row', gap: 10 },
-  themeBtn: {
-    flex: 1, borderRadius: 14, borderWidth: 1.5,
-    paddingVertical: 14, alignItems: 'center', gap: 4,
+  // Theme segmented control
+  segment: { flexDirection: 'row', borderRadius: 14, padding: 4 },
+  segmentBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10, borderRadius: 11,
   },
-  themeBtnActive: { borderColor: '#0084FF', backgroundColor: 'rgba(0,132,255,0.15)' },
-  themeBtnLabel: { fontSize: 14, fontWeight: '600' },
-  themeBtnDesc: { fontSize: 11 },
+  segmentBtnActive: {
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 3, elevation: 2,
+  },
+  segmentLabel: { fontSize: 13, fontWeight: '600' },
+  // Ringtone chips
+  chipRow: { flexDirection: 'row', gap: 10, padding: 12 },
+  chip: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10, borderRadius: 12,
+  },
+  chipText: { fontSize: 13, fontWeight: '600' },
+  updateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 12, borderRadius: 12,
+  },
+  updateBtnText: { fontSize: 14, fontWeight: '600' },
   // Logout
-  dangerBtn: {
-    borderRadius: 14, paddingVertical: 14, alignItems: 'center',
-    borderWidth: 1.5, borderColor: '#FF3B30', backgroundColor: 'rgba(255,59,48,0.1)',
+  logoutBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderRadius: 18, paddingVertical: 15, borderWidth: StyleSheet.hairlineWidth,
   },
   dangerBtnText: { color: '#FF3B30', fontWeight: '700', fontSize: 15 },
-  // Permissions & Lists
-  iconBox: {
-    width: 36, height: 36, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center'
-  },
-  permRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  permInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  permLabel: { fontSize: 15, fontWeight: '500' },
-  updateBtn: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,132,255,0.2)',
-  },
-  updateBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end'
-  },
-  modalContent: {
-    borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40
-  },
+  footer: { textAlign: 'center', fontSize: 12, marginTop: 18, opacity: 0.7 },
+  // What's new popup
+  popupOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 20 },
+  popupCard: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, padding: 18 },
+  popupHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  popupTitle: { fontSize: 18, fontWeight: '700' },
+  relBlock: { marginBottom: 18 },
+  relHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  relVersion: { fontSize: 16, fontWeight: '700' },
+  currentBadge: { backgroundColor: 'rgba(0,132,255,0.15)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  currentBadgeText: { color: '#0084FF', fontSize: 11, fontWeight: '700' },
+  relTitle: { fontSize: 13, marginTop: 2, marginBottom: 8 },
+  relItem: { flexDirection: 'row', gap: 8, marginBottom: 6 },
+  relItemText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  // Ringtone modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
   ringtoneItem: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: 'rgba(150,150,150,0.2)'
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(150,150,150,0.2)',
   },
   ringtonePlayBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: '#0084FF', alignItems: 'center', justifyContent: 'center', marginRight: 12
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#0084FF',
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
   },
-  ringtoneName: {
-    flex: 1, fontSize: 16, fontWeight: '500'
-  },
-  ringtoneSelectBtn: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(0,132,255,0.1)'
-  },
-  ringtoneSelectText: {
-    color: '#0084FF', fontWeight: '600', fontSize: 13
-  }
+  ringtoneName: { flex: 1, fontSize: 16, fontWeight: '500' },
+  ringtoneSelectBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(0,132,255,0.1)' },
+  ringtoneSelectText: { color: '#0084FF', fontWeight: '600', fontSize: 13 },
 });

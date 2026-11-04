@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import { formatTime, getInitials } from '../../utils/helpers';
+import Avatar from '../../components/common/Avatar';
 import { useColors } from '../../store/useThemeStore';
 import SwipeableChatRow from '../../components/chat/SwipeableChatRow';
 
@@ -142,13 +143,7 @@ export default function ArchivedChatsScreen({ navigation }) {
           ]}
         >
           <View style={styles.avatarContainer}>
-            {other?.avatar ? (
-              <Image source={{ uri: other.avatar }} style={styles.avatarImage} />
-            ) : (
-              <LinearGradient colors={gradColors} style={styles.avatarImage}>
-                <Text style={styles.avatarInitials}>{getInitials(other?.name)}</Text>
-              </LinearGradient>
-            )}
+            <Avatar uri={other?.avatar} style={styles.avatarImage} />
             {isOnline && <View style={[styles.onlineBadge, { borderColor: isDark ? '#0D1117' : '#FFFFFF' }]} />}
           </View>
 

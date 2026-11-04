@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { requestApi, conversationApi } from '../../api/services';
 import { getInitials } from '../../utils/helpers';
+import Avatar from '../../components/common/Avatar';
 import useChatStore from '../../store/useChatStore';
 import { useColors } from '../../store/useThemeStore';
 
@@ -69,13 +70,7 @@ export default function FriendRequestsScreen({ navigation }) {
           keyExtractor={(item) => item._id}
           renderItem={({ item }) => (
             <View style={[styles.item, { borderBottomColor: C.border }]}>
-              {item.from?.avatar ? (
-                <Image source={{ uri: item.from.avatar }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, { backgroundColor: '#0084FF', alignItems: 'center', justifyContent: 'center' }]}>
-                  <Text style={{ color: '#FFF', fontWeight: '700' }}>{getInitials(item.from?.name)}</Text>
-                </View>
-              )}
+              <Avatar uri={item.from?.avatar} style={styles.avatar} />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.name, { color: C.text }]}>{item.from?.name}</Text>
                 <Text style={[styles.status, { color: C.textSecondary }]}>{item.from?.status}</Text>

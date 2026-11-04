@@ -88,70 +88,72 @@ export default function SwipeableChatRow({
     extrapolate: 'clamp',
   });
 
+  // Buttons grow slightly as they are revealed
+  const actionsScale = translateX.interpolate({
+    inputRange: [-TOTAL_ACTIONS_WIDTH, -20, 0],
+    outputRange: [1, 0.85, 0.7],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={styles.container}>
       {/* ── Background Action Buttons (Revealed ONLY on Swipe) ── */}
-      <Animated.View style={[styles.actionsContainer, { opacity: actionsOpacity }]}>
+      <Animated.View
+        style={[styles.actionsContainer, { opacity: actionsOpacity, transform: [{ scale: actionsScale }] }]}
+      >
         {/* Archive Action */}
         <TouchableOpacity
           style={styles.actionBtn}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           onPress={() => {
             close();
             onArchive?.();
           }}
         >
           <LinearGradient
-            colors={isArchived ? ['#10B981', '#059669'] : ['#6366F1', '#4F46E5']}
-            style={styles.actionGradient}
+            colors={isArchived ? ['#34D399', '#10B981'] : ['#818CF8', '#6366F1']}
+            style={styles.actionCircle}
           >
-            <Ionicons
-              name={isArchived ? 'file-tray-outline' : 'archive-outline'}
-              size={20}
-              color="#FFF"
-            />
-            <Text style={styles.actionText}>{isArchived ? 'Unarchive' : 'Archive'}</Text>
+            <Ionicons name={isArchived ? 'file-tray' : 'archive'} size={21} color="#FFF" />
           </LinearGradient>
+          <Text style={[styles.actionText, { color: isArchived ? '#10B981' : '#6366F1' }]}>
+            {isArchived ? 'Unarchive' : 'Archive'}
+          </Text>
         </TouchableOpacity>
 
         {/* Mute Action */}
         <TouchableOpacity
           style={styles.actionBtn}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           onPress={() => {
             close();
             onMute?.();
           }}
         >
           <LinearGradient
-            colors={isMuted ? ['#8B5CF6', '#7C3AED'] : ['#F59E0B', '#D97706']}
-            style={styles.actionGradient}
+            colors={isMuted ? ['#A78BFA', '#8B5CF6'] : ['#FBBF24', '#F59E0B']}
+            style={styles.actionCircle}
           >
-            <Ionicons
-              name={isMuted ? 'volume-high-outline' : 'volume-mute-outline'}
-              size={20}
-              color="#FFF"
-            />
-            <Text style={styles.actionText}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+            <Ionicons name={isMuted ? 'notifications' : 'notifications-off'} size={21} color="#FFF" />
           </LinearGradient>
+          <Text style={[styles.actionText, { color: isMuted ? '#8B5CF6' : '#F59E0B' }]}>
+            {isMuted ? 'Unmute' : 'Mute'}
+          </Text>
         </TouchableOpacity>
 
         {/* Delete Action */}
         <TouchableOpacity
           style={styles.actionBtn}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           onPress={() => {
             close();
             onDelete?.();
           }}
         >
-          <LinearGradient
-            colors={['#EF4444', '#DC2626']}
-            style={styles.actionGradient}
-          >
-            <Ionicons name="trash-outline" size={20} color="#FFF" />
-            <Text style={styles.actionText}>Delete</Text>
+          <LinearGradient colors={['#F87171', '#EF4444']} style={styles.actionCircle}>
+            <Ionicons name="trash" size={21} color="#FFF" />
           </LinearGradient>
+          <Text style={[styles.actionText, { color: '#EF4444' }]}>Delete</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -194,7 +196,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     marginVertical: 3,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   actionsContainer: {
@@ -204,31 +206,35 @@ const styles = StyleSheet.create({
     right: 0,
     width: TOTAL_ACTIONS_WIDTH,
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     justifyContent: 'flex-end',
-    borderRadius: 16,
-    overflow: 'hidden',
   },
   actionBtn: {
     width: ACTION_WIDTH,
-    height: '100%',
-  },
-  actionGradient: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+  },
+  actionCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
   },
   actionText: {
-    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
-    marginTop: 3,
+    marginTop: 5,
     textAlign: 'center',
   },
   foreground: {
     width: '100%',
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
   },
 });

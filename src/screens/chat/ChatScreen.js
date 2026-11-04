@@ -7,6 +7,9 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import Avatar from '../../components/common/Avatar';
+import ZoomableImage from '../../components/common/ZoomableImage';
+import { GestureHandlerRootView as ViewerGestureRoot } from 'react-native-gesture-handler';
 import { Animated as RNAnimated } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -107,31 +110,12 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
     }
   };
 
-  const imageEl = (
-    <RNAnimated.Image
-      source={{ uri: data.uri }}
-      style={[styles.imageViewerImg, { transform: [{ scale }, { translateX }, { translateY }] }]}
-      resizeMode="contain"
-    />
-  );
-
-  const content = PinchGestureHandler ? (
-    <PinchGestureHandler onGestureEvent={onPinchEvent} onHandlerStateChange={onPinchStateChange}>
-      <RNAnimated.View style={{ flex: 1 }}>
-        <TouchableOpacity onPress={onClose} onLongPress={onDoubleTap} activeOpacity={1} style={{ flex: 1 }}>
-          {imageEl}
-        </TouchableOpacity>
-      </RNAnimated.View>
-    </PinchGestureHandler>
-  ) : (
-    <TouchableOpacity onPress={onClose} activeOpacity={1} style={{ flex: 1 }}>
-      {imageEl}
-    </TouchableOpacity>
-  );
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.imageViewerBg}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      {/* A Modal needs its own gesture root on Android, otherwise pinch/pan never fire */}
+      <ViewerGestureRoot style={styles.imageViewerBg}>
+        {/* Centered, zoomable photo: pinch, double-tap, drag; single tap closes */}
+        <ZoomableImage uri={data.uri} width={SCREEN_W} height={SCREEN_H * 0.8} onTap={onClose} />
         <View style={styles.imageViewerHeader}>
           <TouchableOpacity style={styles.imageViewerHeaderBtn} onPress={onClose}>
             <Ionicons name="close" size={24} color="#FFF" />
@@ -142,8 +126,7 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
             </TouchableOpacity>
           ) : null}
         </View>
-        {content}
-      </View>
+      </ViewerGestureRoot>
     </Modal>
   );
 }
@@ -876,18 +859,7 @@ export default function ChatScreen({ route, navigation }) {
               {isMine ? `Seen ${timeStr}` : timeStr}
             </Text>
           )}
-          {recipientAvatarData.avatar ? (
-            <Image
-              source={{ uri: recipientAvatarData.avatar }}
-              style={styles.seenMiniAvatar}
-            />
-          ) : (
-            <View style={[styles.seenMiniAvatar, styles.seenMiniAvatarFallback]}>
-              <Text style={styles.seenMiniAvatarText}>
-                {getInitials(recipientAvatarData.name)}
-              </Text>
-            </View>
-          )}
+          <Avatar uri={recipientAvatarData.avatar} style={styles.seenMiniAvatar} />
         </View>
       );
     }
@@ -1000,13 +972,7 @@ export default function ChatScreen({ route, navigation }) {
           {datePill}
           <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
             {!isMine && (
-              msg.sender?.avatar ? (
-                <Image source={{ uri: msg.sender.avatar }} style={styles.senderAvatar} />
-              ) : (
-                <LinearGradient colors={['#0084FF', '#0040CC']} style={[styles.senderAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>{getInitials(msg.sender?.name || recipientUser?.name)}</Text>
-                </LinearGradient>
-              )
+              <Avatar uri={msg.sender?.avatar} style={styles.senderAvatar} />
             )}
             <TouchableOpacity
               onPress={() => {
@@ -1046,13 +1012,7 @@ export default function ChatScreen({ route, navigation }) {
           {datePill}
           <View style={[styles.bubble, isMine ? styles.myBubbleRow : styles.theirBubbleRow]}>
             {!isMine && (
-              msg.sender?.avatar ? (
-                <Image source={{ uri: msg.sender.avatar }} style={styles.senderAvatar} />
-              ) : (
-                <LinearGradient colors={['#0084FF', '#0040CC']} style={[styles.senderAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>{getInitials(msg.sender?.name || recipientUser?.name)}</Text>
-                </LinearGradient>
-              )
+              <Avatar uri={msg.sender?.avatar} style={styles.senderAvatar} />
             )}
             <View style={[styles.deletedBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble, opacity: 0.5 }]}>
               <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontStyle: 'italic', fontSize: 13, paddingRight: 6 }}>
@@ -1103,13 +1063,7 @@ export default function ChatScreen({ route, navigation }) {
           activeOpacity={0.85}
         >
           {!isMine && (
-            msg.sender?.avatar ? (
-              <Image source={{ uri: msg.sender.avatar }} style={styles.senderAvatar} />
-            ) : (
-              <LinearGradient colors={['#0084FF', '#0040CC']} style={[styles.senderAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>{getInitials(msg.sender?.name)}</Text>
-              </LinearGradient>
-            )
+            <Avatar uri={msg.sender?.avatar} style={styles.senderAvatar} />
           )}
           <View style={[styles.bubbleContent, { alignItems: isMine ? 'flex-end' : 'flex-start' }]}>
             {msg.replyTo && (
@@ -1218,21 +1172,7 @@ export default function ChatScreen({ route, navigation }) {
             conversationId: conversationId,
           })}
         >
-          {recipientUser?.avatar ? (
-            <Image source={{ uri: recipientUser.avatar }} style={styles.headerAvatar} />
-          ) : (
-            <View style={[
-              styles.headerAvatar,
-              {
-                backgroundColor: isHeaderLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.3)',
-                borderColor: isHeaderLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.4)',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }
-            ]}>
-              <Text style={{ color: headerNameColor, fontWeight: '700', fontSize: 16 }}>{getInitials(recipientUser?.name)}</Text>
-            </View>
-          )}
+          <Avatar uri={recipientUser?.avatar} style={styles.headerAvatar} />
         </TouchableOpacity>
 
         <TouchableOpacity
