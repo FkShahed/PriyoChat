@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1, marginLeft: 12, marginRight: 8 },
   name: { fontSize: 16, fontWeight: '700' },
-  sub: { fontSize: 12.5, marginTop: 3 },
+  sub: { fontSize: 11, marginTop: 3 },
   actions: { flexDirection: 'row', gap: 8 },
   actionBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   // Empty

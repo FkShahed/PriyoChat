@@ -6,14 +6,14 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { conversationApi } from '../../api/services';
-import { THEMES } from '../../themes/themes';
-import { useColors } from '../../store/useThemeStore';
+import { THEMES, SELECTOR_KEYS, canonicalThemeKey, getAdaptiveTheme } from '../../themes/themes';
+import useThemeStore, { useColors } from '../../store/useThemeStore';
 import useChatStore from '../../store/useChatStore';
 
 // Keys the backend actually supports; all others are stored locally only.
 const BACKEND_THEMES = new Set(['ClassicBlue', 'DarkNeon', 'SoftPurple', 'MinimalWhite', 'OceanGlass']);
 
-const THEME_KEYS = Object.keys(THEMES);
+const THEME_KEYS = SELECTOR_KEYS;
 
 // Group themes into pairs for 2-column grid
 function groupInPairs(arr) {
@@ -27,6 +27,7 @@ function groupInPairs(arr) {
 export default function ThemeSelectorScreen({ route, navigation }) {
   const { conversationId, currentTheme } = route.params;
   const [selected, setSelected] = useState(currentTheme);
+  const mode = useThemeStore((st) => st.resolvedTheme);
   const [loading, setLoading] = useState(false);
   const C = useColors();
 
@@ -50,6 +51,16 @@ export default function ThemeSelectorScreen({ route, navigation }) {
         conversationApi.updateTheme(conversationId, selected).catch(() => {});
       }
 
+      // 4. Post a centered notice in the chat for both people ("X changed the theme to Y")
+      try {
+        const noticeName = getAdaptiveTheme(selected, mode)?.name || THEMES[selected]?.name;
+        if (noticeName) {
+          conversationApi.themeNotice(conversationId, noticeName)
+            .then(({ data }) => { if (data?._id) useChatStore.getState().addMessage(conversationId, data); })
+            .catch(() => {});
+        }
+      } catch (e) { /* notice is optional */ }
+
       navigation.goBack();
     } catch (err) {
       Alert.alert('Error', 'Failed to save theme locally.');
@@ -63,8 +74,8 @@ export default function ThemeSelectorScreen({ route, navigation }) {
   const renderPair = ({ item: pair }) => (
     <View style={styles.row}>
       {pair.map((key) => {
-        const theme = THEMES[key];
-        const isSelected = key === selected;
+        const theme = getAdaptiveTheme(key, mode);
+        const isSelected = key === canonicalThemeKey(selected);
         const BgComp = theme.bgImage ? ImageBackground : View;
         const bgProps = theme.bgImage
           ? { source: theme.bgImage, resizeMode: 'cover' }

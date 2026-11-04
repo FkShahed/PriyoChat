@@ -79,7 +79,9 @@ const useSocketStore = create((set, get) => ({
       // Show push notification if user is NOT in this conversation and NOT muted
       const activeId = useChatStore.getState().activeConversationId;
       const isMuted = useChatStore.getState().isMuted?.(message.conversation);
-      if (activeId !== message.conversation && !isMuted) {
+      // Never notify me about a message I sent myself (e.g. shared from the Feed while not inside that chat)
+      const sentByMe = !!currentUserId && senderId?.toString() === currentUserId.toString();
+      if (activeId !== message.conversation && !isMuted && !sentByMe) {
         NotificationService.showMessageNotification({
           senderName: message.sender?.name || 'New Message',
           senderId: message.sender?._id,
@@ -124,6 +126,11 @@ const useSocketStore = create((set, get) => ({
 
     newSocket.on('user_status', ({ userId, isOnline }) => {
       useChatStore.getState().setUserOnline(userId, isOnline);
+    });
+
+    // Centered system notice (e.g. theme change). Added to the chat only: no unread count, no notification.
+    newSocket.on('system_message', (message) => {
+      if (message?.conversation) useChatStore.getState().addMessage(message.conversation, message);
     });
 
     newSocket.on('theme_changed', ({ conversationId, theme }) => {

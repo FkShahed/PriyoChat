@@ -3,12 +3,14 @@ import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   Image, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
   ImageBackground, ScrollView, Modal, TouchableWithoutFeedback,
-  StatusBar, Dimensions, Keyboard,
+  StatusBar, Dimensions, Keyboard, Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import Avatar from '../../components/common/Avatar';
 import ZoomableImage from '../../components/common/ZoomableImage';
+import { parseShareText } from '../../utils/feedShare';
+import ArticleReader from '../../components/common/ArticleReader';
 import { GestureHandlerRootView as ViewerGestureRoot } from 'react-native-gesture-handler';
 import { Animated as RNAnimated } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -20,7 +22,7 @@ import useAuthStore from '../../store/useAuthStore';
 import useSocketStore from '../../store/useSocketStore';
 import useCallStore from '../../store/useCallStore';
 import { EmojiKeyboard } from '../../components/EmojiKeyboardWrapper';
-import { THEMES, DEFAULT_THEME } from '../../themes/themes';
+import { THEMES, DEFAULT_THEME, getAdaptiveTheme } from '../../themes/themes';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
 import { formatMessageTime, formatLastSeen, getInitials } from '../../utils/helpers';
 
@@ -339,15 +341,8 @@ export default function ChatScreen({ route, navigation }) {
 
   // Resolve active theme: local key wins over backend key
   const activeThemeKey = localThemeKey || convo.theme || DEFAULT_THEME;
-  let theme = THEMES[activeThemeKey] || THEMES[DEFAULT_THEME];
-  if (activeThemeKey === DEFAULT_THEME) {
-    const baseTheme = THEMES[DEFAULT_THEME];
-    if (resolvedTheme === 'dark' && baseTheme.isLight && baseTheme.darkVariant) {
-      theme = THEMES[baseTheme.darkVariant];
-    } else if (resolvedTheme === 'light' && !baseTheme.isLight && baseTheme.lightVariant) {
-      theme = THEMES[baseTheme.lightVariant];
-    }
-  }
+  // Every theme follows the app's light/dark mode with its own matching palette
+  const theme = getAdaptiveTheme(activeThemeKey, resolvedTheme);
 
   const isHeaderLight = isLightHeader(theme);
   const headerIconColor = isHeaderLight ? (theme.headerText || '#1C1C1C') : '#FFFFFF';
@@ -365,6 +360,19 @@ export default function ChatScreen({ route, navigation }) {
       hexToRgba(baseColor, 0.96),
     ];
   }, [theme.inputBg, theme.background, isDarkTheme]);
+
+  // Colour for composer icons / send button. Some light themes use a very pale sent bubble
+  // (e.g. mint) which is nearly invisible on a white bar, so fall back to the theme accent there.
+  const composerColor = useMemo(() => {
+    const c = theme.sentBubble || '#0084FF';
+    if (c.startsWith('#') && c.length >= 7) {
+      const l = (0.299 * parseInt(c.slice(1, 3), 16) + 0.587 * parseInt(c.slice(3, 5), 16) + 0.114 * parseInt(c.slice(5, 7), 16)) / 255;
+      if (l > 0.62) return theme.accentColor || '#0B6E4F';
+    }
+    return c;
+  }, [theme.sentBubble, theme.accentColor]);
+
+  const composerNoticeColor = isDarkTheme ? 'rgba(255,255,255,0.6)' : (theme.accentColor || '#0084FF');
 
   const textInputBg = useMemo(() => {
     if (isDarkTheme) {
@@ -392,6 +400,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const convoMessages = messages[conversationId] || [];
 
+  const [articleReader, setArticleReader] = useState(null);
   const [text, setText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const [selectedImages, setSelectedImages] = useState([]);
@@ -806,7 +815,7 @@ export default function ChatScreen({ route, navigation }) {
       const isMine =
         m.sender?._id?.toString() === currentUser?._id?.toString() ||
         m.sender?.toString() === currentUser?._id?.toString();
-      return isMine && !m.isDeleted;
+      return isMine && !m.isDeleted && !m.isSystem;
     });
   }, [displayedMessages, currentUser]);
 
@@ -941,6 +950,25 @@ export default function ChatScreen({ route, navigation }) {
       setTappedMsgId((prev) => (prev === msg._id?.toString() ? null : msg._id?.toString()));
     };
 
+    // ── System notice (e.g. theme change) ────────────────────────────
+    if (msg.isSystem) {
+      const who = isMine ? 'You' : (msg.sender?.name || 'Someone');
+      const noticeText = msg.systemData?.kind === 'theme' && msg.systemData?.value
+        ? `${who} changed the theme to ${msg.systemData.value}`
+        : msg.text;
+      return (
+        <View style={{ width: '100%' }}>
+          {datePill}
+          <View style={styles.systemNoticeRow}>
+            <View style={[styles.systemNoticePill, { backgroundColor: pillBg }]}>
+              <Ionicons name="color-palette" size={13} color={composerNoticeColor} style={{ marginRight: 6 }} />
+              <Text style={[styles.systemNoticeText, { color: statusColor }]} numberOfLines={2}>{noticeText}</Text>
+            </View>
+          </View>
+        </View>
+      );
+    }
+
     // ── Call message bubble ──────────────────────────────────────────
     if (msg.callData?.callType) {
       const cd = msg.callData;
@@ -966,6 +994,10 @@ export default function ChatScreen({ route, navigation }) {
         ? (isMine ? 'Outgoing video call' : 'Incoming video call')
         : (isMine ? 'Outgoing call' : 'Incoming call');
       const iconColor = isRejected ? '#FF3B30' : '#0084FF';
+      // Dark themes: my call card uses the same look as the other person's (calmer, no bright blue slab)
+      const callUseSent = isMine && !!theme.isLight;
+      const callBg = callUseSent ? theme.sentBubble : theme.receivedBubble;
+      const callTextColor = callUseSent ? theme.sentText : theme.receivedText;
 
       return (
         <View style={{ width: '100%' }}>
@@ -987,16 +1019,16 @@ export default function ChatScreen({ route, navigation }) {
                 navigation.navigate('Call', { otherUser: targetUser, callType: type });
               }}
               activeOpacity={0.7}
-              style={[styles.callBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}
+              style={[styles.callBubble, { backgroundColor: callBg }]}
             >
               <View style={[styles.callIconBadge, { backgroundColor: '#FFF' }]}>
                 <MaterialCommunityIcons name={iconName} size={20} color={iconColor} />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 14, fontWeight: '600' }}>
+                <Text style={{ color: callTextColor, fontSize: 14, fontWeight: '600' }}>
                   {label}{durationStr}
                 </Text>
-                <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 11, opacity: 0.55, marginTop: 2 }}>
+                <Text style={{ color: callTextColor, fontSize: 11, opacity: 0.55, marginTop: 2 }}>
                   {formatMessageTime(msg.createdAt)}
                 </Text>
               </View>
@@ -1111,9 +1143,33 @@ export default function ChatScreen({ route, navigation }) {
             ) : null}
             {msg.text ? (
               <View style={[styles.textBubble, { backgroundColor: isMine ? theme.sentBubble : theme.receivedBubble }]}>
-                <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 15, lineHeight: 22 }}>
-                  {msg.text}
-                </Text>
+                {(() => {
+                  // A story shared from the Feed shows as a small card; everything else is a normal text bubble
+                  const feed = parseShareText(msg.text);
+                  if (!feed) {
+                    return (
+                      <Text style={{ color: isMine ? theme.sentText : theme.receivedText, fontSize: 15, lineHeight: 22 }}>
+                        {msg.text}
+                      </Text>
+                    );
+                  }
+                  const fg = isMine ? theme.sentText : theme.receivedText;
+                  return (
+                    <TouchableOpacity activeOpacity={0.8} onPress={() => setArticleReader({ url: feed.url, title: feed.title, source: feed.meta.split(' · ')[0] })} style={{ minWidth: 200 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(124,58,237,0.9)', alignItems: 'center', justifyContent: 'center', marginRight: 7 }}>
+                          <Ionicons name="newspaper" size={12} color="#FFF" />
+                        </View>
+                        <Text style={{ color: fg, opacity: 0.7, fontSize: 11.5, fontWeight: '700' }} numberOfLines={1}>{feed.meta}</Text>
+                      </View>
+                      <Text style={{ color: fg, fontSize: 15, fontWeight: '700', lineHeight: 21 }} numberOfLines={4}>{feed.title}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                        <Text style={{ color: fg, opacity: 0.75, fontSize: 12.5, fontWeight: '700' }}>Read story</Text>
+                        <Ionicons name="open-outline" size={13} color={fg} style={{ opacity: 0.75, marginLeft: 4 }} />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })()}
               </View>
             ) : null}
             
@@ -1297,7 +1353,7 @@ export default function ChatScreen({ route, navigation }) {
         {replyingTo && (
           <View style={[styles.replyPreviewContainer, { backgroundColor: isDarkTheme ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
             <View style={styles.replyPreviewContent}>
-              <Text numberOfLines={1} style={[styles.replyPreviewName, { color: theme.sentBubble }]}>
+              <Text numberOfLines={1} style={[styles.replyPreviewName, { color: composerColor }]}>
                 {replyingTo.sender?.name || 'User'}
               </Text>
               <Text numberOfLines={1} style={[styles.replyPreviewText, { color: theme.inputText }]}>
@@ -1341,7 +1397,7 @@ export default function ChatScreen({ route, navigation }) {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={stopAndSendRecording}
-              style={[styles.sendBtn, { backgroundColor: theme.sentBubble, shadowColor: theme.sentBubble }]}
+              style={[styles.sendBtn, { backgroundColor: composerColor, shadowColor: composerColor }]}
               activeOpacity={0.8}
             >
               <Ionicons name="send" size={18} color="#FFF" />
@@ -1354,21 +1410,21 @@ export default function ChatScreen({ route, navigation }) {
               style={styles.iconBtn}
               activeOpacity={0.7}
             >
-              <Ionicons name="camera" size={23} color={theme.sentBubble} />
+              <Ionicons name="camera" size={23} color={composerColor} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={pickImages}
               style={styles.iconBtn}
               activeOpacity={0.7}
             >
-              <Ionicons name="image" size={23} color={theme.sentBubble} />
+              <Ionicons name="image" size={23} color={composerColor} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={startRecording}
               style={styles.iconBtn}
               activeOpacity={0.7}
             >
-              <Ionicons name="mic" size={23} color={theme.sentBubble} />
+              <Ionicons name="mic" size={23} color={composerColor} />
             </TouchableOpacity>
             <View style={[
               styles.textInputWrapper,
@@ -1408,7 +1464,7 @@ export default function ChatScreen({ route, navigation }) {
                   }
                 }
               }} style={styles.emojiBtn}>
-                <Ionicons name="happy-outline" size={24} color={theme.sentBubble} />
+                <Ionicons name="happy-outline" size={24} color={composerColor} />
             </TouchableOpacity>
             </View>
             <TouchableOpacity
@@ -1416,9 +1472,9 @@ export default function ChatScreen({ route, navigation }) {
               style={[
                 styles.sendBtn,
                 {
-                  backgroundColor: theme.sentBubble,
+                  backgroundColor: composerColor,
                   opacity: (!text.trim() && selectedImages.length === 0) ? 0.45 : 1,
-                  shadowColor: theme.sentBubble,
+                  shadowColor: composerColor,
                 },
               ]}
               disabled={!text.trim() && selectedImages.length === 0}
@@ -1430,6 +1486,8 @@ export default function ChatScreen({ route, navigation }) {
       </LinearGradient>
 
 
+
+      <ArticleReader data={articleReader} onClose={() => setArticleReader(null)} />
 
       {/* ── Full-screen image viewer ────────────────────────────────── */}
       <ImageViewer
@@ -1878,6 +1936,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
+  systemNoticeRow: { width: '100%', alignItems: 'center', marginVertical: 8, paddingHorizontal: 24 },
+  systemNoticePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, maxWidth: '92%' },
+  systemNoticeText: { fontSize: 12, fontWeight: '600', flexShrink: 1, textAlign: 'center' },
   callBubble: {
     flexDirection: 'row',
     alignItems: 'center',

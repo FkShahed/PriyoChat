@@ -33,6 +33,7 @@ export const conversationApi = {
   getMessages: (id, page = 1) => api.get(`/conversations/${id}/messages?page=${page}`),
   searchMessages: (id, q) => api.get(`/conversations/${id}/search?q=${q}`),
   updateTheme: (id, theme) => api.put(`/conversations/${id}/theme`, { theme }),
+  themeNotice: (id, themeName) => api.post(`/conversations/${id}/theme-notice`, { themeName }),
   deleteMessage: (msgId) => api.delete(`/conversations/messages/${msgId}`),
   clearHistory: (id) => api.delete(`/conversations/${id}/clear`),
   reactToMessage: (msgId, emoji) =>
@@ -57,4 +58,9 @@ export const callApi = {
 
 export const configApi = {
   getGlobal: () => api.get('/config'),
+};
+
+export const feedApi = {
+  getArticles: (interests, lang, page = 1, refresh = false, seed = 0, exclude = []) => api.get('/feed/articles', { params: { interests: interests.join(','), lang, page, limit: 24, refresh: refresh ? 1 : 0, seed, exclude: exclude.join(',') } }),
+  getWidgets: (lat, lng) => api.get('/feed/widgets', { params: { lat, lng } }),
 };

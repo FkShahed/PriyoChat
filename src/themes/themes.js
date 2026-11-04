@@ -317,3 +317,126 @@ export const THEMES = {
 };
 
 export const DEFAULT_THEME = 'DoodleLight';
+
+// ────────────────────────────────────────────────────────────────────────────
+// Adaptive light/dark variants
+// Every theme keeps its own identity (colour family) but is re-graded for the app's
+// current light/dark mode, like Messenger. THEMES above is untouched, so every
+// stored theme key keeps working; this only decides WHICH palette is shown.
+// ────────────────────────────────────────────────────────────────────────────
+const hex2rgb = (h) => {
+  const s = h.replace('#', '');
+  const f = s.length === 3 ? s.split('').map((c) => c + c).join('') : s;
+  return [parseInt(f.slice(0, 2), 16), parseInt(f.slice(2, 4), 16), parseInt(f.slice(4, 6), 16)];
+};
+const rgb2hex = (r, g, b) =>
+  '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => {
+  const A = hex2rgb(a), B = hex2rgb(b);
+  return rgb2hex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t);
+};
+const rgba = (h, a) => { const [r, g, b] = hex2rgb(h); return `rgba(${r}, ${g}, ${b}, ${a})`; };
+const lum = (h) => { const [r, g, b] = hex2rgb(h); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+const asHex = (c, fb) => (typeof c === 'string' && c.startsWith('#') ? c : fb);
+
+// light theme -> its own dark version
+function makeDark(t) {
+  const accent = asHex(t.accentColor, '#4F8CFF');
+  let sent = asHex(t.sentBubble, accent);
+  if (lum(sent) > 0.7) sent = accent;          // pale bubbles (e.g. mint) -> use the accent
+  if (lum(sent) < 0.3) sent = mix(sent, '#FFFFFF', 0.28); // near-black bubbles -> lift so they read on dark
+  else sent = mix(sent, '#000000', 0.12);
+  const lift = mix(accent, '#FFFFFF', lum(accent) < 0.35 ? 0.45 : 0.22);
+  const bg = mix('#0B0D12', accent, 0.07);
+  const header = mix('#0B0D12', accent, 0.17);
+  const received = mix('#161922', accent, 0.12);
+  const text = mix('#F1F3F8', accent, 0.08);
+  const input = mix('#12151C', accent, 0.10);
+  const muted = mix('#8A92A4', accent, 0.18);
+  return {
+    ...t,
+    isLight: false,
+    bgImage: undefined,
+    background: bg,
+    headerBg: header,
+    headerText: '#FFFFFF',
+    headerIconColor: lift,
+    headerStatusColor: rgba(lift, 0.8),
+    sentBubble: sent,
+    sentText: '#FFFFFF',
+    receivedBubble: received,
+    receivedText: text,
+    inputBg: input,
+    inputText: text,
+    placeholderText: muted,
+    timestampColor: muted,
+    accentColor: lift,
+    replySenderColor: lift,
+    replyTextColor: mix('#B6BDCC', accent, 0.18),
+    replyBgMine: 'rgba(255, 255, 255, 0.18)',
+    replyBgTheirs: rgba(lift, 0.12),
+    inputBorderColor: rgba(sent, 0.38),
+    bottomBarBg: [rgba(bg, 0.92), rgba(bg, 0.98)],
+    gradient: [header, mix(header, '#000000', 0.28)],
+    preview: sent,
+  };
+}
+
+// dark theme -> its own light version
+function makeLight(t) {
+  let base = asHex(t.sentBubble, '#4F46E5');
+  if (lum(base) > 0.75) base = mix(base, '#000000', 0.25);
+  const bg = mix('#FFFFFF', base, 0.06);
+  const text = mix('#12161F', base, 0.14);
+  const muted = mix('#8A93A3', base, 0.22);
+  return {
+    ...t,
+    isLight: true,
+    bgImage: undefined,
+    background: bg,
+    headerBg: base,
+    headerText: '#FFFFFF',
+    headerIconColor: '#FFFFFF',
+    headerStatusColor: 'rgba(255, 255, 255, 0.85)',
+    sentBubble: base,
+    sentText: '#FFFFFF',
+    receivedBubble: '#FFFFFF',
+    receivedText: text,
+    inputBg: '#FFFFFF',
+    inputText: text,
+    placeholderText: muted,
+    timestampColor: muted,
+    accentColor: base,
+    replySenderColor: base,
+    replyTextColor: mix('#4A5568', base, 0.25),
+    replyBgMine: 'rgba(255, 255, 255, 0.22)',
+    replyBgTheirs: rgba(base, 0.08),
+    inputBorderColor: rgba(base, 0.22),
+    bottomBarBg: [rgba(bg, 0.90), rgba(bg, 0.98)],
+    gradient: [base, mix(base, '#FFFFFF', 0.2)],
+    preview: base,
+  };
+}
+
+// The only theme pair where light and dark were already designed as the same look
+const SAME_IDENTITY = { DoodleLight: 'DoodleDark', DoodleDark: 'DoodleLight' };
+const _cache = {};
+
+/**
+ * Palette for `key` in the given app mode ('light' | 'dark').
+ * Always returns an object with the same shape as THEMES[key].
+ */
+export function getAdaptiveTheme(key, mode) {
+  const k = THEMES[key] ? key : DEFAULT_THEME;
+  const base = THEMES[k];
+  const wantLight = mode !== 'dark';
+  if (!!base.isLight === wantLight) return base;
+  if (SAME_IDENTITY[k]) return THEMES[SAME_IDENTITY[k]];
+  const id = `${k}:${wantLight ? 'light' : 'dark'}`;
+  if (!_cache[id]) _cache[id] = wantLight ? makeLight(base) : makeDark(base);
+  return _cache[id];
+}
+
+// One card per look in the selector (Cozy Emerald / Forest Dark are the same look)
+export const SELECTOR_KEYS = Object.keys(THEMES).filter((k) => k !== 'DoodleDark');
+export const canonicalThemeKey = (k) => (k === 'DoodleDark' ? 'DoodleLight' : k);

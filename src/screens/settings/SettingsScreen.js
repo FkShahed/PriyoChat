@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image, ScrollView,
-  Alert, ActivityIndicator, TextInput, Platform, Linking, Switch, PermissionsAndroid, AppState, Modal
+  Alert, ActivityIndicator, TextInput, Platform, Linking, Switch, PermissionsAndroid, AppState, Modal, useWindowDimensions, Animated, Easing
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { getInitials } from '../../utils/helpers';
 import { navigationRef } from '../../navigation/navigationRef';
 import { CHANGELOG } from '../../constants/changelog';
 import Avatar from '../../components/common/Avatar';
+import ZoomableImage from '../../components/common/ZoomableImage';
 
 const THEME_OPTIONS = [
   { key: 'light', label: 'Light', desc: 'Always light', icon: 'sunny-outline' },
@@ -59,6 +61,10 @@ export default function SettingsScreen({ navigation }) {
   });
 
   const [showChangelog, setShowChangelog] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false);
+  const [showPhotoSheet, setShowPhotoSheet] = useState(false);
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const { width: winW } = useWindowDimensions();
   const [checkingUpdate, setCheckingUpdate] = useState(true);
   const [updateInfo, setUpdateInfo] = useState({ apkUrl: null, latestVersion: null, isLatest: true });
   
@@ -300,6 +306,21 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
+  // Tap on the profile picture: choose between viewing the current photo or changing it
+  const onAvatarPress = () => {
+    if (!user?.avatar) { pickAvatar(); return; }
+    sheetAnim.setValue(0);
+    setShowPhotoSheet(true);
+    Animated.timing(sheetAnim, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  };
+
+  const closePhotoSheet = (after) => {
+    Animated.timing(sheetAnim, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+      setShowPhotoSheet(false);
+      if (typeof after === 'function') after();
+    });
+  };
+
   const pickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets?.[0]) return;
@@ -445,7 +466,7 @@ export default function SettingsScreen({ navigation }) {
       <ScrollView contentContainerStyle={{ paddingBottom: 130 }} showsVerticalScrollIndicator={false}>
         {/* ── Profile header ──────────────────────────────────────── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={pickAvatar} activeOpacity={0.85} style={styles.avatarWrapper}>
+          <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.85} style={styles.avatarWrapper}>
             <View style={[styles.avatarRing, { borderColor: isDark ? 'rgba(0,132,255,0.55)' : 'rgba(0,132,255,0.35)' }]}>
               <Avatar uri={user?.avatar} style={styles.avatar} />
             </View>
@@ -508,6 +529,20 @@ export default function SettingsScreen({ navigation }) {
         ))}
 
         {/* ── Appearance section ──────────────────────────────────── */}
+        {/* ── Discover (beta) ─────────────────────────────────────── */}
+        {renderSection('Discover', renderRow({
+          icon: 'newspaper', color: '#7C3AED', label: 'Feed', value: 'News & updates picked for you', last: true,
+          onPress: () => navigation.navigate('Feed'),
+          right: (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, backgroundColor: '#7C3AED22', marginRight: 6 }}>
+                <Text style={{ color: '#7C3AED', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 }}>BETA</Text>
+              </View>
+              {chevron}
+            </View>
+          ),
+        }))}
+
         {renderSection('Appearance', (
           <View style={{ padding: 12 }}>
             <View style={[styles.segment, { backgroundColor: C.surfaceAlt }]}>
@@ -675,6 +710,80 @@ export default function SettingsScreen({ navigation }) {
 
         <Text style={[styles.footer, { color: C.textSecondary }]}>PriyoChat v{currentVersion}</Text>
 
+        {/* Profile photo action sheet */}
+        <Modal visible={showPhotoSheet} transparent animationType="none" onRequestClose={() => closePhotoSheet()} statusBarTranslucent>
+          <View style={styles.sheetRoot}>
+            <Animated.View style={[styles.sheetBackdrop, { opacity: sheetAnim }]}>
+              <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => closePhotoSheet()} />
+            </Animated.View>
+            <Animated.View
+              style={[
+                styles.sheet,
+                { backgroundColor: isDark ? '#16181D' : '#FFFFFF' },
+                { transform: [{ translateY: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [320, 0] }) }] },
+              ]}
+            >
+              <View style={[styles.sheetHandle, { backgroundColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)' }]} />
+              <View style={styles.sheetProfile}>
+                <View style={[styles.sheetAvatarRing, { borderColor: 'rgba(0,132,255,0.45)' }]}>
+                  <Avatar uri={user?.avatar} style={styles.sheetAvatar} />
+                </View>
+                <Text style={[styles.sheetName, { color: C.text }]} numberOfLines={1}>{user?.name}</Text>
+                <Text style={[styles.sheetSub, { color: C.textSecondary }]}>Profile photo</Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={[styles.sheetRow, { backgroundColor: isDark ? '#20232A' : '#F3F5F9' }]}
+                onPress={() => closePhotoSheet(() => setShowPhoto(true))}
+              >
+                <LinearGradient colors={['#4DA3FF', '#0084FF']} style={styles.sheetIcon}>
+                  <Ionicons name="eye" size={20} color="#FFF" />
+                </LinearGradient>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetRowTitle, { color: C.text }]}>View photo</Text>
+                  <Text style={[styles.sheetRowSub, { color: C.textSecondary }]}>See your current picture</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={[styles.sheetRow, { backgroundColor: isDark ? '#20232A' : '#F3F5F9' }]}
+                onPress={() => closePhotoSheet(pickAvatar)}
+              >
+                <LinearGradient colors={['#A78BFA', '#7C3AED']} style={styles.sheetIcon}>
+                  <Ionicons name="images" size={20} color="#FFF" />
+                </LinearGradient>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetRowTitle, { color: C.text }]}>Change photo</Text>
+                  <Text style={[styles.sheetRowSub, { color: C.textSecondary }]}>Choose a new one from gallery</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.7} style={styles.sheetCancel} onPress={() => closePhotoSheet()}>
+                <Text style={[styles.sheetCancelText, { color: C.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </Modal>
+
+        {/* Current profile photo viewer */}
+        <Modal visible={showPhoto} transparent animationType="fade" onRequestClose={() => setShowPhoto(false)} statusBarTranslucent>
+          <GestureHandlerRootView style={styles.photoOverlay}>
+            {user?.avatar ? (
+              <ZoomableImage uri={user.avatar} width={winW} height={winW} onTap={() => setShowPhoto(false)} />
+            ) : null}
+            <View style={styles.photoTop} pointerEvents="box-none">
+              <Text style={styles.photoName} numberOfLines={1}>{user?.name}</Text>
+              <TouchableOpacity style={styles.photoClose} onPress={() => setShowPhoto(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </GestureHandlerRootView>
+        </Modal>
+
         {/* What's new popup (App Version) */}
         <Modal visible={showChangelog} transparent animationType="fade" onRequestClose={() => setShowChangelog(false)}>
           <TouchableOpacity activeOpacity={1} style={styles.popupOverlay} onPress={() => setShowChangelog(false)}>
@@ -749,6 +858,25 @@ export default function SettingsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  sheetRoot: { flex: 1, justifyContent: 'flex-end' },
+  sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
+  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 18, paddingBottom: 28, paddingTop: 10, elevation: 24 },
+  sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginBottom: 16 },
+  sheetProfile: { alignItems: 'center', marginBottom: 18 },
+  sheetAvatarRing: { padding: 3, borderRadius: 50, borderWidth: 2 },
+  sheetAvatar: { width: 84, height: 84, borderRadius: 42 },
+  sheetName: { fontSize: 18, fontWeight: '800', marginTop: 10 },
+  sheetSub: { fontSize: 12.5, marginTop: 2 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 18, marginBottom: 10 },
+  sheetIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  sheetRowTitle: { fontSize: 15.5, fontWeight: '700' },
+  sheetRowSub: { fontSize: 12, marginTop: 2 },
+  sheetCancel: { alignItems: 'center', paddingVertical: 14, marginTop: 2 },
+  sheetCancelText: { fontSize: 15, fontWeight: '700' },
+  photoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' },
+  photoTop: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 48, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  photoName: { color: '#FFF', fontSize: 17, fontWeight: '700', flex: 1, marginRight: 12 },
+  photoClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   container: { flex: 1 },
   // Header
   header: { alignItems: 'center', paddingTop: 64, paddingBottom: 20, paddingHorizontal: 24 },

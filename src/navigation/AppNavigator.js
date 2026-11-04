@@ -1,8 +1,8 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { createBottomTabNavigator, BottomTabBar } from '@react-navigation/bottom-tabs';
+import { Text, View, ActivityIndicator, TouchableOpacity, Platform, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import useAuthStore from '../store/useAuthStore';
 import useThemeStore, { useColors } from '../store/useThemeStore';
@@ -37,6 +37,8 @@ import SettingsScreen from '../screens/settings/SettingsScreen';
 import WarningDetailsScreen from '../screens/settings/WarningDetailsScreen';
 import ReportBugScreen from '../screens/settings/ReportBugScreen';
 import InfoScreen from '../screens/settings/InfoScreen';
+import FeedScreen from '../screens/settings/FeedScreen';
+import useTabBarStore from '../store/useTabBarStore';
 
 const Stack = createStackNavigator();
 
@@ -75,6 +77,8 @@ function TabIcon({ name, focused, C, isDark }) {
   else if (name === 'Calls') iconName = focused ? 'call' : 'call-outline';
   else if (name === 'Friends') iconName = focused ? 'people' : 'people-outline';
   else if (name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
+
+  if (!iconName) return null;
 
   return (
     <View
@@ -126,14 +130,33 @@ function GlossyTabBarBackground({ isDark }) {
   );
 }
 
+// Wraps the normal tab bar so it can slide down out of view (Feed hides it while scrolling down)
+function AutoHideTabBar(props) {
+  const hidden = useTabBarStore((st) => st.hidden);
+  const y = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.timing(y, { toValue: hidden ? 110 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [hidden, y]);
+  return (
+    <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
+      <BottomTabBar {...props} />
+    </Animated.View>
+  );
+}
+
 function MainTabs() {
   const C = useColors();
   const isDark = useThemeStore((s) => s.resolvedTheme === 'dark');
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
+      tabBar={(props) => <AutoHideTabBar {...props} />}
+      screenOptions={({ route, navigation }) => ({
         headerShown: false,
-        tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} C={C} isDark={isDark} />,
+        tabBarIcon: ({ focused }) => {
+          // Feed lives under Settings, so keep the Settings tab lit while Feed is open
+          const onFeed = route.name === 'Settings' && navigation.getState()?.routes?.[navigation.getState()?.index]?.name === 'Feed';
+          return <TabIcon name={route.name} focused={focused || onFeed} C={C} isDark={isDark} />;
+        },
         tabBarActiveTintColor: '#0084FF',
         tabBarInactiveTintColor: C.textSecondary,
         tabBarStyle: {
@@ -154,6 +177,10 @@ function MainTabs() {
           shadowOpacity: 0,
         },
         tabBarBackground: () => <GlossyTabBarBackground isDark={isDark} />,
+        // The rounded pill is drawn by TabIcon; stop the navigator adding its own square highlight behind the whole item
+        tabBarActiveBackgroundColor: 'transparent',
+        tabBarInactiveBackgroundColor: 'transparent',
+        tabBarVariant: 'uikit',
         tabBarItemStyle: { paddingTop: 4 },
         tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600', marginTop: 1 },
       })}
@@ -161,7 +188,29 @@ function MainTabs() {
       <Tab.Screen name="Chats" component={ChatListScreen} />
       <Tab.Screen name="Calls" component={CallsListScreen} />
       <Tab.Screen name="Friends" component={FriendsListScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={({ navigation }) => {
+          const onFeed = navigation.getState()?.routes?.[navigation.getState()?.index]?.name === 'Feed';
+          return {
+            tabBarLabel: ({ focused }) => (
+              <Text style={{ fontSize: 10.5, fontWeight: '600', marginTop: 1, color: (focused || onFeed) ? '#0084FF' : C.textSecondary }}>Settings</Text>
+            ),
+          };
+        }}
+      />
+      {/* Feed is opened from Settings. It sits inside the tabs so the bottom bar stays available; its own tab slot is hidden. */}
+      <Tab.Screen
+        name="Feed"
+        component={FeedScreen}
+        options={{
+          tabBarButton: () => null,
+          tabBarIcon: () => null,
+          tabBarLabel: () => null,
+          tabBarItemStyle: { display: 'none', width: 0, height: 0, padding: 0, margin: 0 },
+        }}
+      />
     </Tab.Navigator>
   );
 }

@@ -21,6 +21,7 @@ const mediaRoutes = require('./src/routes/mediaRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
 const callRoutes = require('./src/routes/callRoutes');
 const configRoutes = require('./src/routes/configRoutes');
+const feedRoutes = require('./src/routes/feedRoutes');
 
 // Initialize
 const app = express();
@@ -84,6 +85,7 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/feed', feedRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date() }));

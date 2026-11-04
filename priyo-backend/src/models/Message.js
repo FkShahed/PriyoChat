@@ -72,6 +72,15 @@ const messageSchema = new mongoose.Schema(
       ref: 'Message',
       default: null,
     },
+    // System notices shown centered in the chat (e.g. "X changed the theme to Y"). Not a normal bubble.
+    isSystem: {
+      type: Boolean,
+      default: false,
+    },
+    systemData: {
+      kind: { type: String, default: null },
+      value: { type: String, default: '' },
+    },
   },
   { timestamps: true }
 );

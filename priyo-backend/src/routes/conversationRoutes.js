@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { protect } = require('../middleware/auth');
 const {
-  getConversations, getMessages, updateTheme, deleteMessage,
+  getConversations, getMessages, updateTheme, themeNotice, deleteMessage,
   reactToMessage, searchMessages, reportMessage, blockUser, clearHistory, deleteConversation,
 } = require('../controllers/conversationController');
 
@@ -12,6 +12,7 @@ router.delete('/:id', deleteConversation);
 router.delete('/:id/clear', clearHistory);
 router.get('/:id/search', searchMessages);
 router.put('/:id/theme', updateTheme);
+router.post('/:id/theme-notice', themeNotice);
 router.delete('/messages/:msgId', deleteMessage);
 router.post('/messages/:msgId/react', reactToMessage);
 router.post('/messages/:msgId/report', reportMessage);
