@@ -325,6 +325,18 @@ try {
         }
     }
 
+    # Debug only: ALSO give a link that works from any other network (mobile data / different Wi-Fi)
+    if ($Mode -eq "debug") {
+        Write-Host ""
+        Log-Info "Creating the other-network link (works away from your home Wi-Fi)..."
+        $tunnelScript = Join-Path $PSScriptRoot "start_metro_tunnel.ps1"
+        if (Test-Path $tunnelScript) {
+            try { $null = & $tunnelScript } catch { Log-Warn "Other-network link failed: $_" }
+        } else {
+            Log-Warn "start_metro_tunnel.ps1 not found next to build_apk.ps1, skipping the other-network link."
+        }
+    }
+
     # Returns the absolute path as output
     return $apkItem.FullName
 

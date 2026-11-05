@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { bdDateTime } from '../../utils/bdTime';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity,
   KeyboardAvoidingView, Platform
@@ -22,7 +23,7 @@ export default function SearchChatScreen({ route, navigation }) {
     return (
       <View style={[styles.messageItem, { borderBottomColor: C.border }]}>
         <Text style={[styles.messageDate, { color: C.textSecondary }]}>
-          {new Date(item.createdAt).toLocaleString()}
+          {bdDateTime(item.createdAt)}
         </Text>
         <Text style={[styles.messageText, { color: C.text }]}>{item.text}</Text>
       </View>

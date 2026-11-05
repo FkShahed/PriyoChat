@@ -10,6 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import useCallStore from '../store/useCallStore';
 import useSocketStore from '../store/useSocketStore';
 import { navigationRef } from '../navigation/navigationRef';
@@ -36,7 +37,7 @@ export default function OngoingCallBanner() {
   const isDark = resolvedTheme === 'dark';
 
   const isMinimized = useCallStore((s) => s.isMinimized);
-  const slideAnim = useRef(new Animated.Value(100)).current;
+  const slideAnim = useRef(new Animated.Value(160)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const isCallActive =
@@ -55,7 +56,7 @@ export default function OngoingCallBanner() {
       }).start();
     } else {
       Animated.timing(slideAnim, {
-        toValue: 100,
+        toValue: 160,
         duration: 200,
         useNativeDriver: Platform.OS !== 'web',
       }).start();
@@ -157,73 +158,63 @@ export default function OngoingCallBanner() {
         ]}
       >
         <TouchableOpacity
-          activeOpacity={0.88}
+          activeOpacity={0.9}
           onPress={handleReturnToCall}
-          style={[
-            styles.cardTouchable,
-            isDark ? styles.cardDark : styles.cardLight,
-          ]}
+          style={[styles.cardTouchable, isDark ? styles.cardDark : styles.cardLight]}
         >
-          {/* Avatar with call type mini badge */}
-          <View style={styles.avatarWrapper}>
-            {remoteUser?.avatar ? (
-              <Image source={{ uri: remoteUser.avatar }} style={styles.avatarImg} />
-            ) : (
-              <View style={[styles.avatarFallback, isDark ? styles.avatarFallbackDark : styles.avatarFallbackLight]}>
-                <Text style={[styles.initialsText, isDark ? styles.initialsDark : styles.initialsLight]}>
-                  {getInitials(callerName)}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.typeBadge}>
-              <Ionicons
-                name={callType === 'video' ? 'videocam' : 'call'}
-                size={9}
-                color="#FFFFFF"
-              />
-            </View>
-          </View>
-
-          {/* Simple, gentle eye-pleasing text column */}
-          <View style={styles.infoCol}>
-            <Text
-              style={[styles.nameText, isDark ? styles.textLight : styles.textDark]}
-              numberOfLines={1}
-            >
-              {callerName}
-            </Text>
-            <View style={styles.statusRow}>
-              <View style={styles.indicatorContainer}>
-                <Animated.View
-                  style={[
-                    styles.pulseDot,
-                    { transform: [{ scale: pulseAnim }] },
-                  ]}
-                />
-                <View style={styles.greenDot} />
-              </View>
-              <Text style={styles.durationText}>{durationText}</Text>
-              <Text style={[styles.subText, isDark ? styles.subDark : styles.subLight]}>
-                • In call
-              </Text>
-            </View>
-          </View>
-
-          {/* Clean minimal red circular hangup button */}
-          <TouchableOpacity
-            onPress={handleEndCall}
-            activeOpacity={0.7}
-            style={styles.endBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          <LinearGradient
+            colors={isDark ? ['#1F2937', '#111827'] : ['#FFFFFF', '#EEF4FF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cardInner}
           >
-            <Ionicons
-              name="call"
-              size={15}
-              color="#FFFFFF"
-              style={{ transform: [{ rotate: '135deg' }] }}
-            />
-          </TouchableOpacity>
+            {/* green accent strip on the left: the call is live */}
+            <View style={styles.accent} />
+
+            {/* Avatar with a softly pulsing green ring and a call-type badge */}
+            <View style={styles.avatarWrapper}>
+              <Animated.View style={[styles.ring, { transform: [{ scale: pulseAnim }] }]} />
+              {remoteUser?.avatar ? (
+                <Image source={{ uri: remoteUser.avatar }} style={styles.avatarImg} />
+              ) : (
+                <View style={[styles.avatarFallback, isDark ? styles.avatarFallbackDark : styles.avatarFallbackLight]}>
+                  <Text style={[styles.initialsText, isDark ? styles.initialsDark : styles.initialsLight]}>
+                    {getInitials(callerName)}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.typeBadge}>
+                <Ionicons name={callType === 'video' ? 'videocam' : 'call'} size={10} color="#FFFFFF" />
+              </View>
+            </View>
+
+            {/* Name, then the running time and a hint that the whole card returns to the call */}
+            <View style={styles.infoCol}>
+              <Text style={[styles.nameText, isDark ? styles.textLight : styles.textDark]} numberOfLines={1}>
+                {callerName}
+              </Text>
+              <View style={styles.statusRow}>
+                <View style={styles.timePill}>
+                  <View style={styles.greenDot} />
+                  <Text style={styles.durationText}>{durationText}</Text>
+                </View>
+                <Text style={[styles.subText, isDark ? styles.subDark : styles.subLight]} numberOfLines={1}>
+                  Tap to return
+                </Text>
+                <Ionicons name="chevron-forward" size={12} color={isDark ? '#9CA3AF' : '#6B7280'} />
+              </View>
+            </View>
+
+            {/* Red hang-up button */}
+            <TouchableOpacity
+              onPress={handleEndCall}
+              activeOpacity={0.75}
+              style={styles.endBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="call" size={18} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+          </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
     </SafeAreaView>
@@ -231,65 +222,89 @@ export default function OngoingCallBanner() {
 }
 
 const styles = StyleSheet.create({
+  // the floating tab bar is 58 high and sits 14 (Android) / 22 (iOS) from the bottom; keep a clear gap above it
   safeArea: {
     position: 'absolute',
-    bottom: 66,
+    bottom: Platform.OS === 'ios' ? 92 : 84,
     left: 0,
     right: 0,
     zIndex: 99999,
   },
   container: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingBottom: 2,
   },
   cardTouchable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 10,
   },
   cardDark: {
-    backgroundColor: '#1E232E',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
     shadowColor: '#000',
   },
   cardLight: {
-    backgroundColor: '#FFFFFF',
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-    shadowColor: '#000',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    shadowColor: '#0B3B2A',
+  },
+  cardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+    paddingLeft: 16,
+    paddingRight: 12,
+    borderRadius: 21,
+    overflow: 'hidden',
+  },
+  accent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: '#10B981',
   },
   avatarWrapper: {
     position: 'relative',
-    marginRight: 10,
+    width: 46,
+    height: 46,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ring: {
+    position: 'absolute',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 2,
+    borderColor: 'rgba(16, 185, 129, 0.45)',
   },
   avatarImg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#E5E5EA',
   },
   avatarFallback: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarFallbackLight: {
-    backgroundColor: '#EBF4FF',
+    backgroundColor: '#DCEBFF',
   },
   avatarFallbackDark: {
     backgroundColor: '#2A364F',
   },
   initialsText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
   },
   initialsLight: {
     color: '#0084FF',
@@ -301,13 +316,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -1,
     right: -2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#0084FF',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
   },
   infoCol: {
@@ -315,51 +330,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nameText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 15.5,
+    fontWeight: '700',
     letterSpacing: 0.1,
   },
   textLight: {
-    color: '#F3F4F6',
+    color: '#F9FAFB',
   },
   textDark: {
-    color: '#1F2937',
+    color: '#111827',
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 1,
+    marginTop: 4,
   },
-  indicatorContainer: {
-    width: 10,
-    height: 10,
+  timePill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 5,
-    position: 'relative',
-  },
-  pulseDot: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(16, 185, 129, 0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    marginRight: 8,
   },
   greenDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#10B981',
+    marginRight: 5,
   },
   durationText: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#10B981',
+    fontVariant: ['tabular-nums'],
   },
   subText: {
-    fontSize: 11,
-    fontWeight: '400',
-    marginLeft: 4,
+    fontSize: 11.5,
+    fontWeight: '500',
+    marginRight: 2,
   },
   subDark: {
     color: '#9CA3AF',
@@ -368,12 +379,17 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   endBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginLeft: 10,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4,
   },
 });

@@ -1005,7 +1005,7 @@
         const res = await fetch('/api/status?t=' + Date.now());
         const clientLatency = Math.round(performance.now() - clientStart);
         const data = await res.json();
-        const timeNow = new Date().toLocaleTimeString();
+        const timeNow = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' });
 
         // 1. Sync RAM Chart directly from server persistent buffer
         if (!ramInitialized && data.history && data.history.length > 0) {

@@ -1,3 +1,5 @@
+import { bdClock, bdWeekdayShort, bdShortDate } from './bdTime';
+
 export const formatTime = (dateString) => {
   const date = new Date(dateString);
   const now = new Date();
@@ -8,16 +10,13 @@ export const formatTime = (dateString) => {
 
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m`;
-  if (hours < 24) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (days < 7) return date.toLocaleDateString([], { weekday: 'short' });
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  if (hours < 24) return bdClock(date);
+  if (days < 7) return bdWeekdayShort(date);
+  return bdShortDate(date);
 };
 
 export const formatMessageTime = (dateString) => {
-  return new Date(dateString).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return bdClock(dateString);
 };
 
 export const formatLastSeen = (dateString) => {
@@ -31,7 +30,7 @@ export const formatLastSeen = (dateString) => {
   if (mins < 2) return 'Online now';
   if (mins < 60) return `Last seen ${mins}m ago`;
   if (hours < 24) return `Last seen ${hours}h ago`;
-  return `Last seen ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+  return `Last seen ${bdShortDate(date)}`;
 };
 
 export const getInitials = (name) => {

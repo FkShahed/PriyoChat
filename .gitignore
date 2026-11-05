@@ -82,3 +82,5 @@ scratch/
 dist/
 *service-account*.json
 
+# downloaded helper binaries (cloudflared for the debug tunnel)
+tools/

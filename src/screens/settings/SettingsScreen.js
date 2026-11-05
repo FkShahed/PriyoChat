@@ -57,8 +57,10 @@ export default function SettingsScreen({ navigation }) {
     notifications: false, 
     camera: false, 
     microphone: false,
+    location: false,
     storage: false,
   });
+  const [locPermGranted, setLocPermGranted] = useState(false);
 
   const [showChangelog, setShowChangelog] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
@@ -80,6 +82,7 @@ export default function SettingsScreen({ navigation }) {
     switch (type) {
       case 'camera': return [PermissionsAndroid.PERMISSIONS.CAMERA];
       case 'microphone': return [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+      case 'location': return [PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION, PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
       case 'storage':
         if (Platform.Version >= 33) return [PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES, PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO];
         return [PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE];
@@ -87,21 +90,39 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
+  // The location module, or null when this build doesn't contain it
+  const getLocationModule = () => {
+    try {
+      const core = require('expo-modules-core');
+      if (core.requireOptionalNativeModule && core.requireOptionalNativeModule('ExpoLocation')) return require('expo-location');
+    } catch (e) { /* not in this build */ }
+    return null;
+  };
+
+  // Location counts as allowed if the user gave either precise or approximate access
+  const isGrantedSet = (type, flags) => (type === 'location' ? flags.some(Boolean) : flags.every(Boolean));
+
   const checkPermissions = async () => {
     let newPerms = { ...perms };
     try {
       const { status } = await Notifications.getPermissionsAsync();
       newPerms.notifications = status === 'granted';
       if (Platform.OS === 'android') {
-        const types = ['camera', 'microphone', 'storage'];
+        const types = ['camera', 'microphone', 'storage', 'location'];
         for (let t of types) {
           const required = getAndroidPerms(t);
-          let allGranted = true;
-          for (let p of required) {
-            const isGranted = await PermissionsAndroid.check(p);
-            if (!isGranted) allGranted = false;
+          const flags = [];
+          for (let p of required) flags.push(await PermissionsAndroid.check(p));
+          newPerms[t] = isGrantedSet(t, flags);
+        }
+        // Permission alone is not enough: the phone's own Location switch must be on too
+        const permOk = newPerms.location;
+        setLocPermGranted(permOk);
+        if (permOk) {
+          const Loc = getLocationModule();
+          if (Loc) {
+            try { if (!(await Loc.hasServicesEnabledAsync())) newPerms.location = false; } catch (e) { /* keep as is */ }
           }
-          newPerms[t] = allGranted;
         }
       } else if (Platform.OS === 'web') {
         Object.keys(newPerms).forEach(k => newPerms[k] = true);
@@ -142,6 +163,11 @@ export default function SettingsScreen({ navigation }) {
   }, []);
 
   const togglePermission = async (type) => {
+    if (type === 'location' && !perms.location && locPermGranted) {
+      await ensureLocationServiceOn();
+      await checkPermissions();
+      return;
+    }
     if (perms[type]) {
       Alert.alert('Revoke Permission', `To disable ${type} access, please go to your Device Settings.`, [
         { text: 'Cancel', style: 'cancel' },
@@ -158,7 +184,7 @@ export default function SettingsScreen({ navigation }) {
       } else if (Platform.OS === 'android') {
         const required = getAndroidPerms(type);
         const results = await PermissionsAndroid.requestMultiple(required);
-        granted = required.every(r => results[r] === PermissionsAndroid.RESULTS.GRANTED);
+        granted = isGrantedSet(type, required.map(r => results[r] === PermissionsAndroid.RESULTS.GRANTED));
       } else {
         granted = true; // web fallback
       }
@@ -168,12 +194,30 @@ export default function SettingsScreen({ navigation }) {
 
     if (granted) {
       setPerms((p) => ({ ...p, [type]: true }));
+      if (type === 'location') ensureLocationServiceOn();
     } else {
       Alert.alert('Permission Denied', `We couldn't get permission. You may need to enable it manually in Device Settings.`, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Open Settings', onPress: () => Linking.openSettings() }
       ]);
     }
+  };
+
+  // Allowing the permission is not the same as the phone's Location (GPS) switch being on. If it is off, ask
+  // Android to switch it on (system dialog); if that is not possible, offer to open the Location settings.
+  const ensureLocationServiceOn = async () => {
+    if (Platform.OS !== 'android') return;
+    const Loc = getLocationModule();
+    if (!Loc) return;
+    try {
+      if (await Loc.hasServicesEnabledAsync()) { checkPermissions(); return; }
+      try { await Loc.enableNetworkProviderAsync(); } catch (e) { /* user declined */ }
+      if (await Loc.hasServicesEnabledAsync()) { checkPermissions(); return; }
+      Alert.alert('Turn on Location', "Location is switched off on your phone, so PriyoChat can't find where you are. Turn it on in your phone's Location settings.", [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open Location settings', onPress: () => { Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() => Linking.openSettings()); } },
+      ]);
+    } catch (e) { /* ignore */ }
   };
 
   const grantAllPermissions = async () => {
@@ -185,7 +229,7 @@ export default function SettingsScreen({ navigation }) {
       }
       
       if (Platform.OS === 'android') {
-        const types = ['camera', 'microphone', 'storage'];
+        const types = ['camera', 'microphone', 'storage', 'location'];
         let toRequest = [];
         for (let t of types) {
           if (!perms[t]) toRequest.push(...getAndroidPerms(t));
@@ -195,7 +239,7 @@ export default function SettingsScreen({ navigation }) {
           const results = await PermissionsAndroid.requestMultiple(toRequest);
           for (let t of types) {
              const required = getAndroidPerms(t);
-             updatedPerms[t] = required.every(r => results[r] === PermissionsAndroid.RESULTS.GRANTED || results[r] === true);
+             updatedPerms[t] = isGrantedSet(t, required.map(r => results[r] === PermissionsAndroid.RESULTS.GRANTED || results[r] === true));
           }
         }
       } else if (Platform.OS === 'web') {
@@ -459,6 +503,7 @@ export default function SettingsScreen({ navigation }) {
     { key: 'camera', label: 'Camera', icon: 'camera', color: '#5856D6' },
     { key: 'microphone', label: 'Microphone', icon: 'mic', color: '#FF2D55' },
     { key: 'storage', label: 'Photos & Videos', icon: 'images', color: '#34C759' },
+    { key: 'location', label: 'Location', icon: 'location', color: '#0EA5E9', note: (locPermGranted && !perms.location) ? 'Allowed, but Location is switched off on your phone. Tap to turn it on.' : 'Weather, prayer times & air quality in Feed' },
   ];
 
   return (
@@ -529,20 +574,6 @@ export default function SettingsScreen({ navigation }) {
         ))}
 
         {/* ── Appearance section ──────────────────────────────────── */}
-        {/* ── Discover (beta) ─────────────────────────────────────── */}
-        {renderSection('Discover', renderRow({
-          icon: 'newspaper', color: '#7C3AED', label: 'Feed', value: 'News & updates picked for you', last: true,
-          onPress: () => navigation.navigate('Feed'),
-          right: (
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, backgroundColor: '#7C3AED22', marginRight: 6 }}>
-                <Text style={{ color: '#7C3AED', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 }}>BETA</Text>
-              </View>
-              {chevron}
-            </View>
-          ),
-        }))}
-
         {renderSection('Appearance', (
           <View style={{ padding: 12 }}>
             <View style={[styles.segment, { backgroundColor: C.surfaceAlt }]}>
@@ -577,7 +608,7 @@ export default function SettingsScreen({ navigation }) {
             {permItems.map((p, i) => (
               <React.Fragment key={p.key}>
                 {renderRow({
-                  icon: p.icon, color: p.color, label: p.label,
+                  icon: p.icon, color: p.color, label: p.label, value: p.note,
                   last: i === permItems.length - 1,
                   right: (
                     <Switch

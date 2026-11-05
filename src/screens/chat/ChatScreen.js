@@ -25,6 +25,7 @@ import { EmojiKeyboard } from '../../components/EmojiKeyboardWrapper';
 import { THEMES, DEFAULT_THEME, getAdaptiveTheme } from '../../themes/themes';
 import useThemeStore, { useColors } from '../../store/useThemeStore';
 import { formatMessageTime, formatLastSeen, getInitials } from '../../utils/helpers';
+import { bdDayNumber, bdDayKey, bdLongDate } from '../../utils/bdTime';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -788,17 +789,10 @@ export default function ChatScreen({ route, navigation }) {
 
   // Helper: human-readable date label for separators
   const formatDateLabel = (dateStr) => {
-    const d = new Date(dateStr);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    const sameDay = (a, b) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-    if (sameDay(d, today)) return 'Today';
-    if (sameDay(d, yesterday)) return 'Yesterday';
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const diff = bdDayNumber(Date.now()) - bdDayNumber(dateStr);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    return bdLongDate(dateStr);
   };
 
   const displayedMessages = useMemo(() => {
@@ -926,8 +920,8 @@ export default function ChatScreen({ route, navigation }) {
     // displayedMessages is newest-first. index+1 is the OLDER message.
     // Show a date label above (visually) the oldest message of each day.
     const olderMsg = displayedMessages[index + 1];
-    const thisDay = msg.createdAt ? new Date(msg.createdAt).toDateString() : null;
-    const olderDay = olderMsg?.createdAt ? new Date(olderMsg.createdAt).toDateString() : null;
+    const thisDay = msg.createdAt ? bdDayKey(msg.createdAt) : null;
+    const olderDay = olderMsg?.createdAt ? bdDayKey(olderMsg.createdAt) : null;
     const showDateSeparator = thisDay && thisDay !== olderDay;
     const pillBg = theme.sentBubble?.startsWith('#')
       ? hexToRgba(theme.sentBubble, 0.15)
@@ -1335,7 +1329,34 @@ export default function ChatScreen({ route, navigation }) {
                 <Ionicons name="search" size={42} color="#8E8E93" />
                 <Text style={{ color: '#8E8E93', marginTop: 10, fontSize: 15 }}>No messages found</Text>
               </View>
-            ) : null
+            ) : (
+              // a brand-new conversation: a warm welcome instead of an empty screen (the list is flipped, so this is flipped back)
+              <View style={{ alignItems: 'center', paddingHorizontal: 32, marginTop: 56, transform: [{ scaleY: -1 }] }}>
+                <View style={{ width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }}>
+                  <View style={{ width: 92, height: 92, borderRadius: 46, overflow: 'hidden' }}>
+                    <Avatar uri={recipientAvatarData.avatar} name={recipientAvatarData.name} style={{ width: 92, height: 92, borderRadius: 46 }} />
+                  </View>
+                </View>
+                <Text style={{ marginTop: 18, fontSize: 20, fontWeight: '600', color: isDarkTheme ? '#FFFFFF' : '#1C1E21' }} numberOfLines={1}>
+                  {recipientAvatarData.name && recipientAvatarData.name !== 'U' ? recipientAvatarData.name : 'New chat'}
+                </Text>
+                <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 20, textAlign: 'center', color: isDarkTheme ? 'rgba(255,255,255,0.65)' : '#65676B' }}>
+                  No messages yet. Say hello and start the conversation!
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginTop: 20 }}>
+                  {['Hi 👋', 'How are you?', 'What\'s up?'].map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      activeOpacity={0.8}
+                      onPress={() => setText(s)}
+                      style={{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, marginHorizontal: 4, marginBottom: 8, backgroundColor: isDarkTheme ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }}
+                    >
+                      <Text style={{ fontSize: 14, color: isDarkTheme ? '#FFFFFF' : '#1C1E21' }}>{s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )
           }
           keyboardShouldPersistTaps="handled"
           onTouchStart={closeEmojiPicker}

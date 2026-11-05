@@ -61,6 +61,13 @@ export const configApi = {
 };
 
 export const feedApi = {
-  getArticles: (interests, lang, page = 1, refresh = false, seed = 0, exclude = []) => api.get('/feed/articles', { params: { interests: interests.join(','), lang, page, limit: 24, refresh: refresh ? 1 : 0, seed, exclude: exclude.join(',') } }),
-  getWidgets: (lat, lng) => api.get('/feed/widgets', { params: { lat, lng } }),
+  getArticles: (interests, lang, page = 1, refresh = false, seed = 0, exclude = [], custom = []) => api.get('/feed/articles', { params: { interests: interests.join(','), custom: custom.join('|'), lang, page, limit: 24, refresh: refresh ? 1 : 0, seed, exclude: exclude.join(',') } }),
+  getWidgets: (lat, lng) => api.get('/feed/widgets', { params: { lat, lng }, timeout: 20000 }),
+  getDaily: () => api.get('/feed/daily', { timeout: 20000 }),
+  getDailyAnother: (kind, avoid) => api.get('/feed/daily/another', { params: { kind, avoid }, timeout: 20000 }),
+  getMatches: (days = 7) => api.get('/feed/matches', { params: { days }, timeout: 20000 }),
+  getMatchDetail: (sport, league, id) => api.get('/feed/match', { params: { sport, league, id }, timeout: 20000 }),
+  getWeather: (lat, lng) => api.get('/feed/weather', { params: { lat, lng }, timeout: 20000 }),
+  getSafety: (lat, lng) => api.get('/feed/safety', { params: { lat, lng }, timeout: 20000 }),
+  getPlace: (lat, lng) => api.get('/feed/place', { params: { lat, lng }, timeout: 9000 }),
 };

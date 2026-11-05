@@ -8,7 +8,7 @@ import useAuthStore from '../store/useAuthStore';
 import useThemeStore, { useColors } from '../store/useThemeStore';
 import { navigationRef } from './navigationRef';
 
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 // Warm up all icon fonts in the background at app start so icons never pop in late
 import '../utils/preloadIcons';
 
@@ -38,6 +38,10 @@ import WarningDetailsScreen from '../screens/settings/WarningDetailsScreen';
 import ReportBugScreen from '../screens/settings/ReportBugScreen';
 import InfoScreen from '../screens/settings/InfoScreen';
 import FeedScreen from '../screens/settings/FeedScreen';
+import SafetyScreen from '../screens/settings/SafetyScreen';
+import MatchDetailScreen from '../screens/settings/MatchDetailScreen';
+import WeatherScreen from '../screens/settings/WeatherScreen';
+import DailyCardScreen from '../screens/settings/DailyCardScreen';
 import useTabBarStore from '../store/useTabBarStore';
 
 const Stack = createStackNavigator();
@@ -72,13 +76,44 @@ const STACK_TRANSITION = {
 const Tab = createBottomTabNavigator();
 
 function TabIcon({ name, focused, C, isDark }) {
+  // Centre tab: Chats is the hero of the app, so it is a coloured round button that sits a little above the bar
+  if (name === 'Chats') {
+    return (
+      <View
+        style={{
+          width: 54,
+          height: 54,
+          marginTop: -24,
+          borderRadius: 27,
+          borderWidth: 4,
+          borderColor: isDark ? '#141416' : '#FFFFFF',
+          backgroundColor: '#0A74F0',
+          alignItems: 'center',
+          justifyContent: 'center',
+          elevation: focused ? 10 : 7,
+          shadowColor: '#0084FF',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: focused ? 0.55 : 0.35,
+          shadowRadius: 8,
+        }}
+      >
+        <LinearGradient
+          colors={focused ? ['#3DA5FF', '#0066F5'] : ['#2E96FF', '#0A6BEA']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 23 }}
+        />
+        <Ionicons name={focused ? 'chatbubbles' : 'chatbubbles-outline'} size={23} color="#FFFFFF" />
+      </View>
+    );
+  }
+
   let iconName;
-  if (name === 'Chats') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-  else if (name === 'Calls') iconName = focused ? 'call' : 'call-outline';
+  if (name === 'Calls') iconName = focused ? 'call' : 'call-outline';
   else if (name === 'Friends') iconName = focused ? 'people' : 'people-outline';
   else if (name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
-
-  if (!iconName) return null;
+  const isFeed = name === 'Feed';
+  if (!iconName && !isFeed) return null;
 
   return (
     <View
@@ -91,7 +126,11 @@ function TabIcon({ name, focused, C, isDark }) {
         backgroundColor: focused ? (isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,132,255,0.16)') : 'transparent',
       }}
     >
-      <Ionicons name={iconName} size={21} color={focused ? (isDark ? '#FFFFFF' : '#0084FF') : (isDark ? '#7C7C82' : C.textSecondary)} />
+      {isFeed ? (
+        <MaterialCommunityIcons name={focused ? 'newspaper-variant-multiple' : 'newspaper-variant-multiple-outline'} size={23} color={focused ? (isDark ? '#FFFFFF' : '#0084FF') : (isDark ? '#7C7C82' : C.textSecondary)} />
+      ) : (
+        <Ionicons name={iconName} size={21} color={focused ? (isDark ? '#FFFFFF' : '#0084FF') : (isDark ? '#7C7C82' : C.textSecondary)} />
+      )}
     </View>
   );
 }
@@ -149,14 +188,12 @@ function MainTabs() {
   const isDark = useThemeStore((s) => s.resolvedTheme === 'dark');
   return (
     <Tab.Navigator
+      initialRouteName="Chats"
+      backBehavior="initialRoute"
       tabBar={(props) => <AutoHideTabBar {...props} />}
-      screenOptions={({ route, navigation }) => ({
+      screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarIcon: ({ focused }) => {
-          // Feed lives under Settings, so keep the Settings tab lit while Feed is open
-          const onFeed = route.name === 'Settings' && navigation.getState()?.routes?.[navigation.getState()?.index]?.name === 'Feed';
-          return <TabIcon name={route.name} focused={focused || onFeed} C={C} isDark={isDark} />;
-        },
+        tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} C={C} isDark={isDark} />,
         tabBarActiveTintColor: '#0084FF',
         tabBarInactiveTintColor: C.textSecondary,
         tabBarStyle: {
@@ -185,32 +222,11 @@ function MainTabs() {
         tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600', marginTop: 1 },
       })}
     >
-      <Tab.Screen name="Chats" component={ChatListScreen} />
+      <Tab.Screen name="Feed" component={FeedScreen} />
       <Tab.Screen name="Calls" component={CallsListScreen} />
+      <Tab.Screen name="Chats" component={ChatListScreen} />
       <Tab.Screen name="Friends" component={FriendsListScreen} />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={({ navigation }) => {
-          const onFeed = navigation.getState()?.routes?.[navigation.getState()?.index]?.name === 'Feed';
-          return {
-            tabBarLabel: ({ focused }) => (
-              <Text style={{ fontSize: 10.5, fontWeight: '600', marginTop: 1, color: (focused || onFeed) ? '#0084FF' : C.textSecondary }}>Settings</Text>
-            ),
-          };
-        }}
-      />
-      {/* Feed is opened from Settings. It sits inside the tabs so the bottom bar stays available; its own tab slot is hidden. */}
-      <Tab.Screen
-        name="Feed"
-        component={FeedScreen}
-        options={{
-          tabBarButton: () => null,
-          tabBarIcon: () => null,
-          tabBarLabel: () => null,
-          tabBarItemStyle: { display: 'none', width: 0, height: 0, padding: 0, margin: 0 },
-        }}
-      />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }
@@ -350,6 +366,11 @@ export default function AppNavigator() {
           <Stack.Screen name="WarningDetails" component={WarningDetailsScreen} />
           <Stack.Screen name="ReportBug" component={ReportBugScreen} />
           <Stack.Screen name="Info" component={InfoScreen} />
+          <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
+          <Stack.Screen name="Earthquakes" component={SafetyScreen} />
+          <Stack.Screen name="Disasters" component={SafetyScreen} />
+          <Stack.Screen name="Weather" component={WeatherScreen} />
+          <Stack.Screen name="DailyCard" component={DailyCardScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

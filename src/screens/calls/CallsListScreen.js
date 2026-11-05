@@ -9,6 +9,7 @@ import useAuthStore from '../../store/useAuthStore';
 import useChatStore from '../../store/useChatStore';
 import { useColors } from '../../store/useThemeStore';
 import { formatTime, getInitials } from '../../utils/helpers';
+import { bdDayNumber, bdMediumDate } from '../../utils/bdTime';
 import Avatar from '../../components/common/Avatar';
 
 const ACCENT = '#0084FF';
@@ -40,11 +41,10 @@ const FILTERS = [
 function dayLabel(ts) {
   const d = new Date(ts);
   if (isNaN(d.getTime())) return 'Earlier';
-  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diffDays = Math.round((startOf(new Date()) - startOf(d)) / 86400000);
+  const diffDays = bdDayNumber(Date.now()) - bdDayNumber(d);
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  return bdMediumDate(d);
 }
 
 export default function CallsListScreen({ navigation }) {

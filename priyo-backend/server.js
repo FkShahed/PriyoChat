@@ -1,3 +1,6 @@
+// Bangladesh time for the whole backend (Asia/Dhaka, UTC+6). Stored timestamps stay UTC in MongoDB.
+process.env.TZ = 'Asia/Dhaka';
+
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -132,7 +135,7 @@ setInterval(async () => {
     }
     const mem = process.memoryUsage();
     metricsHistory.push({
-      time: new Date().toLocaleTimeString(),
+      time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' }),
       dbLatencyMs: dbLatencyMs >= 0 ? dbLatencyMs : 60,
       memoryRssMB: Math.round(mem.rss / (1024 * 1024)),
       activeConnections: onlineUsers ? onlineUsers.size : 0,
@@ -222,7 +225,7 @@ function pingServer() {
   try {
     const client = SELF_URL.startsWith('https') ? https : http;
     client.get(`${SELF_URL}/health`, (res) => {
-      console.log(`🟢 Running server - ${new Date().toLocaleTimeString()} (Status: ${res.statusCode})`);
+      console.log(`🟢 Running server - ${new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' })} (Status: ${res.statusCode})`);
     }).on('error', (err) => {
       console.warn(`⚠️ Running server ping: ${err.message}`);
     });
@@ -234,6 +237,7 @@ function pingServer() {
 connectDB().then(() => {
   initFirebase();
   setupSocket(io);
+  try { require('./src/services/feedService').startFeedWarmup(); } catch (e) { console.warn('[feed] warmup not started:', e.message); }
   server.listen(PORT, () => {
     console.log(`🚀 PriyoChat Server running on port ${PORT}`);
     // Start keep-alive after server is up
