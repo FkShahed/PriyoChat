@@ -382,13 +382,13 @@ export default function ApkControlPage() {
         {availableRingtones.length > 0 ? (
           <div style={{ display: 'grid', gap: '10px' }}>
             {availableRingtones.map((ringtone, idx) => (
-              <div key={idx} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              <div key={idx} className="rt-row" style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
                 background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px'
               }}>
-                <div>
+                <div className="rt-info" style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontWeight: '600', color: '#e6edf3', fontSize: '14px' }}>{ringtone.name}</div>
-                  <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '4px' }}>{ringtone.url}</div>
+                  <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '4px', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{ringtone.url}</div>
                 </div>
                 <button 
                   onClick={() => handleDeleteCuratedRingtone(idx)}

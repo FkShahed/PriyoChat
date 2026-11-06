@@ -130,3 +130,12 @@ body { -webkit-font-smoothing: antialiased; }
 }
 
 @media (max-width: 860px) { html, body { overflow-x: hidden; } img, canvas { max-width: 100%; } }
+
+/* long URLs / ringtone rows never overflow */
+.card a, .card div { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .rt-row { flex-wrap: nowrap !important; align-items: flex-start !important; padding: 12px !important; }
+  .rt-row button { flex-shrink: 0; }
+  .card input[type="text"], .card .form-input { min-width: 0; width: 100%; }
+  .card label.primary-btn { display: block; width: 100%; text-align: center; margin-top: 0; }
+}
