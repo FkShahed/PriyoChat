@@ -68,6 +68,7 @@ export const feedApi = {
   getMatches: (days = 7) => api.get('/feed/matches', { params: { days }, timeout: 20000 }),
   getMatchDetail: (sport, league, id) => api.get('/feed/match', { params: { sport, league, id }, timeout: 20000 }),
   getWeather: (lat, lng) => api.get('/feed/weather', { params: { lat, lng }, timeout: 20000 }),
+  getPrayerWeek: (lat, lng, days = 7) => api.get('/feed/prayer', { params: { lat, lng, days }, timeout: 20000 }),
   getSafety: (lat, lng) => api.get('/feed/safety', { params: { lat, lng }, timeout: 20000 }),
   getPlace: (lat, lng) => api.get('/feed/place', { params: { lat, lng }, timeout: 9000 }),
 };

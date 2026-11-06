@@ -493,6 +493,43 @@ async function getPrayer(lat, lng) {
   });
 }
 
+// ── prayer times for the next N days (Aladhan, method 1 like the Feed card), day 0 = today in Dhaka ──
+const cleanTime = (t) => String(t || '').split(' ')[0]; // "05:12 (+06)" -> "05:12"
+
+async function getPrayerWeek(lat, lng, days = 7) {
+  const n = Math.min(10, Math.max(1, parseInt(days, 10) || 7));
+  const key = `prayweek:${lat.toFixed(1)},${lng.toFixed(1)}:${todayKey()}:${n}`;
+  return cached(key, 6 * 60 * 60 * 1000, async () => {
+    const base = Date.now() + 6 * 3600 * 1000; // Dhaka wall clock
+    const jobs = [];
+    for (let i = 0; i < n; i++) {
+      const d = new Date(base + i * 86400000);
+      const dd = String(d.getUTCDate()).padStart(2, '0');
+      const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const yyyy = d.getUTCFullYear();
+      const iso = `${yyyy}-${mm}-${dd}`;
+      jobs.push(
+        http.get(`https://api.aladhan.com/v1/timings/${dd}-${mm}-${yyyy}`, { params: { latitude: lat, longitude: lng, method: 1 }, timeout: 10000 })
+          .then(({ data }) => {
+            const t = data.data.timings;
+            const h = data.data.date && data.data.date.hijri;
+            return {
+              date: iso,
+              weekday: d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+              Fajr: cleanTime(t.Fajr), Sunrise: cleanTime(t.Sunrise), Dhuhr: cleanTime(t.Dhuhr), Asr: cleanTime(t.Asr),
+              Sunset: cleanTime(t.Sunset), Maghrib: cleanTime(t.Maghrib), Isha: cleanTime(t.Isha),
+              hijri: h ? `${h.day} ${h.month.en} ${h.year}` : '',
+            };
+          })
+          .catch(() => null)
+      );
+    }
+    const list = (await Promise.all(jobs)).filter(Boolean);
+    if (!list.length) throw new Error('prayer times unavailable');
+    return list;
+  });
+}
+
 async function getRates() {
   return cached('fx', 60 * 60 * 1000, async () => {
     const { data } = await http.get('https://open.er-api.com/v6/latest/USD');
@@ -1360,4 +1397,4 @@ function startFeedWarmup() {
 }
 
 module.exports = {
-  startFeedWarmup, getArticles, getWidgets, getDaily, getAnother, getPlaceName, getMatchesFull, getMatchDetail, getSafetyFull, getWeatherFull, getHourlyWindow, getHolidays, VALID_CATEGORIES };
+  startFeedWarmup, getArticles, getWidgets, getDaily, getAnother, getPlaceName, getMatchesFull, getMatchDetail, getSafetyFull, getWeatherFull, getHourlyWindow, getHolidays, getPrayerWeek, VALID_CATEGORIES };

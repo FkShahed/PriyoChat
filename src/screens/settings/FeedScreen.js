@@ -1032,13 +1032,18 @@ export default function FeedScreen({ navigation }) {
     if (!pr) return null;
     const np = nextPrayer(pr);
     return (
-      <View key="prayer" style={[styles.listCard, { backgroundColor: P.card, borderColor: P.border }]}>
+      <TouchableOpacity key="prayer" activeOpacity={0.9} onPress={() => navigation.navigate('Prayer', { lat: city.lat, lng: city.lng, name: city.name })} style={[styles.listCard, { backgroundColor: P.card, borderColor: P.border }]}>
         <View style={styles.prayerHead}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={[styles.miniIcon, { backgroundColor: '#10B98122' }]}><Ionicons name="moon" size={14} color="#10B981" /></View>
             <Text style={[styles.listTitle, { color: P.text, marginLeft: 8 }]}>Prayer times</Text>
           </View>
-          {pr.hijri ? <Text style={{ color: P.sub, fontSize: 10, fontWeight: '400', opacity: 0.85 }} numberOfLines={1}>{pr.hijri}</Text> : null}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {pr.hijri ? <Text style={{ color: P.sub, fontSize: 10, fontWeight: '400', opacity: 0.85, marginRight: 8 }} numberOfLines={1}>{pr.hijri}</Text> : null}
+            <View style={[styles.dSecMore, { backgroundColor: P.cardAlt, marginLeft: 0, width: 28, height: 28, borderRadius: 14 }]}>
+              <Ionicons name="arrow-forward" size={15} color={P.text} />
+            </View>
+          </View>
         </View>
         <View style={styles.prayerRow}>
           {['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((n) => {
@@ -1053,7 +1058,7 @@ export default function FeedScreen({ navigation }) {
             );
           })}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

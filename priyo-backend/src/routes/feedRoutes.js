@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { protect } = require('../middleware/auth');
-const { getArticles, getWidgets, getDaily, getAnother, getPlaceName, getMatchesFull, getMatchDetail, getSafetyFull, getWeatherFull, getHourlyWindow, VALID_CATEGORIES } = require('../services/feedService');
+const { getArticles, getWidgets, getDaily, getAnother, getPlaceName, getMatchesFull, getMatchDetail, getPrayerWeek, getSafetyFull, getWeatherFull, getHourlyWindow, VALID_CATEGORIES } = require('../services/feedService');
 
 router.use(protect);
 
@@ -62,6 +62,18 @@ router.get('/match', async (req, res) => {
     res.json(await getMatchDetail(req.query.sport, req.query.league, req.query.id));
   } catch (err) {
     res.status(err.message === 'bad match reference' ? 400 : 502).json({ message: 'Match unavailable' });
+  }
+});
+
+// GET /api/feed/prayer?lat=..&lng=..&days=7 -> prayer times for today and the following days
+router.get('/prayer', async (req, res) => {
+  try {
+    let lat = parseFloat(req.query.lat);
+    let lng = parseFloat(req.query.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) { lat = 23.8103; lng = 90.4125; }
+    res.json({ days: await getPrayerWeek(lat, lng, req.query.days) });
+  } catch (err) {
+    res.status(502).json({ message: 'Prayer times unavailable' });
   }
 });
 

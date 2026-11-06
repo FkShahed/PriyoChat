@@ -41,6 +41,7 @@ import FeedScreen from '../screens/settings/FeedScreen';
 import SafetyScreen from '../screens/settings/SafetyScreen';
 import MatchDetailScreen from '../screens/settings/MatchDetailScreen';
 import WeatherScreen from '../screens/settings/WeatherScreen';
+import PrayerScreen from '../screens/settings/PrayerScreen';
 import DailyCardScreen from '../screens/settings/DailyCardScreen';
 import useTabBarStore from '../store/useTabBarStore';
 
@@ -370,6 +371,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Earthquakes" component={SafetyScreen} />
           <Stack.Screen name="Disasters" component={SafetyScreen} />
           <Stack.Screen name="Weather" component={WeatherScreen} />
+          <Stack.Screen name="Prayer" component={PrayerScreen} />
           <Stack.Screen name="DailyCard" component={DailyCardScreen} />
         </Stack.Navigator>
       </NavigationContainer>

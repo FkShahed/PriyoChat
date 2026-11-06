@@ -61,12 +61,11 @@ export default function CallsListScreen({ navigation }) {
     return ownHistory.filter(h => {
       if (filter === 'incoming') return h.direction === 'incoming';
       if (filter === 'outgoing') return h.direction === 'outgoing';
-      if (filter === 'missed') return h.status === 'missed';
+      if (filter === 'missed') return h.status === 'missed' && h.direction === 'incoming';
       return true;
     });
   }, [ownHistory, filter]);
 
-  const missedCount = React.useMemo(() => ownHistory.filter(h => h.status === 'missed').length, [ownHistory]);
 
   // History with "Today / Yesterday / date" headers between days
   const rows = React.useMemo(() => {
@@ -134,14 +133,16 @@ export default function CallsListScreen({ navigation }) {
     const { remoteUser, type, direction, status, timestamp } = row.item;
     const gradColors = avatarGradient(remoteUser?.name || '');
 
-    const missed = status === 'missed';
-    const declined = status === 'rejected';
     const incoming = direction === 'incoming';
+    const missed = status === 'missed' && incoming;
+    const noAnswer = status === 'missed' && !incoming;
+    const declined = status === 'rejected';
 
     // Direction badge on the avatar + the status text under the name
-    const dirColor = missed || declined ? '#FF3B30' : incoming ? '#34C759' : ACCENT;
+    const SOFT_RED = '#E5736B';
+    const dirColor = missed || declined ? SOFT_RED : incoming ? '#34C759' : ACCENT;
     const dirIcon = incoming ? 'arrow-down-left' : 'arrow-up-right';
-    const statusText = missed ? 'Missed' : declined ? 'Declined' : incoming ? 'Incoming' : 'Outgoing';
+    const statusText = missed ? 'Missed' : noAnswer ? 'No answer' : declined ? 'Declined' : incoming ? 'Incoming' : 'Outgoing';
 
     return (
       <View style={[styles.item, { backgroundColor: C.surface, borderColor: C.border }]}>
@@ -153,7 +154,7 @@ export default function CallsListScreen({ navigation }) {
         </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={0.7} style={styles.info} onPress={() => handleProfile(remoteUser)}>
-          <Text style={[styles.name, { color: missed ? '#FF3B30' : C.text }]} numberOfLines={1}>
+          <Text style={[styles.name, { color: C.text }]} numberOfLines={1}>
             {remoteUser?.name || 'Unknown'}
           </Text>
           <View style={styles.previewRow}>
@@ -164,7 +165,7 @@ export default function CallsListScreen({ navigation }) {
               style={{ marginRight: 5 }}
             />
             <Text style={[styles.preview, { color: C.textSecondary }]} numberOfLines={1}>
-              <Text style={{ color: missed || declined ? '#FF3B30' : C.textSecondary, fontWeight: '600' }}>{statusText}</Text>
+              <Text style={{ color: missed || declined ? SOFT_RED : C.textSecondary, fontWeight: '500' }}>{statusText}</Text>
               {'  •  '}{formatTime(timestamp)}
             </Text>
           </View>
@@ -193,14 +194,6 @@ export default function CallsListScreen({ navigation }) {
           <View>
             <Text style={styles.headerTitle}>Calls</Text>
             <Text style={styles.headerSub}>Recent call history</Text>
-          </View>
-          <View style={styles.statWrap}>
-            {missedCount > 0 && (
-              <View style={[styles.statPill, { backgroundColor: 'rgba(255,59,48,0.9)' }]}>
-                <Ionicons name="close" size={13} color="#FFF" />
-                <Text style={styles.statText}>{missedCount} missed</Text>
-              </View>
-            )}
           </View>
         </View>
       </LinearGradient>

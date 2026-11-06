@@ -297,6 +297,8 @@ const setupSocket = (io) => {
           console.log(`[socketHandler] Call ${callId} timed out after 45s — removing from activeCalls`);
           activeCalls.delete(callId);
         }
+        // Still "pending" after 45 s means nobody answered: record it as missed (answered calls are already "in-progress").
+        Call.updateOne({ _id: callObjectId, status: 'pending' }, { status: 'missed', endedAt: new Date() }).catch(() => {});
       }, 45000);
 
       // 2. Return callId immediately to caller
@@ -505,10 +507,16 @@ const setupSocket = (io) => {
         const validId = cleanId(callId);
         if (validId) {
           activeCalls.delete(validId);
+          // A call that was never answered (still "pending") is a missed call, not a completed one
+          const before = await Call.findById(validId).select('status duration');
+          const neverAnswered = !!before && before.status === 'pending';
+          // a second call_end (from the other phone) must not turn an already missed / rejected call into "completed"
+          const alreadyFinal = !!before && (before.status === 'missed' || before.status === 'rejected');
           await Call.findByIdAndUpdate(validId, { 
-            status: 'completed', 
+            status: neverAnswered ? 'missed' : (alreadyFinal ? before.status : 'completed'), 
             endedAt: new Date(),
-            duration 
+            // both phones send call_end; keep the longer duration so a later 0 never wipes the real talk time
+            duration: Math.max(Number(before && before.duration) || 0, Number(duration) || 0)
           });
         }
         // Also cleanup any active call from this caller

@@ -88,7 +88,7 @@ const useCallStore = create(
               ownerId: user?._id?.toString(),
               type: c.type,
               direction: isReceiver ? 'incoming' : 'outgoing',
-              status: c.status,
+              status: (c.status === 'completed' && !(Number(c.duration) > 0)) ? 'missed' : c.status,
               remoteUser,
               timestamp: c.startedAt
             };
