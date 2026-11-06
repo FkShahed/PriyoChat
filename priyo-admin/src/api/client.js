@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  // Always the Oracle VPS backend (not overridable by a stale build env var)
+  baseURL: import.meta.env.DEV && import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : 'https://138.2.92.182.nip.io/api',
   timeout: 15000,
 });
 
