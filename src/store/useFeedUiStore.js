@@ -11,7 +11,9 @@ const useFeedUiStore = create((set) => ({
   setShowTop: (showTop) => set((s) => (s.showTop === showTop ? s : { showTop })),
   setStuck: (stuck) => set((s) => (s.stuck === stuck ? s : { stuck })),
   setTab: (tab) => set((s) => (s.tab === tab ? s : { tab })),
-  reset: () => set({ showTop: false, stuck: false, tab: 'daily' }),
+  // Leaving the Feed page (for example to open one match) clears only the scroll flags. The chosen tab is kept,
+  // otherwise the tab bar would jump back to "Daily" while the page itself still shows the other tab.
+  reset: () => set({ showTop: false, stuck: false }),
 }));
 
 export default useFeedUiStore;

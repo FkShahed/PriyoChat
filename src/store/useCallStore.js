@@ -51,6 +51,10 @@ const useCallStore = create(
       isMinimized: false,
       callDuration: 0,
       callStartTime: null, // epoch ms when WebRTC first connected — single source of truth for timer
+      // The loudspeaker choice for the CURRENT call (true/false), or null until the call screen sets it. It lives here
+      // (not only inside CallScreen) so that going back and returning to the call screen does not reset it to the default.
+      speakerOn: null,
+      setCallSpeaker: (val) => set({ speakerOn: typeof val === 'boolean' ? val : null }),
       setIsMinimized: (val) => set({ isMinimized: Boolean(val) }),
       setCallDuration: (fnOrVal) => set((prev) => ({ callDuration: typeof fnOrVal === 'function' ? fnOrVal(prev.callDuration) : fnOrVal })),
 
@@ -125,6 +129,7 @@ const useCallStore = create(
           callId: null,
           callStartTime: null,
           callDuration: 0,
+          speakerOn: null,
         });
       },
 
@@ -211,6 +216,7 @@ const useCallStore = create(
           answer: null,
           callStartTime: null,
           callDuration: 0,
+          speakerOn: null,
         });
         return true;
       },
@@ -281,6 +287,7 @@ const useCallStore = create(
         markCallHandled(state.callId);
         stopCallKeepAlive();
         console.log('[useCallStore] endCall, state:', state.callState, 'remoteUser:', state.remoteUser?.name, 'isReceiver:', state.isReceiver);
+        try { require('../utils/audioNormalize').scheduleAudioNormalize(); } catch (e) { /* never block ending a call */ }
 
         // Immediately dismiss all system notifications & stop native CallKeep ringing
         try {
@@ -330,12 +337,14 @@ const useCallStore = create(
           isMinimized: false,
           callDuration: 0,
           callStartTime: null,
+          speakerOn: null,
         });
       },
 
       resetCall: () => {
         markCallHandled(get().callId);
         stopCallKeepAlive();
+        try { require('../utils/audioNormalize').scheduleAudioNormalize(); } catch (e) { /* never block ending a call */ }
         set({
           callState: 'idle',
           callType: null,
@@ -353,6 +362,7 @@ const useCallStore = create(
           isMinimized: false,
           callDuration: 0,
           callStartTime: null,
+          speakerOn: null,
         });
       },
     }),

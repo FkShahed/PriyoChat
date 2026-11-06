@@ -250,7 +250,23 @@ const useChatStore = create(
           }
         : m
     );
-    set({ messages: { ...messages, [conversationId]: updated } });
+
+    // Keep the chat LIST in step too: if this message is the one shown as the conversation's last message,
+    // move its tick (sent -> delivered -> seen) there as well. It never moves backwards (a seen message stays seen).
+    const RANK = { sending: 0, sent: 1, delivered: 2, seen: 3 };
+    const { conversations } = get();
+    let changed = false;
+    const updatedConvos = conversations.map((c) => {
+      const lm = c.lastMessage;
+      if (String(c._id) !== String(conversationId) || !lm || String(lm._id) !== String(messageId)) return c;
+      if (RANK[status] !== undefined && RANK[lm.status] !== undefined && RANK[status] < RANK[lm.status]) return c;
+      if (lm.status === status) return c;
+      changed = true;
+      return { ...c, lastMessage: { ...lm, status, ...(seenAt ? { seenAt } : {}) } };
+    });
+    set(changed
+      ? { messages: { ...messages, [conversationId]: updated }, conversations: updatedConvos }
+      : { messages: { ...messages, [conversationId]: updated } });
   },
 
   clearUnreadCount: (conversationId) => {

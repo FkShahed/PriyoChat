@@ -567,6 +567,7 @@ export default function FeedScreen({ navigation }) {
   useFocusEffect(useCallback(() => {
     useTabBarStore.getState().setHidden(false);
     lastY.current = 0;
+    useFeedUiStore.getState().setTab(tabRef.current); // the highlighted tab always matches the page that is really shown
     return () => { useTabBarStore.getState().setHidden(false); useFeedUiStore.getState().reset(); };
   }, [navigation]));
 

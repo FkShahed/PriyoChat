@@ -182,7 +182,12 @@ export default function CallScreen({ route, navigation }) {
     return st.callDuration || 0;
   });
   const [muted, setMuted] = useState(false);
-  const [speakerOn, setSpeakerOn] = useState(callType === 'video');
+  // Start from the loudspeaker choice already made in this call (kept in the store), so coming back to this screen after
+  // going "back" does not reset it to the default (earpiece for audio) and silently switch the loudspeaker off.
+  const [speakerOn, setSpeakerOn] = useState(() => {
+    const saved = useCallStore.getState().speakerOn;
+    return typeof saved === 'boolean' ? saved : callType === 'video';
+  });
   const [videoOn, setVideoOn] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [cameraFront, setCameraFront] = useState(true);
@@ -236,6 +241,7 @@ export default function CallScreen({ route, navigation }) {
   // Sync speaker state with InCallManager whenever speakerOn toggles
   useEffect(() => {
     setSpeaker(speakerOn);
+    useCallStore.getState().setCallSpeaker(speakerOn); // remember it for when this screen is opened again
   }, [speakerOn, setSpeaker]);
 
   // Proximity Sensor Handling for Audio Calls:
@@ -1007,19 +1013,19 @@ const styles = StyleSheet.create({
   },
   rippleRing: {
     position: 'absolute',
-    width: 140, height: 140,
-    borderRadius: 70,
+    width: 164, height: 164,
+    borderRadius: 82,
     borderWidth: 2,
     borderColor: 'rgba(29, 111, 235, 0.6)',
     backgroundColor: 'rgba(29, 111, 235, 0.08)',
   },
   avatarContainer: {
-    width: 130, height: 130,
-    borderRadius: 65,
+    width: 150, height: 150,
+    borderRadius: 75,
     overflow: 'hidden',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.25)',
-    marginBottom: 28,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.3)',
+    marginBottom: 30,
     shadowColor: '#1D6FEB',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.6,
@@ -1033,14 +1039,17 @@ const styles = StyleSheet.create({
   },
   initials: { fontSize: 44, color: '#FFF', fontWeight: '800' },
   name: {
-    fontSize: 28, fontWeight: '700', color: '#FFF',
-    marginBottom: 10, letterSpacing: 0.3,
+    fontSize: 27, fontWeight: '600', color: '#FFF',
+    marginBottom: 14, letterSpacing: 0.4, paddingHorizontal: 24, textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
   statusRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 7, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
   },
   activeDot: {
     width: 8, height: 8, borderRadius: 4,
@@ -1048,8 +1057,8 @@ const styles = StyleSheet.create({
     shadowColor: '#34C759', shadowRadius: 4, shadowOpacity: 0.8,
   },
   callStatus: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 15, letterSpacing: 0.5, fontWeight: '400',
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14.5, letterSpacing: 0.6, fontWeight: '500',
   },
 
   //  Controls 
@@ -1059,32 +1068,34 @@ const styles = StyleSheet.create({
   },
   secondaryRow: {
     flexDirection: 'row',
-    gap: 56,
-    marginBottom: 40,
+    gap: 52,
+    marginBottom: 38,
   },
   ctrlItem: { alignItems: 'center', gap: 8 },
   ctrlCircle: {
-    width: 64, height: 64, borderRadius: 32,
+    width: 68, height: 68, borderRadius: 34,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
   },
   ctrlCircleOn: {
-    backgroundColor: 'rgba(255,255,255,0.28)',
-    borderColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'rgba(29,111,235,0.55)',
+    borderColor: 'rgba(120,180,255,0.9)',
+    shadowColor: '#1D6FEB', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 12,
+    elevation: 6,
   },
   ctrlLabel: {
-    color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500',
+    color: 'rgba(255,255,255,0.85)', fontSize: 12.5, fontWeight: '500', letterSpacing: 0.2,
   },
   endRow: { alignItems: 'center' },
   endBtn: {
-    width: 80, height: 80, borderRadius: 40,
+    width: 76, height: 76, borderRadius: 38,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 16,
-    elevation: 14,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    elevation: 12,
   },
 
   //  Video Call 

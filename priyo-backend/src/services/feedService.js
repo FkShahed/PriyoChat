@@ -763,6 +763,74 @@ function shapeMatchDetail(sport, d) {
   return out;
 }
 
+// ── cricket: the recent balls of the innings in progress (ESPN play-by-play; newest page is the last one) ──
+function ballLabel(it) {
+  const d = String((it.playType && it.playType.description) || '').toLowerCase();
+  const r = num(it.scoreValue);
+  if (/out|wicket/.test(d)) return { kind: 'wicket', label: 'W' };
+  if (/six/.test(d)) return { kind: 'six', label: '6' };
+  if (/four/.test(d)) return { kind: 'four', label: '4' };
+  if (/wide/.test(d)) return { kind: 'extra', label: r > 1 ? r + 'wd' : 'wd' };
+  if (/no.?ball/.test(d)) return { kind: 'extra', label: r > 1 ? r + 'nb' : 'nb' };
+  if (/leg.?bye/.test(d)) return { kind: 'extra', label: r > 1 ? r + 'lb' : 'lb' };
+  if (/bye/.test(d)) return { kind: 'extra', label: r > 1 ? r + 'b' : 'b' };
+  if (/no run|dot/.test(d) || r === 0) return { kind: 'dot', label: '•' };
+  return { kind: 'run', label: String(r) };
+}
+
+async function getCricketBalls(leagueKey, id) {
+  const base = `https://site.web.api.espn.com/apis/site/v2/sports/cricket/${leagueKey}/playbyplay?event=${id}`;
+  const first = (await http.get(base + '&page=1', { timeout: 10000 })).data.commentary || {};
+  const count = first.count || 0;
+  if (!count) return null;
+  const pages = first.pageCount || 1;
+  let items = first.items || [];
+  if (pages > 1) {
+    const last = (await http.get(base + '&page=' + pages, { timeout: 10000 })).data.commentary || {};
+    items = last.items || [];
+    if (items.length < 20 && pages > 2) {
+      const prev = (await http.get(base + '&page=' + (pages - 1), { timeout: 10000 })).data.commentary || {};
+      items = [...(prev.items || []), ...items];
+    }
+  }
+  if (!items.length) return null;
+  const lastItem = items[items.length - 1];
+  const inn = lastItem.innings && lastItem.innings.number;
+  const mine = items.filter((x) => !inn || (x.innings && x.innings.number === inn));
+  const shape = (x) => {
+    const { kind, label } = ballLabel(x);
+    return { o: String(x.over && x.over.overs != null ? x.over.overs : ''), over: x.over && x.over.number || 0, kind, label, runs: num(x.scoreValue), text: x.shortText || '' };
+  };
+  const balls = mine.map(shape);
+  // commentary: the latest deliveries with their text, newest first (a wicket also gets the dismissal line)
+  const comm = mine.slice(-25).reverse().map((x) => {
+    const b = shape(x);
+    const det = x.dismissal && x.dismissal.text ? x.dismissal.text : (x.text || '');
+    return { o: b.o, kind: b.kind, label: b.label, text: b.text, detail: det };
+  });
+  // group the last three overs
+  const overs = [];
+  for (const b of balls) {
+    let g = overs[overs.length - 1];
+    if (!g || g.over !== b.over) { g = { over: b.over, balls: [], runs: 0, wickets: 0 }; overs.push(g); }
+    g.balls.push(b);
+    g.runs += b.runs;
+    if (b.kind === 'wicket') g.wickets += 1;
+  }
+  const li = lastItem;
+  const bats = (x) => (x && x.athlete && x.athlete.displayName ? { name: x.athlete.shortName || x.athlete.displayName, runs: num(x.runs != null ? x.runs : x.totalRuns), faced: num(x.faced), fours: num(x.fours), sixes: num(x.sixes) } : null);
+  return {
+    balls: balls.slice(-12),
+    comm,
+    overs: overs.slice(-3),
+    batters: [bats(li.batsman), bats(li.otherBatsman)].filter(Boolean),
+    bowler: li.bowler && li.bowler.athlete && li.bowler.athlete.displayName ? { name: li.bowler.athlete.shortName || li.bowler.athlete.displayName, overs: li.bowler.overs, maidens: li.bowler.maidens, runs: li.bowler.conceded, wickets: li.bowler.wickets } : null,
+    runRate: li.innings && li.innings.runRate || 0,
+    target: li.innings && li.innings.target || 0,
+    lastText: li.shortText || '',
+  };
+}
+
 async function getMatchDetail(sport, leagueKey, id) {
   const sp = sport === 'cricket' ? 'cricket' : 'soccer';
   if (!/^[\w.\-]{1,24}$/.test(String(leagueKey || '')) || !/^\d{3,12}$/.test(String(id || ''))) throw new Error('bad match reference');
@@ -771,7 +839,11 @@ async function getMatchDetail(sport, leagueKey, id) {
   const key = `match:${sp}:${leagueKey}:${id}`;
   const first = await cached(key, 15 * 1000, async () => {
     const { data } = await http.get(url, { timeout: 12000 });
-    return shapeMatchDetail(sp, data);
+    const out = shapeMatchDetail(sp, data);
+    if (sp === 'cricket' && (out.state === 'live' || out.state === 'final')) {
+      try { out.live = await getCricketBalls(leagueKey, id); } catch (e) { out.live = null; }
+    }
+    return out;
   });
   return first;
 }

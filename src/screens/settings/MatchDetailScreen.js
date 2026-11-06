@@ -145,7 +145,7 @@ export default function MatchDetailScreen({ navigation, route }) {
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.league} numberOfLines={1}>{d?.league || mt.league}</Text>
-        {live ? (
+        {live && !isCricket ? (
           <View style={styles.livePill}><PulseDot /><Text style={styles.livePillText}>LIVE</Text></View>
         ) : null}
       </View>
@@ -196,6 +196,87 @@ export default function MatchDetailScreen({ navigation, route }) {
     </LinearGradient>
   );
 
+  // One delivery as a round chip: dot, runs, 4, 6, wicket, extras
+  const BALL = {
+    dot: { bg: dark ? '#2A2F3A' : '#E6E9F0', fg: dark ? '#9CA3AF' : '#6B7280' },
+    run: { bg: dark ? '#1E3A5F' : '#DBEAFE', fg: dark ? '#93C5FD' : '#1D4ED8' },
+    four: { bg: '#2563EB', fg: '#FFFFFF' },
+    six: { bg: '#7C3AED', fg: '#FFFFFF' },
+    wicket: { bg: '#EF4444', fg: '#FFFFFF' },
+    extra: { bg: dark ? '#4A3410' : '#FEF3C7', fg: dark ? '#FBBF24' : '#B45309' },
+  };
+  const BallChip = ({ b, size = 32, latest = false, faded = false }) => {
+    const c = BALL[b.kind] || BALL.run;
+    return (
+      <View style={[styles.ball, { width: size, height: size, borderRadius: size / 2, backgroundColor: c.bg, opacity: faded ? 0.55 : 1 }, latest && styles.ballLatest]}>
+        <Text style={{ color: c.fg, fontSize: b.label.length > 2 ? size * 0.3 : size * 0.4, fontWeight: '500' }}>{b.label}</Text>
+      </View>
+    );
+  };
+
+  // "Recent balls": last deliveries (newest on the right), this over and the one before, batters and bowler
+  const renderRecentBalls = (lv) => {
+    if (!lv || !(lv.balls || []).length) return null;
+    const overs = (lv.overs || []).slice().reverse(); // newest over first
+    const cur = overs[0];
+    const prev = overs[1];
+    const over6 = (o) => (o.balls || []).slice(-8);
+    return (
+      <View style={[styles.rbWrap, { borderTopColor: P.border }]}>
+        <View style={styles.rbHead}>
+          <Text style={[styles.rbTitle, { color: P.sub }]}>RECENT BALLS</Text>
+          <View style={{ flex: 1 }} />
+          {lv.runRate ? <Text style={[styles.rbRate, { color: P.sub }]}>Run rate {Number(lv.runRate).toFixed(2)}</Text> : null}
+        </View>
+
+        <View style={styles.rbRow}>
+          {lv.balls.map((b, i) => (
+            <BallChip key={i} b={b} size={30} latest={i === lv.balls.length - 1} faded={i < lv.balls.length - 6} />
+          ))}
+        </View>
+
+        {cur ? (
+          <View style={[styles.rbOver, { backgroundColor: P.cardAlt }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: P.text, fontSize: 13, fontWeight: '500' }}>Over {cur.over}</Text>
+              <Text style={{ color: P.sub, fontSize: 11.5, marginTop: 2 }}>{cur.runs} run{cur.runs === 1 ? '' : 's'}{cur.wickets ? ' · ' + cur.wickets + ' wkt' : ''}</Text>
+            </View>
+            <View style={styles.rbOverBalls}>{over6(cur).map((b, i) => <BallChip key={i} b={b} size={26} />)}</View>
+          </View>
+        ) : null}
+        {prev ? (
+          <View style={[styles.rbOver, { backgroundColor: 'transparent', paddingVertical: 4 }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: P.sub, fontSize: 12 }}>Over {prev.over} · {prev.runs} run{prev.runs === 1 ? '' : 's'}{prev.wickets ? ' · ' + prev.wickets + ' wkt' : ''}</Text>
+            </View>
+            <View style={styles.rbOverBalls}>{over6(prev).map((b, i) => <BallChip key={i} b={b} size={22} faded />)}</View>
+          </View>
+        ) : null}
+
+        {(lv.batters || []).length || lv.bowler ? (
+          <View style={styles.rbPlayers}>
+            {(lv.batters || []).map((b, i) => (
+              <View key={i} style={styles.rbPlayer}>
+                <Ionicons name="baseball" size={12} color={P.sub} />
+                <Text style={[styles.rbPName, { color: P.text }]} numberOfLines={1}>{b.name}</Text>
+                <Text style={{ color: P.text, fontSize: 13, fontWeight: '500' }}>{b.runs}<Text style={{ color: P.sub, fontWeight: '400' }}> ({b.faced})</Text></Text>
+              </View>
+            ))}
+            {lv.bowler ? (
+              <View style={styles.rbPlayer}>
+                <Ionicons name="radio-button-on" size={12} color="#EF4444" />
+                <Text style={[styles.rbPName, { color: P.text }]} numberOfLines={1}>{lv.bowler.name}</Text>
+                <Text style={{ color: P.text, fontSize: 13, fontWeight: '500' }}>{lv.bowler.wickets}-{lv.bowler.runs}<Text style={{ color: P.sub, fontWeight: '400' }}> ({lv.bowler.overs})</Text></Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {lv.lastText ? <Text style={[styles.rbLast, { color: P.sub }]} numberOfLines={2}>Last ball: {lv.lastText}</Text> : null}
+      </View>
+    );
+  };
+
   // Cricket scoreboard: a clean card in the page body (not in the header)
   const renderScoreboard = () => {
     const anyWinner = !!(d && (d.teams || []).some((x) => x.winner));
@@ -231,6 +312,8 @@ export default function MatchDetailScreen({ navigation, route }) {
               </View>
             );
           })}
+
+          {live ? renderRecentBalls(d?.live) : null}
 
           {live || final || d?.summary ? (
             <View style={[styles.sbFoot, { backgroundColor: accent + '14' }]}>
@@ -365,6 +448,30 @@ export default function MatchDetailScreen({ navigation, route }) {
   };
 
   // ── cricket ──
+  // Cricket commentary: every delivery as a line, newest first (shows up for matches that have ball-by-ball data)
+  const renderCricketCommentary = () => {
+    const cm = (d?.live?.comm || []).slice(0, 3); // just the latest three; the list refreshes with the live data
+    if (!cm.length) return null;
+    return (
+      <Block icon="chatbubbles" color="#F59E0B" title={live ? 'Live commentary' : 'Commentary'} i={1}>
+        <View style={[styles.card, { backgroundColor: P.card, borderColor: P.border }]}>
+          {cm.map((c, i) => (
+            <View key={i} style={[styles.cmRow, { alignItems: 'flex-start' }, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border }]}>
+              <View style={{ width: 50, alignItems: 'center' }}>
+                <BallChip b={c} size={28} />
+                <Text style={{ color: P.sub, fontSize: 10.5, marginTop: 4 }}>{c.o}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={{ color: P.text, fontSize: 13.5, lineHeight: 19, fontWeight: c.kind === 'wicket' || c.kind === 'four' || c.kind === 'six' ? '500' : '400' }}>{c.text}</Text>
+                {c.detail && c.kind === 'wicket' ? <Text style={{ color: P.sub, fontSize: 12, lineHeight: 17, marginTop: 3 }}>{c.detail}</Text> : null}
+              </View>
+            </View>
+          ))}
+        </View>
+      </Block>
+    );
+  };
+
   const renderCricketInfo = () => {
     const inf = d?.info;
     if (!inf) return null;
@@ -496,7 +603,7 @@ export default function MatchDetailScreen({ navigation, route }) {
           ) : null}
 
           {d && !isCricket ? (<>{renderEvents()}{renderStats()}{renderLineups()}{renderCommentary()}</>) : null}
-          {d && isCricket ? (<>{renderCricketInfo()}{renderScorecards()}{renderCloses()}</>) : null}
+          {d && isCricket ? (<>{renderCricketCommentary()}{renderCricketInfo()}{renderScorecards()}{renderCloses()}</>) : null}
 
           {d && !isCricket && !(d.events || []).length && !(d.stats || []).length && state === 'upcoming' ? (
             <View style={styles.empty}>
@@ -567,6 +674,19 @@ const styles = StyleSheet.create({
   sbWon: { color: '#10B981', fontSize: 11.5, fontWeight: '500', marginTop: 3 },
   sbExtra: { fontSize: 12, marginTop: 3, lineHeight: 16 },
   sbScore: { fontSize: 22, fontWeight: '500', letterSpacing: -0.2, fontVariant: ['tabular-nums'], textAlign: 'right' },
+  ball: { alignItems: 'center', justifyContent: 'center', marginRight: 6, marginBottom: 6 },
+  ballLatest: { borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  rbWrap: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
+  rbHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  rbTitle: { fontSize: 11, fontWeight: '600', letterSpacing: 1 },
+  rbRate: { fontSize: 11.5 },
+  rbRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  rbOver: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12, marginTop: 4 },
+  rbOverBalls: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '62%' },
+  rbPlayers: { marginTop: 10 },
+  rbPlayer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
+  rbPName: { flex: 1, fontSize: 13.5, marginLeft: 8, marginRight: 8 },
+  rbLast: { fontSize: 12, marginTop: 8, lineHeight: 17 },
   sbFoot: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
   sbFootText: { flex: 1, fontSize: 13.5, fontWeight: '500', marginLeft: 9, lineHeight: 19 },
   syncRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 14 },

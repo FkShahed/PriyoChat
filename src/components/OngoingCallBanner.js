@@ -15,6 +15,7 @@ import useCallStore from '../store/useCallStore';
 import useSocketStore from '../store/useSocketStore';
 import { navigationRef } from '../navigation/navigationRef';
 import NotificationService from '../services/NotificationService';
+import { InCallManager } from '../utils/nativeModules';
 import { getInitials } from '../utils/helpers';
 import useThemeStore from '../store/useThemeStore';
 
@@ -79,6 +80,21 @@ export default function OngoingCallBanner() {
     }
     return () => loop?.stop();
   }, [shouldShow]);
+
+  // While the call screen is away (minimized), keep the loudspeaker on if the user had it on. Android can quietly drop the
+  // speaker route when another screen or sound changes the audio mode; this puts it back within a few seconds.
+  // Does nothing when the speaker was off, so the earpiece / headset / Bluetooth behaviour is never touched.
+  const speakerPref = useCallStore((s) => s.speakerOn);
+  useEffect(() => {
+    if (!shouldShow || callState !== 'active' || speakerPref !== true || !InCallManager) return undefined;
+    const id = setInterval(() => {
+      try {
+        InCallManager.setSpeakerphoneOn(true);
+        InCallManager.setForceSpeakerphoneOn(true);
+      } catch (e) { /* best effort */ }
+    }, 4000);
+    return () => clearInterval(id);
+  }, [shouldShow, callState, speakerPref]);
 
   // Sync ongoing notification ONLY when minimized
   useEffect(() => {

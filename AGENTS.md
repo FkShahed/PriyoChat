@@ -5,7 +5,7 @@
 2. **Proactively execute commands, edit files, fix bugs, and verify changes directly.**
 3. Do not ask "Should I proceed?", "Would you like me to do this?", or block for user approval.
 4. Take full initiative to inspect, fix, build, test, and deliver completed results.
-5. **সব সময় তুমি লাস্ট স্টেবল ভার্সন Main branch / version-3.8 (v3.8.2 — most stable so far) এইটা যাতে কোনভাবেই ফাংশনালিটি কোন ফাংশনালিটি ব্রেক না করে এটার দিকে সর্বোচ্চ নজর রাখবা প্রত্যেকটা ইমপ্রুভমেন্ট অথবা যত রকম তুমি এডিট করো আপডেট করো প্রত্যেকটা জিনিসে এই জিনিসটা মাথায় রাখবা যে স্টেবল ভার্সনের যাতে কোন রকম কিছু না হয় বা কোন রকম কিছু উল্টাপাল্টা না হয় বারবার এটা চেক করে নিবা**
+5. **সব সময় তুমি লাস্ট স্টেবল ভার্সন version-4.0.0 branch (v4.0.0 — সর্বশেষ ও সর্বোচ্চ স্টেবল ভার্সন; এর আগের স্টেবল ছিল Main branch / version-3.8, v3.8.2) এইটা যাতে কোনভাবেই ফাংশনালিটি কোন ফাংশনালিটি ব্রেক না করে এটার দিকে সর্বোচ্চ নজর রাখবা প্রত্যেকটা ইমপ্রুভমেন্ট অথবা যত রকম তুমি এডিট করো আপডেট করো প্রত্যেকটা জিনিসে এই জিনিসটা মাথায় রাখবা যে স্টেবল ভার্সনের যাতে কোন রকম কিছু না হয় বা কোন রকম কিছু উল্টাপাল্টা না হয় বারবার এটা চেক করে নিবা**
 6. **Never push / git releted delet anything without permission**
 7. **Version Naming Rule**:
    - Whenever user ask for an APK built, The app version must always match the active branch name (e.g., branch `version-3.7` -> version `3.7.0`).
