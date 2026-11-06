@@ -32,6 +32,35 @@ export default function DailyCardScreen({ navigation, route }) {
   const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => () => { alive.current = false; }, []);
 
+  // Tafsir of the verse on screen (Bengali + English), fetched when the page opens and whenever another verse is shown
+  const isVerse = kind === 'ayah' || kind === 'dua';
+  const [tafsir, setTafsir] = useState(null);
+  const [tafBusy, setTafBusy] = useState(false);
+  const [tafFailed, setTafFailed] = useState(false);
+  const [tafLang, setTafLang] = useState('bn');
+  const [tafOpen, setTafOpen] = useState(false);
+  const loadTafsir = async (ref) => {
+    if (!ref) return;
+    setTafBusy(true);
+    setTafFailed(false);
+    try {
+      const { data } = await feedApi.getTafsir(ref);
+      if (!alive.current) return;
+      setTafsir(data);
+      if (!data?.bn && data?.en) setTafLang('en');
+    } catch (e) {
+      if (alive.current) setTafFailed(true);
+    } finally {
+      if (alive.current) setTafBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (!isVerse || !item?.ref) return;
+    setTafsir(null);
+    setTafOpen(false);
+    loadTafsir(item.ref);
+  }, [item?.ref]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const avoidOf = (it) => (!it ? '' : (kind === 'ayah' || kind === 'dua') ? it.ref : kind === 'word' ? it.word : it.text);
   const loadAnother = async () => {
     if (loadingNext) return;
@@ -59,7 +88,7 @@ export default function DailyCardScreen({ navigation, route }) {
   const shareBody = () => {
     if (!item) return '';
     const NL = String.fromCharCode(10);
-    if (kind === 'ayah' || kind === 'dua') return ['📖 ' + item.surah + ' ' + item.ref, item.arabic, item.bangla, item.english].join(NL + NL);
+    if (kind === 'ayah' || kind === 'dua') return ['📖 ' + item.surah + ' ' + item.ref, item.arabic, item.bangla, item.english].concat(item.info && item.info.why ? [item.info.title + NL + item.info.why] : []).join(NL + NL);
     if (kind === 'word') return '🔤 ' + item.word + (item.pos ? ' (' + item.pos + ')' : '') + NL + item.definition + (item.example ? NL + '"' + item.example + '"' : '');
     if (kind === 'quote') return '“' + item.text + '”' + NL + '— ' + item.author;
     return (kind === 'fact' ? '💡 ' : '😄 ') + item.text;
@@ -72,6 +101,93 @@ export default function DailyCardScreen({ navigation, route }) {
       {children}
     </View>
   );
+
+  // long paragraphs are cut into shorter ones (at the end of a sentence) so the tafsir is easy to read
+  const splitParas = (text) => {
+    const out = [];
+    String(text || '').split(/\n\s*\n/).forEach((p) => {
+      const t = p.trim();
+      if (!t) return;
+      if (t.length <= 520) { out.push(t); return; }
+      // (no look-behind in the pattern: a marker character is added after each sentence end instead)
+      const sentences = t.replace(/([।.!?])\s+/g, '$1\u0001').split('\u0001');
+      let cur = '';
+      sentences.forEach((sn) => {
+        if (cur && (cur + ' ' + sn).length > 460) { out.push(cur); cur = sn; } else cur = cur ? cur + ' ' + sn : sn;
+      });
+      if (cur) out.push(cur);
+    });
+    return out;
+  };
+
+  const renderTafsir = () => {
+    if (!isVerse) return null;
+    const cur = tafsir ? tafsir[tafLang] : null;
+    const paras = cur?.text ? splitParas(cur.text) : [];
+    const total = paras.join(' ').length;
+    const LIMIT = 1100;
+    let shown = paras;
+    if (!tafOpen && total > LIMIT) {
+      shown = [];
+      let used = 0;
+      for (const p of paras) {
+        if (used >= LIMIT) break;
+        shown.push(p);
+        used += p.length;
+      }
+    }
+    const more = !tafOpen && shown.length < paras.length;
+    return (
+      <Block title="Tafsir · তাফসীর">
+        {tafsir?.bn && tafsir?.en ? (
+          <View style={styles.tafTabs}>
+            {[['bn', 'বাংলা'], ['en', 'English']].map(([k, label]) => (
+              <TouchableOpacity key={k} activeOpacity={0.8} onPress={() => { setTafLang(k); setTafOpen(false); }} style={[styles.tafTab, { backgroundColor: tafLang === k ? accent : P.cardAlt }]}>
+                <Text style={{ color: tafLang === k ? '#FFF' : P.text, fontSize: 12.5, fontWeight: '500' }}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+
+        {tafBusy && !tafsir ? (
+          <View style={{ paddingVertical: 22, alignItems: 'center' }}>
+            <ActivityIndicator color={accent} />
+            <Text style={{ color: P.sub, fontSize: 12.5, marginTop: 8 }}>Loading tafsir…</Text>
+          </View>
+        ) : null}
+
+        {tafFailed && !tafsir ? (
+          <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+            <Text style={{ color: P.sub, fontSize: 13.5, textAlign: 'center' }}>Tafsir is not available right now.</Text>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => loadTafsir(item?.ref)} style={[styles.tafRetry, { borderColor: accent }]}>
+              <Text style={{ color: accent, fontSize: 13, fontWeight: '500' }}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {cur ? (
+          <>
+            {shown.map((p, i) => (
+              <Text key={i} style={[styles.tafText, { color: P.text, fontSize: tafLang === 'bn' ? 16 : 15.5 }, i === 0 && paras.length > 1 && paras[0].length < 90 && { fontWeight: '500', color: accent }]}>{p}</Text>
+            ))}
+            {more ? (
+              <TouchableOpacity activeOpacity={0.8} onPress={() => setTafOpen(true)} style={[styles.tafMore, { borderColor: accent }]}>
+                <Text style={{ color: accent, fontSize: 13.5, fontWeight: '500' }}>Read full tafsir</Text>
+                <Ionicons name="chevron-down" size={15} color={accent} />
+              </TouchableOpacity>
+            ) : null}
+            {tafOpen && total > LIMIT ? (
+              <TouchableOpacity activeOpacity={0.8} onPress={() => setTafOpen(false)} style={[styles.tafMore, { borderColor: accent }]}>
+                <Text style={{ color: accent, fontSize: 13.5, fontWeight: '500' }}>Show less</Text>
+                <Ionicons name="chevron-up" size={15} color={accent} />
+              </TouchableOpacity>
+            ) : null}
+            <Text style={[styles.tafCredit, { color: P.sub }]}>{cur.name} · {cur.source} · via Quran.com. Explanation of the verse and the verses around it.</Text>
+          </>
+        ) : null}
+      </Block>
+    );
+  };
 
   const renderBody = () => {
     if (!item) return <Block><Text style={{ color: P.sub, fontSize: 14 }}>Nothing to show right now.</Text></Block>;
@@ -88,6 +204,39 @@ export default function DailyCardScreen({ navigation, route }) {
           </Block>
           {item.bangla ? <Block title="বাংলা অনুবাদ"><Text style={[styles.body, { color: P.text }]}>{item.bangla}</Text></Block> : null}
           {item.english ? <Block title="English"><Text style={[styles.body, { color: P.text }]}>{item.english}</Text></Block> : null}
+          {(item.info || item.revelation) ? (
+            <>
+              <Block title={kind === 'dua' ? 'About this dua' : 'About this ayah'}>
+                {item.info?.title ? <Text style={[styles.infoTitle, { color: P.text }]}>{item.info.title}</Text> : null}
+                {item.revelation ? (
+                  <View style={styles.factRow}>
+                    {[
+                      item.revelation === 'Meccan' ? 'Revealed in Makkah' : item.revelation === 'Medinan' ? 'Revealed in Madinah' : item.revelation,
+                      item.meaning ? 'Surah ' + item.surah + ' · "' + item.meaning + '"' : 'Surah ' + item.surah,
+                      item.surahAyahs ? item.surahAyahs + ' verses' : null,
+                      item.juz ? 'Juz ' + item.juz : null,
+                    ].filter(Boolean).map((t) => (
+                      <View key={t} style={[styles.factChip, { backgroundColor: accent + '1A' }]}><Text style={[styles.factText, { color: accent }]}>{t}</Text></View>
+                    ))}
+                  </View>
+                ) : null}
+                {(kind === 'dua'
+                  ? [['person', 'Who made this dua', item.info?.who], ['time', 'When it was said', item.info?.when], ['star', 'Why it matters', item.info?.why], ['repeat', 'When to recite it', item.info?.use]]
+                  : [['location', 'Where it comes from', item.info?.context], ['star', 'Why it matters', item.info?.why], ['repeat', 'How to apply it', item.info?.apply]]
+                ).filter(([, , text]) => !!text).map(([icon, label, text], i) => (
+                  <View key={label} style={[styles.infoRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border }]}>
+                    <View style={[styles.infoIcon, { backgroundColor: accent + '1F' }]}><Ionicons name={icon} size={15} color={accent} /></View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={[styles.infoLabel, { color: P.sub }]}>{label}</Text>
+                      <Text style={[styles.infoText, { color: P.text }]}>{text}</Text>
+                    </View>
+                  </View>
+                ))}
+              </Block>
+              {item.info?.whyBn ? <Block title="কেন গুরুত্বপূর্ণ"><Text style={[styles.body, { color: P.text }]}>{item.info.whyBn}</Text></Block> : null}
+            </>
+          ) : null}
+          {renderTafsir()}
           {item.translator ? <Text style={[styles.credit, { color: P.sub }]}>Translation: {item.translator}</Text> : null}
         </>
       );
@@ -196,6 +345,20 @@ const styles = StyleSheet.create({
   sheet: { paddingHorizontal: 16, marginTop: -34 },
   block: { borderRadius: 22, borderWidth: 1, padding: 18, marginBottom: 12 },
   blockTitle: { fontSize: 12, fontWeight: '500', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
+  factRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 },
+  factChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, marginRight: 6, marginBottom: 6 },
+  factText: { fontSize: 11.5, fontWeight: '500' },
+  tafTabs: { flexDirection: 'row', marginBottom: 12 },
+  tafTab: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 16, marginRight: 8 },
+  tafText: { lineHeight: 27, marginBottom: 12 },
+  tafMore: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.2, borderRadius: 16, paddingVertical: 10, marginTop: 2 },
+  tafRetry: { borderWidth: 1.2, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 8, marginTop: 10 },
+  tafCredit: { fontSize: 11, lineHeight: 16, marginTop: 14, textAlign: 'center' },
+  infoTitle: { fontSize: 17, fontWeight: '500', marginBottom: 8, lineHeight: 24 },
+  infoRow: { flexDirection: 'row', paddingVertical: 12 },
+  infoIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  infoLabel: { fontSize: 11.5, fontWeight: '500', letterSpacing: 0.3, marginBottom: 3 },
+  infoText: { fontSize: 14.5, lineHeight: 22, fontWeight: '400' },
   arabic: { fontSize: 28, lineHeight: 54, textAlign: 'right', writingDirection: 'rtl' },
   refChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, marginTop: 12 },
   refText: { fontSize: 12.5, fontWeight: '500', marginLeft: 5 },

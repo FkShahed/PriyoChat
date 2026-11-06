@@ -530,6 +530,31 @@ async function getPrayerWeek(lat, lng, days = 7) {
   });
 }
 
+// ── tafsir of one ayah (Quran.com API): Bengali "Tafseer ibn Kathir" (Tawheed Publication) and English Ibn Kathir (abridged) ──
+// The text explains the verse, its background and the verses around it. Cached for a week per verse.
+const PARA = String.fromCharCode(10) + String.fromCharCode(10); // a blank line between paragraphs
+const tafsirText = (html) => String(html || '')
+  .replace(/\(আরবি\)/g, '')
+  .replace(/<\/p>|<br\s*\/?>|<\/h\d>|<\/div>|<\/li>|<\/b>/gi, PARA)
+  .split(PARA).map((x) => stripTags(x)).filter(Boolean).join(PARA);
+
+async function getTafsir(ref) {
+  if (!/^\d{1,3}:\d{1,3}$/.test(String(ref || ''))) throw new Error('bad ref');
+  return cached(`tafsir:${ref}`, 7 * 24 * 60 * 60 * 1000, async () => {
+    const pull = (id) => http.get(`https://api.quran.com/api/v4/tafsirs/${id}/by_ayah/${ref}`, { timeout: 15000 })
+      .then((r) => (r.data && r.data.tafsir) || null).catch(() => null);
+    const [bn, en] = await Promise.all([pull(164), pull(169)]);
+    const shape = (t, name, source) => (t && t.text ? { name, source, text: tafsirText(t.text) } : null);
+    const out = {
+      ref,
+      bn: shape(bn, 'তাফসীর ইবনে কাছীর', 'Tawheed Publication'),
+      en: shape(en, 'Tafsir Ibn Kathir (abridged)', 'Darussalam'),
+    };
+    if (!out.bn && !out.en) throw new Error('tafsir unavailable');
+    return out;
+  });
+}
+
 async function getRates() {
   return cached('fx', 60 * 60 * 1000, async () => {
     const { data } = await http.get('https://open.er-api.com/v6/latest/USD');
@@ -1195,6 +1220,8 @@ async function getWidgets({ lat, lng }) {
 const dayIndex = () => Math.floor((Date.now() + 6 * 3600 * 1000) / 86400000); // Dhaka day number
 const todayKey = () => new Date(Date.now() + 6 * 3600 * 1000).toISOString().slice(0, 10);
 
+const DUA_INFO = require('./duaInfo'); // who / when / why for each dua below
+const AYAH_INFO = require('./ayahInfo'); // context / why / how to apply for each ayah of the day
 // Quranic duas: only the references are curated; the text always comes from the Quran API
 const DUA_REFS = ['2:201', '3:8', '7:23', '14:40', '17:24', '18:10', '20:114', '21:87', '23:118', '25:74', '59:10', '66:8', '2:127', '3:147', '3:193', '71:28', '28:24', '14:41', '2:250', '60:5'];
 
@@ -1208,6 +1235,11 @@ async function quranRef(ref) {
     ref: `${ar.surah.number}:${ar.numberInSurah}`,
     surah: ar.surah.englishName,
     surahAr: ar.surah.name,
+    surahNumber: ar.surah.number,
+    revelation: ar.surah.revelationType || '',
+    surahAyahs: ar.surah.numberOfAyahs || 0,
+    meaning: ar.surah.englishNameTranslation || '',
+    juz: ar.juz || 0,
     arabic: ar.text,
     bangla: bn.text,
     english: en.text,
@@ -1218,7 +1250,7 @@ async function getAyah() {
   return cached(`ayah:${todayKey()}`, 12 * 60 * 60 * 1000, async () => {
     const ref = AYAH_REFS[(dayIndex() * 7) % AYAH_REFS.length]; // well-known, uplifting ayat, one per day
     const q = await quranRef(ref);
-    return { ...q, translator: 'বাংলা অনুবাদ: মুহিউদ্দীন খান · English: Sahih International' };
+    return { ...q, translator: 'বাংলা অনুবাদ: মুহিউদ্দীন খান · English: Sahih International', info: AYAH_INFO[q.ref] || null };
   });
 }
 
@@ -1226,7 +1258,7 @@ async function getDua() {
   return cached(`dua:${todayKey()}`, 12 * 60 * 60 * 1000, async () => {
     const ref = DUA_REFS[dayIndex() % DUA_REFS.length];
     const q = await quranRef(ref);
-    return { ...q, translator: 'বাংলা অনুবাদ: মুহিউদ্দীন খান · English: Sahih International' };
+    return { ...q, translator: 'বাংলা অনুবাদ: মুহিউদ্দীন খান · English: Sahih International', info: DUA_INFO[q.ref] || null };
   });
 }
 
@@ -1320,7 +1352,7 @@ async function getAnother(kind, avoid) {
   if (kind === 'ayah' || kind === 'dua') {
     const ref = pickOther(kind === 'ayah' ? AYAH_REFS : DUA_REFS, avoidStr);
     const q = await cached(`quranref:${ref}`, 24 * 60 * 60 * 1000, () => quranRef(ref));
-    return { ...q, translator: 'বাংলা অনুবাদ: মুহিউদ্দীন খান · English: Sahih International' };
+    return { ...q, translator: 'বাংলা অনুবাদ: মুহিউদ্দীন খান · English: Sahih International', info: (kind === 'dua' ? DUA_INFO : AYAH_INFO)[q.ref] || null };
   }
   if (kind === 'quote') {
     for (let i = 0; i < 3; i++) {
@@ -1397,4 +1429,4 @@ function startFeedWarmup() {
 }
 
 module.exports = {
-  startFeedWarmup, getArticles, getWidgets, getDaily, getAnother, getPlaceName, getMatchesFull, getMatchDetail, getSafetyFull, getWeatherFull, getHourlyWindow, getHolidays, getPrayerWeek, VALID_CATEGORIES };
+  startFeedWarmup, getArticles, getWidgets, getDaily, getAnother, getPlaceName, getMatchesFull, getMatchDetail, getSafetyFull, getWeatherFull, getHourlyWindow, getHolidays, getPrayerWeek, getTafsir, VALID_CATEGORIES };

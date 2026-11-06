@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { protect } = require('../middleware/auth');
-const { getArticles, getWidgets, getDaily, getAnother, getPlaceName, getMatchesFull, getMatchDetail, getPrayerWeek, getSafetyFull, getWeatherFull, getHourlyWindow, VALID_CATEGORIES } = require('../services/feedService');
+const { getArticles, getWidgets, getDaily, getAnother, getPlaceName, getMatchesFull, getMatchDetail, getPrayerWeek, getTafsir, getSafetyFull, getWeatherFull, getHourlyWindow, VALID_CATEGORIES } = require('../services/feedService');
 
 router.use(protect);
 
@@ -74,6 +74,15 @@ router.get('/prayer', async (req, res) => {
     res.json({ days: await getPrayerWeek(lat, lng, req.query.days) });
   } catch (err) {
     res.status(502).json({ message: 'Prayer times unavailable' });
+  }
+});
+
+// GET /api/feed/tafsir?ref=2:152 -> { ref, bn: {name, source, text}, en: {...} }
+router.get('/tafsir', async (req, res) => {
+  try {
+    res.json(await getTafsir(req.query.ref));
+  } catch (err) {
+    res.status(err.message === 'bad ref' ? 400 : 502).json({ message: 'Tafsir unavailable' });
   }
 });
 

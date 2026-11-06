@@ -1325,13 +1325,14 @@ export default function ChatScreen({ route, navigation }) {
           ListHeaderComponent={isTyping ? <TypingIndicator theme={theme} /> : null}
           ListEmptyComponent={
             searchQuery ? (
-              <View style={{ alignItems: 'center', marginTop: 48, transform: [{ scaleY: -1 }] }}>
+              <View style={{ alignItems: 'center', marginTop: 48 }}>
                 <Ionicons name="search" size={42} color="#8E8E93" />
                 <Text style={{ color: '#8E8E93', marginTop: 10, fontSize: 15 }}>No messages found</Text>
               </View>
             ) : (
-              // a brand-new conversation: a warm welcome instead of an empty screen (the list is flipped, so this is flipped back)
-              <View style={{ alignItems: 'center', paddingHorizontal: 32, marginTop: 56, transform: [{ scaleY: -1 }] }}>
+              // a brand-new conversation: a warm welcome instead of an empty screen.
+              // (FlatList already un-flips its empty component when `inverted`, so no extra flip here: that made it upside down)
+              <View style={{ alignItems: 'center', paddingHorizontal: 32, marginTop: 56 }}>
                 <View style={{ width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }}>
                   <View style={{ width: 92, height: 92, borderRadius: 46, overflow: 'hidden' }}>
                     <Avatar uri={recipientAvatarData.avatar} name={recipientAvatarData.name} style={{ width: 92, height: 92, borderRadius: 46 }} />

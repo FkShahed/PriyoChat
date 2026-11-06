@@ -16,7 +16,7 @@ import useThemeStore, { useColors } from '../../store/useThemeStore';
 import { feedApi } from '../../api/services';
 import Avatar from '../../components/common/Avatar';
 import ArticleReader from '../../components/common/ArticleReader';
-import { FEED_CATEGORIES, FEED_GROUPS, CATEGORY_BY_ID, FEED_CITIES, DEFAULT_PREFS, DAILY_EXTRAS, timeAgo } from '../../constants/feedConfig';
+import { FEED_CATEGORIES, FEED_GROUPS, CATEGORY_BY_ID, FEED_CITIES, DEFAULT_PREFS, DAILY_EXTRAS, EXTRA_GROUPS, timeAgo } from '../../constants/feedConfig';
 import { buildShareText } from '../../utils/feedShare';
 import { bdParts, bdClock, bdMinutesOfDay, bdDayKey, bdFullDate } from '../../utils/bdTime';
 import MatchCard from '../../components/feed/MatchCard';
@@ -1988,13 +1988,13 @@ export default function FeedScreen({ navigation }) {
               <TouchableOpacity key={c.id} activeOpacity={0.8} onPress={() => toggleInterest(c.id)} style={{ marginRight: 8, marginBottom: 8 }}>
                 {on ? (
                   <LinearGradient colors={c.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.interestChip}>
-                    <Ionicons name={c.icon} size={15} color="#FFF" />
+                    <Ionicons name={c.icon} size={13} color="#FFF" />
                     <Text style={[styles.interestText, { color: '#FFF' }]}>{c.label}</Text>
-                    <Ionicons name="checkmark" size={14} color="#FFF" />
+                    <Ionicons name="checkmark" size={12} color="#FFF" />
                   </LinearGradient>
                 ) : (
                   <View style={[styles.interestChip, { backgroundColor: P.cardAlt, borderColor: P.border }]}>
-                    <Ionicons name={c.icon} size={15} color={P.sub} />
+                    <Ionicons name={c.icon} size={13} color={P.sub} />
                     <Text style={[styles.interestText, { color: P.text }]}>{c.label}</Text>
                   </View>
                 )}
@@ -2037,28 +2037,42 @@ export default function FeedScreen({ navigation }) {
           </View>
         ) : null}
 
-        <PickHead P={P} icon="sparkles-outline" title="Daily extras" sub="Cards you want on your Daily page" right={DAILY_EXTRAS.filter((e) => ({ ...DEFAULT_PREFS.extras, ...(draft.extras || {}) })[e.id]).length + ' on'} />
-        <View style={styles.chipWrap}>
-          {DAILY_EXTRAS.map((e) => {
-            const on = ({ ...DEFAULT_PREFS.extras, ...(draft.extras || {}) })[e.id];
-            return (
-              <TouchableOpacity key={e.id} activeOpacity={0.8} onPress={() => toggleExtra(e.id)} style={{ marginRight: 8, marginBottom: 8 }}>
-                {on ? (
-                  <LinearGradient colors={['#7C3AED', '#5B4BE8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.interestChip}>
-                    <Ionicons name={e.icon} size={15} color="#FFF" />
-                    <Text style={[styles.interestText, { color: '#FFF' }]}>{e.label}</Text>
-                    <Ionicons name="checkmark" size={14} color="#FFF" />
-                  </LinearGradient>
-                ) : (
-                  <View style={[styles.interestChip, { backgroundColor: P.cardAlt, borderColor: P.border }]}>
-                    <Ionicons name={e.icon} size={15} color={P.sub} />
-                    <Text style={[styles.interestText, { color: P.text }]}>{e.label}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <PickHead P={P} icon="sparkles-outline" title="Cards in your tabs" sub="Choose what each tab shows. Matches, Markets and News are always on." right={DAILY_EXTRAS.filter((e) => ({ ...DEFAULT_PREFS.extras, ...(draft.extras || {}) })[e.id]).length + ' on'} />
+        {EXTRA_GROUPS.map((g) => {
+          const items = g.ids.map((id) => DAILY_EXTRAS.find((e) => e.id === id)).filter(Boolean);
+          const cur = { ...DEFAULT_PREFS.extras, ...(draft.extras || {}) };
+          const picked = items.filter((e) => cur[e.id]).length;
+          return (
+            <View key={g.id} style={{ marginBottom: 4 }}>
+              <View style={styles.groupHead}>
+                <Ionicons name={g.icon} size={13} color={P.sub} />
+                <Text style={[styles.groupLabel, { color: P.sub }]}>{g.label}</Text>
+                <Text style={[styles.groupCount, { color: P.accent }]}>{picked}/{items.length}</Text>
+              </View>
+              <View style={styles.chipWrap}>
+                {items.map((e) => {
+                  const on = cur[e.id];
+                  return (
+                    <TouchableOpacity key={e.id} activeOpacity={0.8} onPress={() => toggleExtra(e.id)} style={{ marginRight: 6, marginBottom: 6 }}>
+                      {on ? (
+                        <LinearGradient colors={['#7C3AED', '#5B4BE8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.interestChip}>
+                          <Ionicons name={e.icon} size={13} color="#FFF" />
+                          <Text style={[styles.interestText, { color: '#FFF' }]}>{e.label}</Text>
+                          <Ionicons name="checkmark" size={12} color="#FFF" />
+                        </LinearGradient>
+                      ) : (
+                        <View style={[styles.interestChip, { backgroundColor: P.cardAlt, borderColor: P.border }]}>
+                          <Ionicons name={e.icon} size={13} color={P.sub} />
+                          <Text style={[styles.interestText, { color: P.text }]}>{e.label}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
 
         <PickHead P={P} icon="location-outline" title="Your location" sub="For weather, prayer times and air quality" />
         <TouchableOpacity activeOpacity={0.85} onPress={useMyLocation} style={{ marginBottom: 12 }}>
@@ -2098,11 +2112,23 @@ export default function FeedScreen({ navigation }) {
           })}
         </View>
       </ScrollView>
-      <TouchableOpacity activeOpacity={0.85} onPress={savePrefs} style={{ marginTop: 10 }}>
-        <LinearGradient colors={['#7C3AED', '#5B4BE8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtn}>
-          <Text style={styles.saveText}>{(prefs?.onboarded ? 'Save' : 'Show my feed') + ' · ' + (draft.interests.length + (draft.customTopics || []).length) + (draft.interests.length + (draft.customTopics || []).length === 1 ? ' topic' : ' topics')}</Text>
-        </LinearGradient>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', marginTop: 10 }}>
+        {prefs?.onboarded ? (
+          // Cancel: close without saving and throw away the changes made here (only once the feed is already set up)
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => { setDraft(prefs); setCustomText(''); setShowPicker(false); }}
+            style={[styles.saveBtn, { flex: 1, marginRight: 10, backgroundColor: P.cardAlt, borderWidth: 1, borderColor: P.border }]}
+          >
+            <Text style={[styles.saveText, { color: P.text }]}>Cancel</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity activeOpacity={0.85} onPress={savePrefs} style={{ flex: prefs?.onboarded ? 2 : 1 }}>
+          <LinearGradient colors={['#7C3AED', '#5B4BE8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtn}>
+            <Text style={styles.saveText}>{(prefs?.onboarded ? 'Save' : 'Show my feed') + ' · ' + (draft.interests.length + (draft.customTopics || []).length) + (draft.interests.length + (draft.customTopics || []).length === 1 ? ' topic' : ' topics')}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
     </BottomSheet>
   );
 
@@ -2367,8 +2393,8 @@ const styles = StyleSheet.create({
   shareBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   thumb: { width: 104, height: 96, borderRadius: 16 },
 
-  gpsBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 13, borderRadius: 18 },
-  gpsText: { flex: 1, marginLeft: 10, fontSize: 14.5, fontWeight: '500' },
+  gpsBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, paddingVertical: 10, borderRadius: 16 },
+  gpsText: { flex: 1, marginLeft: 9, fontSize: 13.5, fontWeight: '500' },
   glassIcon: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   meterHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   meterLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 12.5, fontWeight: '400' },
@@ -2535,12 +2561,12 @@ const styles = StyleSheet.create({
   sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginBottom: 14 },
 
   pickerHead: { alignItems: 'center', marginBottom: 6 },
-  pickerIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  pickerTitle: { fontSize: 20, fontWeight: '600' },
-  pickerSub: { fontSize: 13.5, textAlign: 'center', marginTop: 4, lineHeight: 19 },
+  pickerIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  pickerTitle: { fontSize: 17.5, fontWeight: '500' },
+  pickerSub: { fontSize: 12, textAlign: 'center', marginTop: 3, lineHeight: 17 },
   pickerLabel: { fontSize: 13, fontWeight: '500', marginTop: 20, marginBottom: 10 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  pickHead: { flexDirection: 'row', alignItems: 'center', marginTop: 26, marginBottom: 12 },
+  pickHead: { flexDirection: 'row', alignItems: 'center', marginTop: 18, marginBottom: 9 },
   topicBtn: { flexDirection: 'row', alignItems: 'center', maxWidth: 190, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
   topicBtnText: { fontSize: 12.5, fontWeight: '500', marginHorizontal: 6, flexShrink: 1 },
   topicMenu: { position: 'absolute', width: 230, borderRadius: 18, borderWidth: 1, paddingVertical: 6, elevation: 14, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
@@ -2548,23 +2574,23 @@ const styles = StyleSheet.create({
   topicDot: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   topicItemText: { flex: 1, fontSize: 14, fontWeight: '400', marginLeft: 10 },
   customRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingLeft: 12, paddingRight: 6, paddingVertical: 6 },
-  customInput: { flex: 1, fontSize: 14.5, paddingVertical: 6, paddingHorizontal: 10 },
+  customInput: { flex: 1, fontSize: 13.5, paddingVertical: 4, paddingHorizontal: 9 },
   customAdd: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  groupHead: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 8 },
-  groupLabel: { fontSize: 12, fontWeight: '500', letterSpacing: 0.4, marginLeft: 6, textTransform: 'uppercase' },
-  groupCount: { fontSize: 11.5, fontWeight: '600', marginLeft: 8 },
-  pickHeadIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  pickHeadTitle: { fontSize: 15, fontWeight: '500' },
-  pickHeadSub: { fontSize: 12, marginTop: 1 },
+  groupHead: { flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 6 },
+  groupLabel: { fontSize: 10.5, fontWeight: '500', letterSpacing: 0.5, marginLeft: 5, textTransform: 'uppercase' },
+  groupCount: { fontSize: 10.5, fontWeight: '600', marginLeft: 7 },
+  pickHeadIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  pickHeadTitle: { fontSize: 14, fontWeight: '500' },
+  pickHeadSub: { fontSize: 11, marginTop: 1, lineHeight: 15 },
   pickCount: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 11 },
-  interestChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
-  interestText: { fontSize: 14, fontWeight: '400', marginHorizontal: 7 },
+  interestChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 15, borderWidth: 1, borderColor: 'transparent' },
+  interestText: { fontSize: 12.5, fontWeight: '400', marginHorizontal: 5 },
   segment: { flexDirection: 'row', borderRadius: 16, padding: 4 },
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12 },
   segText: { fontSize: 13.5, fontWeight: '500' },
   hint: { fontSize: 11.5, marginTop: 8, lineHeight: 16 },
-  cityChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, borderWidth: 1, marginRight: 8, marginBottom: 8 },
-  saveBtn: { borderRadius: 20, alignItems: 'center', justifyContent: 'center', paddingVertical: 15 },
+  cityChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 15, borderWidth: 1, marginRight: 6, marginBottom: 6 },
+  saveBtn: { borderRadius: 18, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
   saveText: { color: '#FFF', fontSize: 15.5, fontWeight: '500', letterSpacing: 0.2 },
 
   sharePreview: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 18 },

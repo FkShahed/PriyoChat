@@ -86,9 +86,19 @@ export const DAILY_EXTRAS = [
   { id: 'joke', label: 'Light joke', bn: 'হালকা জোকস', icon: 'happy' },
   { id: 'sunmoon', label: 'Sun & moon', bn: 'সূর্য ও চাঁদ', icon: 'moon' },
   { id: 'uv', label: 'UV & dust', bn: 'ইউভি ও ধুলা', icon: 'sunny' },
-  { id: 'safety', label: 'Disaster & flood watch', bn: 'দুর্যোগ সতর্কতা', icon: 'warning' },
+  { id: 'safety', label: 'Earthquakes, disasters & rivers', bn: 'দুর্যোগ সতর্কতা', icon: 'warning' },
   { id: 'holidays', label: 'Public holidays', bn: 'সরকারি ছুটি', icon: 'calendar' },
   { id: 'art', label: 'Artwork of the day', bn: 'আজকের শিল্পকর্ম', icon: 'color-palette' },
+];
+
+// The Feed now has a tab for each of these; the cards you switch on or off here decide what shows inside that tab.
+// (Matches, Markets and News have no switches: they are always there.)
+export const EXTRA_GROUPS = [
+  { id: 'daily', label: 'Daily', icon: 'sunny', ids: ['sunmoon', 'uv'] },
+  { id: 'safety', label: 'Safety', icon: 'warning', ids: ['safety'] },
+  { id: 'holidays', label: 'Holidays', icon: 'calendar', ids: ['holidays'] },
+  { id: 'inspiration', label: 'Inspiration', icon: 'sparkles', ids: ['ayah', 'dua', 'quote', 'word'] },
+  { id: 'discover', label: 'Discover', icon: 'compass', ids: ['art', 'recipe', 'fact', 'joke'] },
 ];
 
 export function timeAgo(iso) {
