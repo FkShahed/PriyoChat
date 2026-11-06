@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../context/AuthContext';
 import './AdminLayout.css';
@@ -18,8 +18,31 @@ export default function AdminLayout({ children }) {
   const { admin, logout } = useAdminAuth();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const mainRef = useRef(null);
 
   useEffect(() => { setOpen(false); }, [location.pathname]);
+
+  // Mobile: label every table cell with its column name so CSS can render rows as cards.
+  useEffect(() => {
+    const root = mainRef.current;
+    if (!root) return undefined;
+    const label = () => {
+      root.querySelectorAll('table').forEach((t) => {
+        const heads = Array.from(t.querySelectorAll('thead th')).map((h) => h.textContent.trim());
+        t.querySelectorAll('tbody tr').forEach((tr) => {
+          Array.from(tr.children).forEach((td, i) => {
+            if (td.colSpan > 1) { td.removeAttribute('data-label'); return; }
+            const l = heads[i] || '';
+            if (td.getAttribute('data-label') !== l) td.setAttribute('data-label', l);
+          });
+        });
+      });
+    };
+    label();
+    const mo = new MutationObserver(label);
+    mo.observe(root, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, [location.pathname]);
 
   return (
     <div className="layout">
@@ -48,7 +71,7 @@ export default function AdminLayout({ children }) {
           <button className="logout-btn" onClick={logout}>Logout</button>
         </div>
       </aside>
-      <main className="main-content">
+      <main className="main-content" ref={mainRef}>
         {children}
       </main>
     </div>
