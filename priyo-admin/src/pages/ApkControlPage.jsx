@@ -6,6 +6,7 @@ export default function ApkControlPage() {
   const [apkUrl, setApkUrl] = useState('');
   const [releaseNotes, setReleaseNotes] = useState('');
   const [history, setHistory] = useState([]);
+  const [latest, setLatest] = useState(null); // currently published version on the server
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [globalRingtoneUrl, setGlobalRingtoneUrl] = useState('');
@@ -19,6 +20,7 @@ export default function ApkControlPage() {
         api.get('/admin/app-update/history'),
         api.get('/admin/config')
       ]);
+      setLatest(infoRes.data && infoRes.data.version ? infoRes.data : null);
       setVersion(infoRes.data.version || '');
       setApkUrl(infoRes.data.apkUrl || '');
       setReleaseNotes(infoRes.data.releaseNotes || '');
@@ -213,9 +215,10 @@ export default function ApkControlPage() {
             <button
               type="button"
               onClick={() => {
-                setVersion('3.7.0');
-                setApkUrl('https://138.2.92.182.nip.io/apk/PriyoChat-latest.apk');
-                setReleaseNotes('Version 3.7.0 (STABLE). PriyoChat Cloud Engine release with high-throughput cloud sockets and WebRTC calls.');
+                if (!latest) return;
+                setVersion(latest.version || '');
+                setApkUrl(latest.apkUrl || 'https://138.2.92.182.nip.io/apk/PriyoChat-latest.apk');
+                setReleaseNotes(latest.releaseNotes || '');
               }}
               style={{
                 fontSize: '12px',
@@ -227,7 +230,7 @@ export default function ApkControlPage() {
                 cursor: 'pointer'
               }}
             >
-              Fill Latest (v3.7.0)
+              {latest ? `Fill Latest (v${latest.version})` : 'Fill Latest'}
             </button>
           </h3>
           
