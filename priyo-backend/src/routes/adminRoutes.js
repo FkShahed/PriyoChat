@@ -2,7 +2,7 @@ const router = require('express').Router();
 const { protect } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/role');
 const {
-  getAllUsers, banUser, suspendUser, warnUser, removeWarning,
+  getAllUsers, deleteUser, banUser, suspendUser, warnUser, removeWarning,
   getReports, resolveReport, getAnalytics, getAuditLogs,
   getBugReports, updateBugReportStatus,
   getAppUpdate, setAppUpdate, getAppUpdateHistory, deleteAppUpdate,
@@ -14,6 +14,7 @@ const {
 router.use(protect, requireAdmin);
 
 router.get('/users', getAllUsers);
+router.delete('/users/:id', deleteUser);
 router.put('/users/:id/ban', banUser);
 router.put('/users/:id/suspend', suspendUser);
 router.put('/users/:id/warn', warnUser);

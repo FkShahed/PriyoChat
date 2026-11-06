@@ -53,8 +53,8 @@ export default function AuditLogsPage() {
                   {new Date(log.createdAt).toLocaleString()}
                 </td>
                 <td>
-                  <div className="user-name">{log.admin?.name}</div>
-                  <div className="user-email">{log.admin?.email}</div>
+                  <div className="user-name">{log.admin?.name || 'Unknown'}</div>
+                  <div className="user-email">{log.admin?.email || ''}</div>
                 </td>
                 <td>
                   <span className="log-action" style={{ color: actionColor[log.action] || '#58a6ff', background: `${actionColor[log.action] || '#58a6ff'}18` }}>

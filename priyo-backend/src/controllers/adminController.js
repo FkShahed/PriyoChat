@@ -433,7 +433,71 @@ const updateAppConfig = async (req, res) => {
   }
 };
 
+// DELETE /api/admin/users/:id  — permanently remove a user and all their data
+const deleteUser = async (req, res) => {
+  try {
+    const FriendRequest = require('../models/FriendRequest');
+    const Call = require('../models/Call');
+    const Notification = require('../models/Notification');
+    const cloudinary = require('../config/cloudinary');
+    const mongoose = require('mongoose');
+
+    const id = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid user id' });
+    if (String(req.user._id) === String(id)) return res.status(400).json({ message: 'You cannot delete your own account' });
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.role && user.role !== 'user') return res.status(403).json({ message: 'Admin accounts cannot be deleted here' });
+
+    // Chats with this user (and every message in them)
+    const convs = await Conversation.find({ participants: user._id }).select('_id');
+    const convIds = convs.map((c) => c._id);
+    const msgs = await Message.find({ conversation: { $in: convIds } }).select('images');
+    const publicIds = [];
+    msgs.forEach((m) => (m.images || []).forEach((im) => im.publicId && publicIds.push(im.publicId)));
+    if (user.avatarPublicId) publicIds.push(user.avatarPublicId);
+    // best-effort media cleanup (never blocks deletion)
+    await Promise.all(publicIds.map((p) => cloudinary.uploader.destroy(p).catch(() => {})));
+
+    const msgDel = await Message.deleteMany({ $or: [{ conversation: { $in: convIds } }, { sender: user._id }] });
+    await Conversation.deleteMany({ _id: { $in: convIds } });
+    await FriendRequest.deleteMany({ $or: [{ from: user._id }, { to: user._id }] });
+    await Call.deleteMany({ $or: [{ caller: user._id }, { receiver: user._id }] });
+    await Notification.deleteMany({ user: user._id });
+    await Report.deleteMany({ $or: [{ reportedBy: user._id }, { reportedUser: user._id }] });
+    await BugReport.deleteMany({ reportedBy: user._id });
+    await User.updateMany({ blockedUsers: user._id }, { $pull: { blockedUsers: user._id } });
+    await Message.updateMany({ 'reactions.user': user._id }, { $pull: { reactions: { user: user._id } } });
+
+    // Disconnect any live session
+    const io = req.app.get('io');
+    if (io) {
+      io.to(user._id.toString()).emit('user_moderated', { type: 'ban', reason: 'Account deleted' });
+      try { io.in(user._id.toString()).disconnectSockets(true); } catch (e) {}
+    }
+
+    const name = user.name;
+    const email = user.email;
+    await User.deleteOne({ _id: user._id });
+
+    // Audit log is kept as history (target shown as the saved name)
+    await logAdminAction(
+      req.user._id,
+      'DELETE_USER',
+      'User',
+      user._id,
+      { targetName: name, email, deletedMessages: msgDel.deletedCount || 0, deletedChats: convIds.length },
+      req.ip
+    );
+    res.json({ message: 'User and all related data deleted', deletedMessages: msgDel.deletedCount || 0, deletedChats: convIds.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 module.exports = {
+  deleteUser,
   getAllUsers,
   banUser,
   suspendUser,

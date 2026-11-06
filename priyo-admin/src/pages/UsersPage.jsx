@@ -77,6 +77,23 @@ export default function UsersPage() {
     }
   };
 
+  const deleteUser = async (u) => {
+    const typed = window.prompt(
+      `PERMANENTLY delete "${u.name}" (${u.email})?\nThis removes the account, all their chats, messages, calls, requests and reports. This cannot be undone.\n\nType DELETE to confirm:`
+    );
+    if (typed !== 'DELETE') return;
+    setActionLoading((prev) => ({ ...prev, [u._id]: 'delete' }));
+    try {
+      const res = await api.delete(`/admin/users/${u._id}`);
+      window.alert(`Deleted. Chats removed: ${res.data.deletedChats ?? 0}, messages removed: ${res.data.deletedMessages ?? 0}`);
+      load(page, search);
+    } catch (err) {
+      window.alert(`Error: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [u._id]: null }));
+    }
+  };
+
   return (
     <>
       <h1 className="page-title">User Management</h1>
@@ -177,6 +194,9 @@ export default function UsersPage() {
                     ) : (
                       <button className="btn btn-ban" onClick={() => doAction(u._id, 'ban')}>🚫 Ban</button>
                     )}
+                    <button className="btn btn-ban btn-delete" onClick={() => deleteUser(u)} disabled={!!actionLoading[u._id]} title="Permanently delete user and all data">
+                      {actionLoading[u._id] === 'delete' ? '...' : '🗑 Delete'}
+                    </button>
                   </div>
                 </td>
               </tr>

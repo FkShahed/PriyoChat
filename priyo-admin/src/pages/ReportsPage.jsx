@@ -78,8 +78,8 @@ export default function ReportsPage() {
               </td></tr>
             ) : data.reports.map((r) => (
               <tr key={r._id}>
-                <td><div className="user-name">{r.reportedBy?.name}</div><div className="user-email">{r.reportedBy?.email}</div></td>
-                <td><div className="user-name">{r.reportedUser?.name || '—'}</div></td>
+                <td><div className="user-name">{r.reportedBy?.name || 'Unknown'}</div><div className="user-email">{r.reportedBy?.email || ''}</div></td>
+                <td><div className="user-name">{r.reportedUser ? (r.reportedUser.name || 'Unknown') : 'Unknown'}</div></td>
                 <td><span className="badge badge-pending">{REASON_LABELS[r.reason] || r.reason}</span></td>
                 <td style={{ maxWidth: 200 }}>
                   <span style={{ color: 'rgba(230,237,243,0.5)', fontSize: 12 }} title={r.message?.text}>
