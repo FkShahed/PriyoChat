@@ -1039,7 +1039,6 @@ export default function FeedScreen({ navigation }) {
             <Text style={[styles.listTitle, { color: P.text, marginLeft: 8 }]}>Prayer times</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {pr.hijri ? <Text style={{ color: P.sub, fontSize: 10, fontWeight: '400', opacity: 0.85, marginRight: 8 }} numberOfLines={1}>{pr.hijri}</Text> : null}
             <View style={[styles.dSecMore, { backgroundColor: P.cardAlt, marginLeft: 0, width: 28, height: 28, borderRadius: 14 }]}>
               <Ionicons name="arrow-forward" size={15} color={P.text} />
             </View>
