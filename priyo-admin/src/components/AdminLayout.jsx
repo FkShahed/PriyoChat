@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../context/AuthContext';
 import './AdminLayout.css';
+import './AdminPolish.css';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: '📊' },
@@ -16,10 +17,15 @@ const navItems = [
 export default function AdminLayout({ children }) {
   const { admin, logout } = useAdminAuth();
   const location = useLocation();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => { setOpen(false); }, [location.pathname]);
 
   return (
     <div className="layout">
-      <aside className="sidebar">
+      <button className="menu-btn" onClick={() => setOpen((o) => !o)} aria-label="Menu">{open ? '✕' : '☰'}</button>
+      <div className={`sidebar-backdrop ${open ? 'show' : ''}`} onClick={() => setOpen(false)} />
+      <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <span className="logo-icon">💬</span>
           <span className="logo-text">PriyoChat</span>

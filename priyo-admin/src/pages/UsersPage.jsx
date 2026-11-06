@@ -12,6 +12,23 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState({});
+  const [filter, setFilter] = useState('all');
+
+  const statusOf = (u) => (u.isBlocked ? 'banned' : u.isSuspended ? 'suspended' : 'active');
+  const counts = {
+    all: data.users.length,
+    active: data.users.filter((u) => statusOf(u) === 'active').length,
+    online: data.users.filter((u) => u.isOnline).length,
+    suspended: data.users.filter((u) => statusOf(u) === 'suspended').length,
+    banned: data.users.filter((u) => statusOf(u) === 'banned').length,
+    warned: data.users.filter((u) => u.warnings > 0).length,
+  };
+  const shown = data.users.filter((u) => {
+    if (filter === 'all') return true;
+    if (filter === 'online') return u.isOnline;
+    if (filter === 'warned') return u.warnings > 0;
+    return statusOf(u) === filter;
+  });
 
   const load = useCallback(async (p = 1, s = '') => {
     setLoading(true);
@@ -74,6 +91,14 @@ export default function UsersPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <div className="filter-bar">
+          {[['all', 'All'], ['active', 'Active'], ['online', 'Online'], ['warned', 'Warned'], ['suspended', 'Suspended'], ['banned', 'Banned']].map(([k, l]) => (
+            <button key={k} className={`chip ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>
+              {l}<span className="count">{counts[k]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="table-scroll">
         <table>
           <thead>
             <tr>
@@ -88,9 +113,9 @@ export default function UsersPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'rgba(230,237,243,0.3)' }}>Loading...</td></tr>
-            ) : data.users.length === 0 ? (
+            ) : shown.length === 0 ? (
               <tr><td colSpan={6} className="empty-state"><div className="empty-icon">👥</div><div>No users found</div></td></tr>
-            ) : data.users.map((u) => (
+            ) : shown.map((u) => (
               <tr key={u._id}>
                 <td>
                   <div className="avatar-cell">
@@ -117,7 +142,7 @@ export default function UsersPage() {
                 <td>{u.warnings > 0 ? <span style={{ color: '#ff9500', fontWeight: 700 }}>{u.warnings} warn{u.warnings > 1 ? 's' : ''}</span> : '—'}</td>
                 <td>{new Date(u.createdAt).toLocaleDateString()}</td>
                 <td>
-                  {u.isOnline ? <span className="badge badge-online">Online</span> : <span className="badge badge-offline">Offline</span>}
+                  {u.isOnline ? <span className="badge badge-online"><span className="online-dot" />Online</span> : <span className="badge badge-offline">Offline</span>}
                 </td>
                 <td>
                   <div className="actions" style={{ alignItems: 'center' }}>
@@ -158,6 +183,7 @@ export default function UsersPage() {
             ))}
           </tbody>
         </table>
+        </div>
         {/* Pagination */}
         <div className="pagination">
           <button className="page-btn" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>‹ Prev</button>
