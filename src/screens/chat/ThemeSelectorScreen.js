@@ -11,7 +11,8 @@ import useThemeStore, { useColors } from '../../store/useThemeStore';
 import useChatStore from '../../store/useChatStore';
 
 // Keys the backend actually supports; all others are stored locally only.
-const BACKEND_THEMES = new Set(['ClassicBlue', 'DarkNeon', 'SoftPurple', 'MinimalWhite', 'OceanGlass']);
+// (server now accepts every theme key, so the other person gets the change too)
+const BACKEND_THEMES = new Set(Object.keys(THEMES));
 
 const THEME_KEYS = SELECTOR_KEYS;
 

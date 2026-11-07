@@ -11,7 +11,7 @@ const conversationSchema = new mongoose.Schema(
     ],
     theme: {
       type: String,
-      enum: ['ClassicBlue', 'DarkNeon', 'SoftPurple', 'MinimalWhite', 'OceanGlass'],
+      enum: ['ClassicBlue', 'DarkNeon', 'SoftPurple', 'MinimalWhite', 'OceanGlass', 'DoodleLight', 'DoodleDark', 'WatercolorLight', 'OilPainting', 'AbstractArt', 'SketchArt'],
       default: 'ClassicBlue',
     },
     lastMessage: {

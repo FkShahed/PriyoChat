@@ -135,23 +135,57 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
 }
 
 // ── Dropdown menu ────────────────────────────────────────────────────
-function DropdownMenu({ visible, onClose, items }) {
+function DropdownMenu({ visible, onClose, items, isDark }) {
+  const anim = useRef(new RNAnimated.Value(0)).current;
+  useEffect(() => {
+    if (visible) {
+      anim.setValue(0);
+      RNAnimated.spring(anim, { toValue: 1, useNativeDriver: true, friction: 8, tension: 90 }).start();
+    }
+  }, [visible, anim]);
   if (!visible) return null;
+
+  const cardBg = isDark ? '#1E2128' : '#FFFFFF';
+  const textColor = isDark ? '#F2F4F8' : '#1B1F29';
+  const divider = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+  const top = (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 50) + 54;
+
   return (
     <TouchableWithoutFeedback onPress={onClose}>
-      <View style={StyleSheet.absoluteFill}>
-        <View style={styles.dropdownCard}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.12)' }]}>
+        <RNAnimated.View
+          style={[
+            styles.dropdownCard,
+            {
+              top,
+              backgroundColor: cardBg,
+              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+              opacity: anim,
+              transform: [
+                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) },
+                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) },
+              ],
+            },
+          ]}
+        >
           {items.map((item, i) => (
             <TouchableOpacity
               key={i}
-              style={[styles.dropdownItem, i < items.length - 1 && styles.dropdownItemBorder]}
+              activeOpacity={0.6}
+              style={[
+                styles.dropdownItem,
+                i < items.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: divider },
+              ]}
               onPress={() => { onClose(); item.onPress(); }}
             >
-              <Ionicons name={item.icon} size={19} color="#555" style={{ width: 26 }} />
-              <Text style={styles.dropdownLabel}>{item.label}</Text>
+              <View style={[styles.dropdownIconChip, { backgroundColor: (item.tint || '#0084FF') + (isDark ? '2E' : '1F') }]}>
+                <Ionicons name={item.icon} size={18} color={item.tint || '#0084FF'} />
+              </View>
+              <Text style={[styles.dropdownLabel, { color: textColor }]}>{item.label}</Text>
+              <Ionicons name="chevron-forward" size={15} color={isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.25)'} />
             </TouchableOpacity>
           ))}
-        </View>
+        </RNAnimated.View>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -328,9 +362,15 @@ export default function ChatScreen({ route, navigation }) {
 
   // Local theme key — loaded from AsyncStorage (supports painted themes the backend can't store)
   const [localThemeKey, setLocalThemeKey] = useState(null);
+  const convoThemeRef = useRef(convo?.theme);
+  convoThemeRef.current = convo?.theme;
   useEffect(() => {
     AsyncStorage.getItem(`chat_theme_${conversationId}`).then(stored => {
-      if (stored && THEMES[stored]) setLocalThemeKey(stored);
+      // A theme the other person picked (saved on the server) wins over an old local value;
+      // the local value only fills in while the server still has its untouched default.
+      const serverKey = convoThemeRef.current;
+      const serverIsDefault = !serverKey || serverKey === 'ClassicBlue';
+      if (stored && THEMES[stored] && serverIsDefault) setLocalThemeKey(stored);
     });
   }, [conversationId]);
 
@@ -440,6 +480,7 @@ export default function ChatScreen({ route, navigation }) {
   const swipeableRefs = useRef({});
   const isKeyboardVisible = useRef(false);
   const keyboardPadding = useRef(new RNAnimated.Value(0)).current;
+  const kbWrapRef = useRef(null);
   const isTyping = typingUsers[conversationId];
 
   const isOtherOnline = onlineUsers[recipientUser?._id] ?? recipientUser?.isOnline;
@@ -483,11 +524,27 @@ export default function ChatScreen({ route, navigation }) {
         keyboardHeightRef.current = h;
         setKeyboardHeight(h);
       }
-      RNAnimated.timing(keyboardPadding, {
-        toValue: h,
-        duration: e?.duration || 180,
-        useNativeDriver: false,
-      }).start();
+      // Lift the composer by exactly how far the keyboard really overlaps this screen. The event
+      // height alone can be a little short/long (nav-bar / gesture inset differences), which left the
+      // input row partly hidden behind the keyboard now and then. Falls back to the event height.
+      const dur = e?.duration || 180;
+      const sy = e?.endCoordinates?.screenY;
+      const node = kbWrapRef.current;
+      const apply = (pad) => {
+        if (!isKeyboardVisible.current) return;
+        RNAnimated.timing(keyboardPadding, { toValue: pad, duration: dur, useNativeDriver: false }).start();
+      };
+      let measured = false;
+      if (Platform.OS === 'android' && h > 0 && sy > 0 && node && typeof node.measureInWindow === 'function') {
+        try {
+          node.measureInWindow((x, y, w, ht) => {
+            const pad = Math.max(0, Math.round(y + ht - sy));
+            apply(Number.isFinite(pad) && Math.abs(pad - h) <= 80 ? pad : h);
+          });
+          measured = true;
+        } catch (err) { measured = false; }
+      }
+      if (!measured) apply(h);
       scrollToBottom(false);
       setTimeout(() => scrollToBottom(true), 80);
     });
@@ -1192,16 +1249,16 @@ export default function ChatScreen({ route, navigation }) {
 
   // ── 3-dot menu items ────────────────────────────────────────────────
   const menuItems = [
-    { icon: 'color-palette-outline', label: 'Chat Theme', onPress: () => navigation.navigate('ThemeSelector', { conversationId, currentTheme: convo.theme }) },
-    { icon: 'images-outline', label: 'Shared Media', onPress: () => navigation.navigate('SharedMedia', { conversationId }) },
-    { icon: 'search-outline', label: 'Search Messages', onPress: () => { setSearchVisible(true); setMenuVisible(false); } },
+    { icon: 'color-palette-outline', tint: '#8B5CF6', label: 'Chat Theme', onPress: () => navigation.navigate('ThemeSelector', { conversationId, currentTheme: convo.theme }) },
+    { icon: 'images-outline', tint: '#0EA5E9', label: 'Shared Media', onPress: () => navigation.navigate('SharedMedia', { conversationId }) },
+    { icon: 'search-outline', tint: '#F59E0B', label: 'Search Messages', onPress: () => { setSearchVisible(true); setMenuVisible(false); } },
   ];
 
   const bgStyle = [styles.container, { backgroundColor: theme.background }];
 
   // Platform-aware keyboard handling: use animated padding for smooth transition with Emoji Keyboard
   const KeyboardWrapper = RNAnimated.View;
-  const wrapperProps = { style: [{ flex: 1 }, { paddingBottom: keyboardPadding }] };
+  const wrapperProps = { ref: kbWrapRef, collapsable: false, style: [{ flex: 1 }, { paddingBottom: keyboardPadding }] };
 
   // ── Main content (shared between View and ImageBackground wrappers)
   const content = (
@@ -1533,6 +1590,7 @@ export default function ChatScreen({ route, navigation }) {
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
         items={menuItems}
+        isDark={isDarkTheme}
       />
 
       {/* ── Context Menu (Reactions & Delete) ───────────────────────── */}
@@ -1692,27 +1750,34 @@ const styles = StyleSheet.create({
   // Dropdown
   dropdownCard: {
     position: 'absolute',
-    top: 100,
     right: 12,
-    backgroundColor: '#FFF',
-    borderRadius: 14,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 10,
-    minWidth: 190,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 14,
+    minWidth: 224,
+    paddingVertical: 6,
     overflow: 'hidden',
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    marginHorizontal: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
     gap: 12,
   },
-  dropdownItemBorder: { borderBottomWidth: 0.5, borderBottomColor: '#F2F2F7' },
-  dropdownLabel: { fontSize: 15, color: '#1C1C1E', fontWeight: '500' },
+  dropdownIconChip: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownLabel: { flex: 1, fontSize: 15, fontWeight: '600', letterSpacing: 0.1 },
   // Image viewer
   imageViewerBg: {
     flex: 1,

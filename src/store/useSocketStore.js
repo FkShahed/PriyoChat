@@ -135,6 +135,8 @@ const useSocketStore = create((set, get) => ({
 
     newSocket.on('theme_changed', ({ conversationId, theme }) => {
       useChatStore.getState().addOrUpdateConversation({ _id: conversationId, theme });
+      // keep the saved local theme in step, so an old local value cannot override the new one later
+      if (conversationId && theme) AsyncStorage.setItem(`chat_theme_${conversationId}`, theme).catch(() => {});
     });
 
     // ── Call events ──────────────────────────────────────────────────

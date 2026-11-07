@@ -20,7 +20,7 @@ async function updateApk() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log('Connected to MongoDB successfully!');
 
-  let version = '4.0.4';
+  let version = '4.0.5';
   try {
     const appJsonPath = path.resolve(__dirname, '../app.json');
     if (fs.existsSync(appJsonPath)) {
