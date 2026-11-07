@@ -511,7 +511,6 @@ export default function ChatScreen({ route, navigation }) {
   const swipeableRefs = useRef({});
   const isKeyboardVisible = useRef(false);
   const keyboardPadding = useRef(new RNAnimated.Value(0)).current;
-  const kbWrapRef = useRef(null);
   const isTyping = typingUsers[conversationId];
 
   const isOtherOnline = onlineUsers[recipientUser?._id] ?? recipientUser?.isOnline;
@@ -555,27 +554,11 @@ export default function ChatScreen({ route, navigation }) {
         keyboardHeightRef.current = h;
         setKeyboardHeight(h);
       }
-      // Lift the composer by exactly how far the keyboard really overlaps this screen. The event
-      // height alone can be a little short/long (nav-bar / gesture inset differences), which left the
-      // input row partly hidden behind the keyboard now and then. Falls back to the event height.
-      const dur = e?.duration || 180;
-      const sy = e?.endCoordinates?.screenY;
-      const node = kbWrapRef.current;
-      const apply = (pad) => {
-        if (!isKeyboardVisible.current) return;
-        RNAnimated.timing(keyboardPadding, { toValue: pad, duration: dur, useNativeDriver: false }).start();
-      };
-      let measured = false;
-      if (Platform.OS === 'android' && h > 0 && sy > 0 && node && typeof node.measureInWindow === 'function') {
-        try {
-          node.measureInWindow((x, y, w, ht) => {
-            const pad = Math.max(0, Math.round(y + ht - sy));
-            apply(Number.isFinite(pad) && Math.abs(pad - h) <= 80 ? pad : h);
-          });
-          measured = true;
-        } catch (err) { measured = false; }
-      }
-      if (!measured) apply(h);
+      RNAnimated.timing(keyboardPadding, {
+        toValue: h,
+        duration: e?.duration || 180,
+        useNativeDriver: false,
+      }).start();
       scrollToBottom(false);
       setTimeout(() => scrollToBottom(true), 80);
     });
@@ -1292,7 +1275,7 @@ export default function ChatScreen({ route, navigation }) {
 
   // Platform-aware keyboard handling: use animated padding for smooth transition with Emoji Keyboard
   const KeyboardWrapper = RNAnimated.View;
-  const wrapperProps = { ref: kbWrapRef, collapsable: false, style: [{ flex: 1 }, { paddingBottom: keyboardPadding }] };
+  const wrapperProps = { style: [{ flex: 1 }, { paddingBottom: keyboardPadding }] };
 
   // ── Main content (shared between View and ImageBackground wrappers)
   const content = (
