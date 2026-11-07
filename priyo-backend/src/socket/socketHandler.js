@@ -10,6 +10,18 @@ const onlineUsers = new Map();
 // Active pending calls in-memory: callId -> { callId, from, to, offer, callType, caller }
 const activeCalls = new Map();
 
+// Diagnostic-only call timing log (never affects signalling; any error inside is swallowed).
+const callTrace = (fn) => { try { console.log('[CallTrace] ' + fn()); } catch (e) { /* never break a call for a log line */ } };
+const iceKind = (cand) => {
+  const s = typeof cand === 'string' ? cand : ((cand && cand.candidate) || '');
+  const m = String(s).match(/ typ (\w+)/);
+  return m ? m[1] : 'end';
+};
+const sinceOffer = (callId) => {
+  const c = callId ? activeCalls.get(String(callId)) : null;
+  return c && c.createdAt ? `${Date.now() - c.createdAt}ms` : 'n/a';
+};
+
 const setupSocket = (io) => {
   // Auth middleware for socket
   io.use(async (socket, next) => {
@@ -29,6 +41,17 @@ const setupSocket = (io) => {
   io.on('connection', async (socket) => {
     const userId = socket.user._id.toString();
     console.log(`🔌 User connected: ${socket.user.name} (${userId})`);
+
+    // The handlers below are registered only after a couple of database round trips. A client that
+    // is already waiting (e.g. the phone, cold-started from the call notification, whose "answer"
+    // is ready the instant its socket connects) can emit BEFORE that point — and Socket.IO silently
+    // drops events that have no listener yet, so the caller never got the answer. Hold such early
+    // events and replay them once every handler exists (see the end of this function).
+    const earlyEvents = [];
+    const earlyCatcher = (event, ...args) => {
+      if (earlyEvents.length < 200) earlyEvents.push({ event, args });
+    };
+    socket.onAny(earlyCatcher);
 
     // Track online status
     onlineUsers.set(userId, socket.id);
@@ -85,6 +108,7 @@ const setupSocket = (io) => {
       if (activeCall.to === userId) {
         console.log(`[socketHandler] User ${userId} connected with VALID pending call ${cId}. Emitting incoming_call.`);
         socket.emit('incoming_call', activeCall);
+        callTrace(() => `receiver socket connected call=${String(cId).slice(-6)} +${Date.now() - (activeCall.createdAt || Date.now())}ms after offer; replaying ${(activeCall.iceCandidates || []).length} buffered ICE`);
         if (Array.isArray(activeCall.iceCandidates) && activeCall.iceCandidates.length > 0) {
           console.log(`[socketHandler] Forwarding ${activeCall.iceCandidates.length} buffered early ICE candidates to connected user ${userId}`);
           activeCall.iceCandidates.forEach((candObj) => {
@@ -282,12 +306,36 @@ const setupSocket = (io) => {
       // was swiped away mid-call and its call_end never arrived). Otherwise the old, already
       // answered call gets replayed to the receiver on reconnect and the new call fails.
       // Only entries between this exact pair are touched: other users' calls are never affected.
+      const supersededRinging = [];
       for (const [cId, c] of activeCalls.entries()) {
         const pair = [String(c.from), String(c.to)];
         if (pair.includes(String(userId)) && pair.includes(String(targetRoom))) {
           console.log(`[socketHandler] New call supersedes older call ${cId} between same users`);
+          // Same caller re-dialling the same person while the older call was never answered:
+          // that older call's notification is still sitting on the receiver's phone (see below).
+          if (!c.answered && String(c.from) === String(userId) && String(c.to) === String(targetRoom)) {
+            supersededRinging.push(String(cId));
+          }
           activeCalls.delete(cId);
         }
+      }
+      // Tell the receiver's phone to drop the notification / ringtone of every superseded, never
+      // answered call (same silent "call_cancel" push the normal caller-hung-up path already uses),
+      // so a dead call can not be tapped and answered. Fire-and-forget: it can never delay,
+      // block or change the new call below, and only ever targets the OLD callIds.
+      if (supersededRinging.length > 0) {
+        (async () => {
+          try {
+            const rec = await User.findById(targetRoom).select('fcmToken');
+            if (rec && rec.fcmToken) {
+              for (const oldId of supersededRinging) {
+                await sendPushNotification(rec.fcmToken, '', '', { type: 'call_cancel', callId: oldId });
+              }
+            }
+          } catch (e) {
+            console.warn('[socketHandler] superseded call_cancel push error:', e.message);
+          }
+        })();
       }
 
       // 1. Immediately store in activeCalls map
@@ -403,12 +451,14 @@ const setupSocket = (io) => {
 
     socket.on('call_ringing', ({ to }) => {
       const targetRoom = cleanId(to) || to;
+      callTrace(() => `ringing ack from ${socket.user?.name} (receiver app is up and showing the call)`);
       io.to(targetRoom).emit('call_ringing', { from: userId });
     });
 
     socket.on('call_answer', async ({ to, answer, callId }) => {
       const targetRoom = cleanId(to) || to;
       console.log(`📞 Call Answer received from ${socket.user?.name} (${userId}) to ${targetRoom}, callId: ${callId}`);
+      callTrace(() => `answer call=${String(callId).slice(-6)} +${sinceOffer(cleanId(callId))} after offer; callerOnline=${onlineUsers.has(String(targetRoom))}`);
       try {
         const validId = cleanId(callId);
         if (validId) {
@@ -427,6 +477,7 @@ const setupSocket = (io) => {
 
     socket.on('call_ice', ({ to, candidate, callId }) => {
       const targetRoom = cleanId(to) || to;
+      callTrace(() => `ice ${socket.user?.name}->${String(targetRoom).slice(-4)} call=${String(callId || '').slice(-6)} typ=${iceKind(candidate)} +${sinceOffer(cleanId(callId))} targetOnline=${onlineUsers.has(String(targetRoom))}`);
       // Buffer into the RIGHT call: exact callId first; otherwise (early candidates sent before the
       // caller knows its callId) the NEWEST call between these two users — never an older one.
       let bufferCall = callId ? activeCalls.get(cleanId(callId)) : null;
@@ -503,6 +554,7 @@ const setupSocket = (io) => {
     });
 
     socket.on('call_end', async ({ to, callId, duration = 0, callType = 'audio' }) => {
+      callTrace(() => `end by ${socket.user?.name} call=${String(callId || '').slice(-6)} duration=${duration}s +${sinceOffer(cleanId(callId))} after offer`);
       try {
         const validId = cleanId(callId);
         if (validId) {
@@ -601,6 +653,19 @@ const setupSocket = (io) => {
       io.emit('user_status', { userId, isOnline: false, lastSeen: new Date() });
       console.log(`🔌 User disconnected: ${socket.user.name}`);
     });
+
+    // ─── All handlers are registered now: replay anything the client sent in the meantime ───
+    try { socket.offAny(earlyCatcher); } catch (e) { /* ignore */ }
+    if (earlyEvents.length > 0) {
+      callTrace(() => `replaying ${earlyEvents.length} early event(s) from ${socket.user.name}: ${earlyEvents.map((x) => x.event).join(',')}`);
+      for (const { event, args } of earlyEvents.splice(0)) {
+        try {
+          socket.listeners(event).forEach((fn) => fn(...args));
+        } catch (e) {
+          console.warn(`[socketHandler] early event "${event}" replay error:`, e.message);
+        }
+      }
+    }
   });
 };
 
