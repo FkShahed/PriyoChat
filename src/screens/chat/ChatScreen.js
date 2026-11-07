@@ -77,6 +77,16 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
   const translateX = useRef(new RNAnimated.Value(0)).current;
   const translateY = useRef(new RNAnimated.Value(0)).current;
 
+  // All photos of the tapped message, so the viewer can swipe between them
+  const photos = data?.msg?.images?.length ? data.msg.images.map((im) => im.url) : (data ? [data.uri] : []);
+  const [photoIdx, setPhotoIdx] = useState(0);
+  React.useEffect(() => {
+    if (!data) return;
+    const i = photos.indexOf(data.uri);
+    setPhotoIdx(i < 0 ? 0 : i);
+  }, [data?.uri, data?.msg?._id]);
+  const goPhoto = (dir) => setPhotoIdx((i) => Math.max(0, Math.min(photos.length - 1, i + dir)));
+
   // Reset transforms when modal opens/closes
   React.useEffect(() => {
     if (!visible) {
@@ -118,7 +128,24 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
       {/* A Modal needs its own gesture root on Android, otherwise pinch/pan never fire */}
       <ViewerGestureRoot style={styles.imageViewerBg}>
         {/* Centered, zoomable photo: pinch, double-tap, drag; single tap closes */}
-        <ZoomableImage uri={data.uri} width={SCREEN_W} height={SCREEN_H * 0.8} onTap={onClose} />
+        <ZoomableImage
+          key={photos[photoIdx] || data.uri}
+          uri={photos[photoIdx] || data.uri}
+          width={SCREEN_W}
+          height={SCREEN_H * 0.8}
+          onTap={onClose}
+          onSwipe={photos.length > 1 ? goPhoto : undefined}
+        />
+        {photos.length > 1 && (
+          <View pointerEvents="none" style={{ position: 'absolute', bottom: 48, alignSelf: 'center', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+              {photos.map((_, i) => (
+                <View key={i} style={{ width: i === photoIdx ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: i === photoIdx ? '#FFF' : 'rgba(255,255,255,0.4)' }} />
+              ))}
+            </View>
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600' }}>{photoIdx + 1} / {photos.length}</Text>
+          </View>
+        )}
         <View style={styles.imageViewerHeader}>
           <TouchableOpacity style={styles.imageViewerHeaderBtn} onPress={onClose}>
             <Ionicons name="close" size={24} color="#FFF" />
@@ -133,6 +160,10 @@ function ImageViewer({ data, visible, onClose, onDelete, canDelete }) {
     </Modal>
   );
 }
+
+// Several photos in one message: a fixed-width 2-column grid (sits on the sender's side like any bubble)
+const MULTI_GRID_W = Math.min(Math.round(Dimensions.get('window').width * 0.66), 280);
+const MULTI_CELL = Math.floor((MULTI_GRID_W - 4) / 2);
 
 // ── Dropdown menu ────────────────────────────────────────────────────
 function DropdownMenu({ visible, onClose, items, isDark }) {
@@ -1167,7 +1198,7 @@ export default function ChatScreen({ route, navigation }) {
             )}
             {msg.images?.length > 0 && (
               <View style={styles.imageBubbleContainer}>
-                <View style={styles.imageGrid}>
+                <View style={[styles.imageGrid, msg.images.length > 1 && { width: MULTI_GRID_W, justifyContent: isMine ? 'flex-end' : 'flex-start' }]}>
                   {msg.images.map((img, i) => (
                     <TouchableOpacity
                       key={i}
@@ -1176,7 +1207,10 @@ export default function ChatScreen({ route, navigation }) {
                       delayLongPress={100}
                       activeOpacity={0.9}
                     >
-                      <Image source={{ uri: img.url }} style={styles.messageImage} />
+                      <Image
+                        source={{ uri: img.url }}
+                        style={msg.images.length > 1 ? { width: MULTI_CELL, height: MULTI_CELL, borderRadius: 12 } : styles.messageImage}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>

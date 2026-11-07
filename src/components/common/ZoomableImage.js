@@ -11,7 +11,7 @@ const DOUBLE_TAP_SCALE = 2.5;
  * Must be rendered inside a GestureHandlerRootView (inside a <Modal> add its own — see viewers).
  * `onTap` fires on a single tap (used to close the viewer).
  */
-export default function ZoomableImage({ uri, width, height, onTap }) {
+export default function ZoomableImage({ uri, width, height, onTap, onSwipe }) {
   const scale = useRef(new Animated.Value(1)).current;
   const tx = useRef(new Animated.Value(0)).current;
   const ty = useRef(new Animated.Value(0)).current;
@@ -64,7 +64,13 @@ export default function ZoomableImage({ uri, width, height, onTap }) {
       ty.setValue(p.y);
     })
     .onEnd((e) => {
-      if (saved.scale <= 1) return;
+      if (saved.scale <= 1) {
+        // Not zoomed: a clear sideways swipe moves to the next/previous photo (when the viewer has several)
+        if (onSwipe && Math.abs(e.translationX) > 60 && Math.abs(e.translationX) > Math.abs(e.translationY) * 1.5) {
+          onSwipe(e.translationX < 0 ? 1 : -1);
+        }
+        return;
+      }
       const p = clampPan(saved.scale, saved.tx + e.translationX, saved.ty + e.translationY);
       saved.tx = p.x;
       saved.ty = p.y;
